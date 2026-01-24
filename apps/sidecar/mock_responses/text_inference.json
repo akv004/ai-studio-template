@@ -1,0 +1,15 @@
+{
+    "success": true,
+    "model": "llama-7b",
+    "inference_time_ms": 2340,
+    "response": {
+        "text": "Based on the analysis of the provided data, I can identify several key patterns and recommendations:\n\n1. The dataset shows strong correlation between features A and B\n2. Consider implementing a regularization term to prevent overfitting\n3. The optimal batch size for this workload appears to be 32\n\nWould you like me to elaborate on any of these points?",
+        "tokens_generated": 78,
+        "tokens_per_second": 33.3
+    },
+    "usage": {
+        "prompt_tokens": 45,
+        "completion_tokens": 78,
+        "total_tokens": 123
+    }
+}

@@ -1,0 +1,57 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://ai-studio.app/schemas/project.json",
+    "title": "Project",
+    "description": "AI Studio project schema",
+    "type": "object",
+    "required": [
+        "id",
+        "name",
+        "createdAt",
+        "updatedAt"
+    ],
+    "properties": {
+        "id": {
+            "type": "string",
+            "description": "Unique project identifier"
+        },
+        "name": {
+            "type": "string",
+            "description": "Project name",
+            "minLength": 1,
+            "maxLength": 100
+        },
+        "description": {
+            "type": "string",
+            "description": "Project description",
+            "maxLength": 500
+        },
+        "status": {
+            "type": "string",
+            "enum": [
+                "active",
+                "archived",
+                "draft"
+            ],
+            "default": "draft"
+        },
+        "createdAt": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "thumbnail": {
+            "type": "string",
+            "description": "Path to thumbnail image"
+        },
+        "tags": {
+            "type": "array",
+            "items": {
+                "type": "string"
+            }
+        }
+    }
+}

@@ -1,0 +1,37 @@
+{
+    "success": true,
+    "model": "whisper-base",
+    "inference_time_ms": 1250,
+    "transcription": {
+        "text": "Hello, this is a test transcription from the AI Studio application. The audio quality is excellent and the speech recognition is working perfectly.",
+        "language": "en",
+        "confidence": 0.92,
+        "segments": [
+            {
+                "start": 0.0,
+                "end": 2.5,
+                "text": "Hello, this is a test transcription",
+                "confidence": 0.95
+            },
+            {
+                "start": 2.5,
+                "end": 5.2,
+                "text": "from the AI Studio application.",
+                "confidence": 0.91
+            },
+            {
+                "start": 5.2,
+                "end": 8.0,
+                "text": "The audio quality is excellent",
+                "confidence": 0.93
+            },
+            {
+                "start": 8.0,
+                "end": 11.5,
+                "text": "and the speech recognition is working perfectly.",
+                "confidence": 0.89
+            }
+        ]
+    },
+    "audio_duration_s": 11.5
+}

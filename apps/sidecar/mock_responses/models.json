@@ -1,0 +1,46 @@
+{
+    "models": [
+        {
+            "id": "yolov8-n",
+            "name": "YOLOv8 Nano",
+            "type": "vision",
+            "size_mb": 6.3,
+            "loaded": true
+        },
+        {
+            "id": "yolov8-s",
+            "name": "YOLOv8 Small",
+            "type": "vision",
+            "size_mb": 22.5,
+            "loaded": false
+        },
+        {
+            "id": "whisper-base",
+            "name": "Whisper Base",
+            "type": "audio",
+            "size_mb": 142,
+            "loaded": true
+        },
+        {
+            "id": "whisper-large",
+            "name": "Whisper Large",
+            "type": "audio",
+            "size_mb": 2950,
+            "loaded": false
+        },
+        {
+            "id": "llama-7b",
+            "name": "LLaMA 7B",
+            "type": "text",
+            "size_mb": 13000,
+            "loaded": false
+        },
+        {
+            "id": "codegen-350m",
+            "name": "CodeGen 350M",
+            "type": "code",
+            "size_mb": 700,
+            "loaded": false
+        }
+    ]
+}

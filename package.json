@@ -1,0 +1,22 @@
+{
+  "name": "ai-studio-template",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Production-grade AI Desktop Application Template",
+  "type": "module",
+  "workspaces": [
+    "apps/ui",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/ui",
+    "build": "npm run build --workspace=apps/ui",
+    "tauri": "cd apps/desktop/src-tauri && cargo tauri",
+    "tauri:dev": "cd apps/desktop/src-tauri && cargo tauri dev",
+    "tauri:build": "cd apps/desktop/src-tauri && cargo tauri build",
+    "sidecar": "python apps/sidecar/server.py"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

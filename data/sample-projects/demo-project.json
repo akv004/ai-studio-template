@@ -1,0 +1,22 @@
+{
+    "id": "sample-project-1",
+    "name": "Object Detection Demo",
+    "description": "Sample project demonstrating real-time object detection capabilities with YOLOv8",
+    "status": "active",
+    "createdAt": "2024-01-15T10:00:00Z",
+    "updatedAt": "2024-01-20T14:30:00Z",
+    "tags": [
+        "vision",
+        "detection",
+        "yolo"
+    ],
+    "config": {
+        "model": "yolov8-n",
+        "confidence_threshold": 0.5,
+        "nms_threshold": 0.4,
+        "input_size": [
+            640,
+            640
+        ]
+    }
+}

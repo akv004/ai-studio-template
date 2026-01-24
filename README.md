@@ -15,6 +15,25 @@ A production-grade, cross-platform AI Desktop Application template built with **
 
 ---
 
+## 📸 Screenshots
+
+### Main Dashboard
+![Main Dashboard](docs/screenshots/screenshot-1-main-dashboard.png)
+
+### Canvas Demo (Node Graph)
+![Canvas Demo](docs/screenshots/screenshot-2-canvas-demo.png)
+
+### Vision Module
+![Vision Module](docs/screenshots/screenshot-4-vision.png)
+
+### Agents
+![Agents](docs/screenshots/agents.png)
+
+### Training
+![Training](docs/screenshots/screenshot-training.png)
+
+---
+
 ## 🚀 Installation Guide
 
 ### Prerequisites

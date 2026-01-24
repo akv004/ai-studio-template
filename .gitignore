@@ -1,3 +1,26 @@
+# Dependencies
+node_modules
+.pnpm-debug.log*
+
+# Build outputs
+dist
+dist-ssr
+*.local
+
+# Rust / Tauri
+apps/desktop/src-tauri/target/
+**/*.rs.bk
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
 # Logs
 logs
 *.log
@@ -6,11 +29,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
-node_modules
-dist
-dist-ssr
-*.local
 
 # Editor directories and files
 .vscode/*
@@ -22,3 +40,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.local
+.env.*.local

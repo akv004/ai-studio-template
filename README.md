@@ -266,10 +266,60 @@ First-time compilation is slow (~3-5 min). Subsequent builds are fast.
 npm run tauri:build
 ```
 
-This creates platform-specific installers in `apps/desktop/src-tauri/target/release/bundle/`:
-- **macOS**: `.dmg`, `.app`
-- **Windows**: `.msi`, `.exe`
-- **Linux**: `.deb`, `.AppImage`
+This creates platform-specific installers in `apps/desktop/src-tauri/target/release/bundle/`.
+
+### macOS Installation
+
+1. Build creates:
+   - `bundle/macos/AI Studio.app` - Application bundle
+   - `bundle/dmg/AI Studio_X.X.X_aarch64.dmg` - Installer disk image
+
+2. **Install via DMG (Recommended)**:
+   ```bash
+   # Open the DMG
+   open apps/desktop/src-tauri/target/release/bundle/dmg/AI\ Studio_*.dmg
+   # Drag "AI Studio" to Applications folder
+   ```
+
+3. **Or copy directly**:
+   ```bash
+   cp -r "apps/desktop/src-tauri/target/release/bundle/macos/AI Studio.app" /Applications/
+   ```
+
+4. **First launch**: Right-click → Open (bypasses Gatekeeper for unsigned apps)
+
+### Windows Installation
+
+1. Build creates:
+   - `bundle/msi/AI Studio_X.X.X_x64_en-US.msi` - MSI installer
+   - `bundle/nsis/AI Studio_X.X.X_x64-setup.exe` - NSIS installer
+
+2. **Install via MSI**:
+   - Double-click the `.msi` file
+   - Follow the installation wizard
+   - App installs to `C:\Program Files\AI Studio\`
+
+3. **Or run portable**:
+   - Use `target/release/ai-studio.exe` directly
+
+### Linux Installation
+
+1. Build creates:
+   - `bundle/deb/ai-studio_X.X.X_amd64.deb` - Debian package
+   - `bundle/appimage/ai-studio_X.X.X_amd64.AppImage` - Portable AppImage
+
+2. **Install via .deb (Debian/Ubuntu)**:
+   ```bash
+   sudo dpkg -i apps/desktop/src-tauri/target/release/bundle/deb/ai-studio_*.deb
+   # Fix dependencies if needed:
+   sudo apt-get install -f
+   ```
+
+3. **Or run AppImage (Any distro)**:
+   ```bash
+   chmod +x apps/desktop/src-tauri/target/release/bundle/appimage/ai-studio_*.AppImage
+   ./ai-studio_*.AppImage
+   ```
 
 ---
 

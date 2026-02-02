@@ -21,6 +21,13 @@
   <a href="#-ai-agent-infrastructure">AI Agent</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/akv004/ai-studio-template/stargazers"><img src="https://img.shields.io/github/stars/akv004/ai-studio-template?style=social" alt="Stars"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-blue" alt="Platform">
+  <img src="https://img.shields.io/badge/license-MIT-green" alt="License">
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen" alt="PRs Welcome">
+</p>
+
 ---
 
 > 🎯 **Purpose**: Architecture + scaffolding for a 5-10 year foundation. Not a fully working product, but a professional starting point.

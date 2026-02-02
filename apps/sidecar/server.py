@@ -24,6 +24,7 @@ from agent.providers import (
     OllamaProvider,
     AnthropicProvider,
     OpenAIProvider,
+    GoogleProvider,
     Message,
 )
 
@@ -89,6 +90,11 @@ async def lifespan(app: FastAPI):
     if os.getenv("OPENAI_API_KEY"):
         chat_service.register_provider(OpenAIProvider())
         print("✓ OpenAI provider enabled")
+    
+    # Configure Google AI / Gemini (if API key is set)
+    if os.getenv("GOOGLE_API_KEY"):
+        chat_service.register_provider(GoogleProvider())
+        print("✓ Google AI (Gemini) provider enabled")
     
     print(f"🤖 AI Studio Sidecar initialized")
     print(f"   Ollama: {ollama_host} (model: {ollama_model})")

@@ -1,8 +1,28 @@
-# AI Studio Template
+# AI Studio Framework
 
-A production-grade, cross-platform AI Desktop Application template built with **Tauri + React + TypeScript**.
+A production-grade, cross-platform AI Desktop Application **framework** built with **Tauri + React + TypeScript**.
 
-> 🎯 **Purpose**: Architecture + scaffolding for a 5-10 year foundation. Not a fully working product, but a professional starting point.
+> 🎯 **Purpose**: Extensible framework for building AI-powered desktop applications with a 5-10 year foundation. Not just a template — a complete architecture for professional AI applications.
+
+## 🆕 What's New: Framework Evolution
+
+This project is evolving from a **template** into a full **framework** with:
+- **Module System** — Extensible, pluggable modules
+- **Provider Abstraction** — Swap AI backends (Mock, OpenClaw, custom)
+- **Event-Driven Architecture** — Decoupled, scalable design
+- **Plugin Support** — Third-party extensions and skills
+
+📄 See [Framework Architecture](docs/specs/architecture/framework-design.md) for details.
+
+### 🦞 Coming Soon: OpenClaw Integration
+
+Integration with [OpenClaw](https://github.com/openclaw/openclaw) — the open-source personal AI assistant platform — is planned. This will enable:
+- Real AI agent conversations (not mocked)
+- Multi-channel messaging (WhatsApp, Telegram, Discord, etc.)
+- Voice interaction (Voice Wake, Talk Mode)
+- Skills ecosystem
+
+📄 See [OpenClaw Integration Spec](docs/specs/features/openclaw-integration.md) for details.
 
 ## Features
 
@@ -12,6 +32,9 @@ A production-grade, cross-platform AI Desktop Application template built with **
 - ✅ **Clean separation**: UI, OS access, AI, and rendering layers
 - ✅ **Extensible**: Vision, Audio, Agents, Training, Projects
 - ✅ **Mock-first**: All data mocked for rapid prototyping
+- ✅ **Module System**: Pluggable, registerable modules
+- ✅ **Provider Abstraction**: Swappable AI backends
+- 🔜 **OpenClaw Integration**: Real AI assistant capabilities
 
 ---
 
@@ -320,6 +343,42 @@ This creates platform-specific installers in `apps/desktop/src-tauri/target/rele
    chmod +x apps/desktop/src-tauri/target/release/bundle/appimage/ai-studio_*.AppImage
    ./ai-studio_*.AppImage
    ```
+
+---
+
+## 🗺️ Roadmap
+
+### v0.2.0 - Framework Foundation (Current)
+- [x] Core architecture design *(spec complete)*
+- [x] Module system specification *(spec complete)*
+- [x] Provider abstraction design *(spec complete)*
+- [ ] Event bus implementation
+- [ ] Config file support
+
+### v0.3.0 - Provider Ecosystem
+- [ ] OpenClaw integration
+- [ ] Plugin architecture
+- [ ] Skills support
+
+### v0.4.0 - Advanced Features
+- [ ] WebGPU renderer
+- [ ] Voice integration
+- [ ] Multi-window support
+
+### v1.0.0 - Stable Release
+- [ ] API stability guarantee
+- [ ] Full documentation
+- [ ] Example applications
+
+📄 See [Framework Architecture](docs/specs/architecture/framework-design.md) for detailed roadmap.
+
+---
+
+## 📚 Documentation
+
+- [Framework Architecture](docs/specs/architecture/framework-design.md) — Core framework design
+- [OpenClaw Integration](docs/specs/features/openclaw-integration.md) — AI assistant integration spec
+- [Specifications Index](docs/specs/README.md) — All technical specs
 
 ---
 

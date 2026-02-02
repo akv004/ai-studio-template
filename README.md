@@ -138,6 +138,70 @@ cd apps/sidecar && python server.py
 
 ---
 
+## 📦 Installation Guide
+
+### Prerequisites
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| **Node.js** | 18+ | JavaScript runtime |
+| **npm** | 9+ | Package manager |
+| **Rust** | Latest stable | Native desktop shell (Tauri) |
+| **Python** | 3.10+ | AI sidecar |
+
+### Step 1: Install Node.js
+
+```bash
+# macOS (Homebrew)
+brew install node
+
+# Windows (Chocolatey)
+choco install nodejs
+
+# Or download from https://nodejs.org
+```
+
+### Step 2: Install Rust (Required for Desktop App)
+
+```bash
+# macOS / Linux
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Restart terminal or run:
+source ~/.cargo/env
+
+# Verify
+rustc --version
+```
+
+### Step 3: Install Tauri CLI
+
+```bash
+cargo install tauri-cli
+```
+
+> ⏱️ First time takes ~2-3 minutes (compiles 700+ crates)
+
+### Step 4: Clone & Install
+
+```bash
+git clone https://github.com/akv004/ai-studio-template.git
+cd ai-studio-template
+npm install
+```
+
+### Step 5: Run
+
+```bash
+# Browser only (for UI dev)
+npm run dev
+
+# Native desktop app
+npm run tauri:dev
+```
+
+> ⏱️ First Tauri build takes ~3-5 minutes. Subsequent runs are instant.
+
 ## 🏗️ Architecture
 
 ```

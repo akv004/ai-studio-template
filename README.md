@@ -32,6 +32,9 @@ A production-grade, cross-platform AI Desktop Application template built with **
 ### Training
 ![Training](docs/screenshots/screenshot-training.png)
 
+### Settings - AI Providers
+![Settings - AI Providers](docs/screenshots/setting_providers.png)
+
 ---
 
 ## 🚀 Installation Guide
@@ -160,6 +163,29 @@ The sidecar supports multiple LLM providers:
 | **Ollama** | Local | `OLLAMA_HOST`, `OLLAMA_MODEL` |
 | **Anthropic** | Cloud | `ANTHROPIC_API_KEY` |
 | **OpenAI** | Cloud | `OPENAI_API_KEY` |
+| **Google AI** | Cloud | `GOOGLE_API_KEY` |
+
+### Tools API
+
+The agent includes tools for shell commands, browser automation, and filesystem access:
+
+```bash
+# Execute shell commands
+curl -X POST http://localhost:8765/tools/shell \
+  -H "Content-Type: application/json" \
+  -d '{"command": "ls -la"}'
+
+# Read a file
+curl -X POST http://localhost:8765/tools/filesystem \
+  -H "Content-Type: application/json" \
+  -d '{"action": "read", "path": "README.md"}'
+
+# Browser automation (start, navigate, screenshot)
+curl -X POST http://localhost:8765/tools/browser/start
+curl -X POST http://localhost:8765/tools/browser \
+  -H "Content-Type: application/json" \
+  -d '{"action": "navigate", "url": "https://example.com"}'
+```
 
 ### API Endpoints
 

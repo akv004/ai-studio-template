@@ -1,433 +1,300 @@
-# AI Studio Template
+<p align="center">
+  <img src="docs/screenshots/screenshot-1-main-dashboard.png" alt="AI Studio" width="800">
+</p>
 
-A production-grade, cross-platform AI Desktop Application template built with **Tauri + React + TypeScript**.
+<h1 align="center">🧠 AI Studio</h1>
 
-> 🎯 **Purpose**: Architecture + scaffolding for a 5-10 year foundation. Not a fully working product, but a professional starting point.
+<p align="center">
+  <strong>Your Personal AI Assistant. Any OS. Any Provider. Local-First.</strong>
+</p>
 
-## Features
+<p align="center">
+  A production-grade, cross-platform AI desktop application that runs LLMs locally on your machine, connects to any cloud provider, and gives you full control of your AI experience.
+</p>
 
-- ✅ **Cross-platform**: macOS, Windows, Linux
-- ✅ **Professional GUI**: Node graphs, timelines, media panels
-- ✅ **GPU-ready**: Canvas/WebGL now, WebGPU architecture ready
-- ✅ **Clean separation**: UI, OS access, AI, and rendering layers
-- ✅ **Extensible**: Vision, Audio, Agents, Training, Projects
-- ✅ **Mock-first**: All data mocked for rapid prototyping
+<p align="center">
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-features">Features</a> •
+  <a href="#-architecture">Architecture</a> •
+  <a href="#-roadmap">Roadmap</a> •
+  <a href="#-contributing">Contributing</a>
+</p>
+
+---
+
+## ✨ Why AI Studio?
+
+| Problem | Solution |
+|---------|----------|
+| **Vendor Lock-in** | Swap providers with one config change |
+| **Privacy Concerns** | Run 100% local with Ollama |
+| **Limited Access** | Works from Telegram, Desktop, Web |
+| **Black Box AI** | Full control, open source, self-hosted |
+
+**AI Studio is the open-source alternative** for developers who want a personal AI assistant that:
+- 🦙 **Runs locally** on your RTX 4090/5090 with Ollama
+- ☁️ **Connects to clouds** — Anthropic, OpenAI, Google AI
+- 💬 **Works anywhere** — Desktop app, Telegram, Web UI
+- 🛠️ **Has real tools** — Shell, browser, filesystem access
+- 🔐 **Respects privacy** — Your keys, your data, your machine
 
 ---
 
 ## 📸 Screenshots
 
-### Main Dashboard
-![Main Dashboard](docs/screenshots/screenshot-1-main-dashboard.png)
-
-### Canvas Demo (Node Graph)
-![Canvas Demo](docs/screenshots/screenshot-2-canvas-demo.png)
-
-### Vision Module
-![Vision Module](docs/screenshots/screenshot-4-vision.png)
-
-### Agents
-![Agents](docs/screenshots/agents.png)
-
-### Training
-![Training](docs/screenshots/screenshot-training.png)
-
-### Settings - AI Providers
-![Settings - AI Providers](docs/screenshots/setting_providers.png)
+<table>
+  <tr>
+    <td><img src="docs/screenshots/agents.png" alt="Agents" width="400"></td>
+    <td><img src="docs/screenshots/screenshot-2-canvas-demo.png" alt="Canvas" width="400"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>AI Agents Dashboard</strong></td>
+    <td align="center"><strong>Canvas & Node Graphs</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/screenshot-training.png" alt="Training" width="400"></td>
+    <td><img src="docs/screenshots/setting_providers.png" alt="Settings" width="400"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Training Pipeline</strong></td>
+    <td align="center"><strong>Multi-Provider Settings</strong></td>
+  </tr>
+</table>
 
 ---
 
-## 🚀 Installation Guide
+## 🎯 Features
 
-### Prerequisites
+### ✅ What's Built
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| **Node.js** | 18+ | JavaScript runtime |
-| **npm** | 9+ | Package manager |
-| **Rust** | Latest stable | Native desktop shell (Tauri) |
-| **Python** | 3.10+ | AI sidecar (optional) |
+| Feature | Description |
+|---------|-------------|
+| **Multi-Provider LLM** | Ollama, Anthropic Claude, OpenAI GPT, Google Gemini |
+| **Conversation Memory** | Persistent sessions with context retention |
+| **Telegram Bot** | Chat with your AI from anywhere via Telegram |
+| **Desktop App** | Native macOS/Windows/Linux with Tauri |
+| **Shell Tool** | Execute commands with safety controls |
+| **Browser Tool** | Playwright automation — navigate, click, extract |
+| **Filesystem Tool** | Read/write files with path safety |
+| **Docker Compose** | One-command deployment with GPU support |
+| **Settings UI** | Configure providers, API keys, models |
 
-### Step 1: Install Node.js
+### 🗺️ Roadmap
 
-If not installed, download from [nodejs.org](https://nodejs.org/) or use:
+| Phase | Feature | Status |
+|-------|---------|--------|
+| **1** | WhatsApp / Discord / Slack channels | 🔜 Planned |
+| **2** | Voice (Wake word + STT/TTS) | 🔜 Planned |
+| **2** | Screen capture + Vision | 🔜 Planned |
+| **3** | Cron jobs & Webhooks | 🔜 Planned |
+| **4** | Skills/Plugin system | 🔜 Planned |
+| **5** | Multi-agent routing | 🔜 Future |
 
-```bash
-# macOS (Homebrew)
-brew install node
+> See full roadmap: [`docs/specs/agent-roadmap.md`](docs/specs/agent-roadmap.md)
 
-# Windows (Chocolatey)
-choco install nodejs
-```
+---
 
-### Step 2: Install Rust (Required for Desktop App)
+## 🚀 Quick Start
 
-Rust is needed to compile the native Tauri shell:
-
-```bash
-# macOS / Linux
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# When prompted, select: 1) Proceed with standard installation
-```
-
-After installation, **restart your terminal** or run:
-```bash
-source ~/.cargo/env
-```
-
-Verify installation:
-```bash
-rustc --version
-# Should show: rustc 1.XX.X
-```
-
-### Step 3: Install Tauri CLI
+### Option 1: Docker (Recommended)
 
 ```bash
-cargo install tauri-cli
-```
-
-> ⏱️ First time takes ~2-3 minutes (compiles 700+ crates)
-
-### Step 4: Clone & Install Dependencies
-
-```bash
-git clone <your-repo-url>
+# Clone the repo
+git clone https://github.com/akv004/ai-studio-template.git
 cd ai-studio-template
-npm install
+
+# Start with Docker (includes Ollama)
+docker compose up
+
+# With GPU support (NVIDIA)
+docker compose --profile gpu up
 ```
 
----
-
-## 🏃 Running the Application
-
-### Option A: Browser Only (Quick Development)
-
-Best for UI development without Rust:
-
-```bash
-npm run dev
-# Opens at http://localhost:1420
-```
-
-### Option B: Native Desktop App (Full Experience)
-
-Runs as a real macOS/Windows/Linux application:
-
-```bash
-npm run tauri:dev
-```
-
-> ⏱️ First build takes ~3-5 minutes (compiles Rust dependencies)  
-> Subsequent runs are instant.
-
-### Option C: Run AI Agent Backend
-
-The AI sidecar is a **multi-provider LLM agent** with local and cloud support:
+### Option 2: Local Development
 
 ```bash
 # Install dependencies
+npm install
 cd apps/sidecar && pip install -r requirements.txt
 
-# Run the agent server
-python server.py
-# API docs at: http://localhost:8765/docs
+# Start the AI backend
+python server.py  # http://localhost:8765
+
+# Start the desktop app (in another terminal)
+npm run tauri:dev
 ```
 
-### Option D: Docker Compose (Recommended for Local LLM)
-
-Run everything with Docker, including Ollama for local LLM:
+### Option 3: Cloud Providers Only
 
 ```bash
-# CPU mode
-docker compose up
+# Set your API keys
+export ANTHROPIC_API_KEY=sk-ant-...
+export OPENAI_API_KEY=sk-...
+export GOOGLE_API_KEY=...
 
-# GPU mode (requires nvidia-container-toolkit)
-docker compose --profile gpu up
-
-# With Telegram bot
-TELEGRAM_BOT_TOKEN=your_token docker compose --profile telegram up
+# Start the server
+cd apps/sidecar && python server.py
 ```
-
----
-
-## 🤖 AI Agent Infrastructure
-
-### Multi-Provider LLM Support
-
-The sidecar supports multiple LLM providers:
-
-| Provider | Type | Configuration |
-|----------|------|---------------|
-| **Ollama** | Local | `OLLAMA_HOST`, `OLLAMA_MODEL` |
-| **Anthropic** | Cloud | `ANTHROPIC_API_KEY` |
-| **OpenAI** | Cloud | `OPENAI_API_KEY` |
-| **Google AI** | Cloud | `GOOGLE_API_KEY` |
-
-### Tools API
-
-The agent includes tools for shell commands, browser automation, and filesystem access:
-
-```bash
-# Execute shell commands
-curl -X POST http://localhost:8765/tools/shell \
-  -H "Content-Type: application/json" \
-  -d '{"command": "ls -la"}'
-
-# Read a file
-curl -X POST http://localhost:8765/tools/filesystem \
-  -H "Content-Type: application/json" \
-  -d '{"action": "read", "path": "README.md"}'
-
-# Browser automation (start, navigate, screenshot)
-curl -X POST http://localhost:8765/tools/browser/start
-curl -X POST http://localhost:8765/tools/browser \
-  -H "Content-Type: application/json" \
-  -d '{"action": "navigate", "url": "https://example.com"}'
-```
-
-### API Endpoints
-
-```bash
-# Chat with conversation memory
-curl -X POST http://localhost:8765/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hello!", "provider": "ollama"}'
-
-# List available providers
-curl http://localhost:8765/providers
-
-# Health check
-curl http://localhost:8765/status
-```
-
-### Telegram Bot Integration
-
-1. Create a bot via [@BotFather](https://t.me/BotFather) on Telegram
-2. Set your bot token:
-   ```bash
-   export TELEGRAM_BOT_TOKEN=your_token
-   ```
-3. Run the bot:
-   ```bash
-   cd apps/sidecar
-   python -m channels.telegram
-   ```
-
-**Bot Commands:**
-- `/start` - Show help
-- `/clear` - Clear conversation
-- `/provider <name>` - Switch provider
-- `/model <name>` - Set model
-- `/status` - Show settings
-
----
-
-## 📁 Project Structure
-
-```
-ai-studio-template/
-├── apps/
-│   ├── desktop/              # Tauri + Rust backend
-│   │   └── src-tauri/
-│   │       ├── src/
-│   │       │   ├── main.rs       # Entry point
-│   │       │   ├── lib.rs        # Core logic
-│   │       │   ├── commands.rs   # IPC handlers
-│   │       │   └── system.rs     # OS info
-│   │       └── tauri.conf.json
-│   │
-│   ├── ui/                   # React + TypeScript + Vite
-│   │   ├── src/
-│   │   │   ├── app/
-│   │   │   │   ├── layout/       # Shell, Header, Sidebar
-│   │   │   │   └── pages/        # Module pages
-│   │   │   ├── canvas/           # Rendering abstraction
-│   │   │   ├── state/            # Zustand store
-│   │   │   └── commands/         # Keyboard shortcuts
-│   │   └── vite.config.ts
-│   │
-│   └── sidecar/              # AI Agent Backend (Multi-Provider LLM)
-│       ├── agent/
-│       │   ├── providers/       # Ollama, Anthropic, OpenAI
-│       │   └── chat.py          # Chat service with memory
-│       ├── channels/
-│       │   └── telegram.py      # Telegram bot integration
-│       ├── server.py            # FastAPI server
-│       ├── Dockerfile
-│       └── requirements.txt
-│
-├── packages/
-│   └── shared/               # Shared types & schemas
-│
-├── data/
-│   └── sample-projects/      # Mock project data
-│
-└── package.json              # Monorepo workspace config
-```
-
----
-
-## 🎨 UI Modules
-
-| Module | Description | Key Features |
-|--------|-------------|--------------|
-| **Projects** | Project management | List, create, open, JSON persistence |
-| **Vision** | Image analysis | Preview canvas, detection overlays |
-| **Audio** | Audio processing | Waveform display, transcription |
-| **Agents** | AI agent management | Status monitoring, chat interface |
-| **Training** | Model training | Dataset management, progress tracking |
-| **Runs** | Pipeline execution | Phase timeline, live logs |
-| **Settings** | Configuration | Models, paths, hotkeys, appearance |
-
----
-
-## ⌨️ Keyboard Shortcuts
-
-| Shortcut | Action |
-|----------|--------|
-| `⌘K` / `Ctrl+K` | Open Command Palette |
-| `⌘1-6` | Navigate to modules |
-| `⌘,` | Open Settings |
-| `⌘N` | New Project |
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        AI STUDIO                                │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                    React UI Layer                        │   │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        │   │
-│  │  │Projects │ │ Vision  │ │ Agents  │ │Training │  ...   │   │
-│  │  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘        │   │
-│  │       │           │           │           │              │   │
-│  │  ┌────┴───────────┴───────────┴───────────┴────┐        │   │
-│  │  │           State Management (Zustand)         │        │   │
-│  │  └─────────────────────┬───────────────────────┘        │   │
-│  │                        │                                 │   │
-│  │  ┌─────────────────────┴───────────────────────┐        │   │
-│  │  │        Canvas Rendering Layer               │        │   │
-│  │  │  ┌──────────────┐    ┌──────────────────┐   │        │   │
-│  │  │  │CanvasRenderer│    │WebGPURenderer.stub│  │        │   │
-│  │  │  └──────────────┘    └──────────────────┘   │        │   │
-│  │  └─────────────────────────────────────────────┘        │   │
-│  └─────────────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────┐              ┌──────────────────┐        │
-│  │   Tauri / Rust   │◄────IPC────►│  Python Sidecar  │        │
-│  │   (OS Access)    │              │  (AI Inference)  │        │
-│  └──────────────────┘              └──────────────────┘        │
-└─────────────────────────────────────────────────────────────────┘
+AI Studio
+├── 🖥️  Desktop App (Tauri + React)
+│   ├── Professional UI with node graphs, timelines
+│   ├── Settings for providers, models, API keys
+│   └── Native performance, cross-platform
+│
+├── 🤖  AI Sidecar (Python FastAPI)
+│   ├── Multi-provider LLM abstraction
+│   ├── Conversation memory
+│   └── Tools (shell, browser, filesystem)
+│
+├── 📱  Channels
+│   ├── Telegram bot
+│   ├── Web UI (built-in)
+│   └── (Planned: WhatsApp, Discord, Slack)
+│
+└── 🐳  Docker Compose
+    ├── Ollama (local LLM)
+    ├── Sidecar (agent server)
+    └── GPU support (NVIDIA)
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## 🔧 Configuration
 
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| Desktop Shell | Tauri 2.0 + Rust | Native OS access, windowing |
-| UI Framework | React 19 + TypeScript | Component-based UI |
-| Build Tool | Vite 7 | Fast HMR, optimized builds |
-| Styling | Tailwind CSS 4 | Utility-first CSS |
-| State | Zustand | Lightweight state management |
-| Rendering | Canvas 2D (abstracted) | Node graphs, timelines |
-| AI Interface | Python HTTP Server | Future ML integration |
-
----
-
-## 🔧 Troubleshooting
-
-### "cargo: command not found"
-```bash
-source ~/.cargo/env
-# Or restart your terminal
-```
-
-### "Port 1420 is already in use"
-```bash
-# Kill the process using the port
-lsof -ti:1420 | xargs kill -9
-```
-
-### Rust compilation taking too long
-First-time compilation is slow (~3-5 min). Subsequent builds are fast.
-
----
-
-## 📦 Building for Production
+### Environment Variables
 
 ```bash
-# Build production bundle
-npm run tauri:build
+# Local LLM (Ollama)
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=llama3.2
+
+# Cloud Providers (optional)
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
+
+# Telegram (optional)
+TELEGRAM_BOT_TOKEN=...
+
+# Tools safety mode: sandboxed | restricted | full
+TOOLS_MODE=restricted
 ```
 
-This creates platform-specific installers in `apps/desktop/src-tauri/target/release/bundle/`.
+### Providers
 
-### macOS Installation
-
-1. Build creates:
-   - `bundle/macos/AI Studio.app` - Application bundle
-   - `bundle/dmg/AI Studio_X.X.X_aarch64.dmg` - Installer disk image
-
-2. **Install via DMG (Recommended)**:
-   ```bash
-   # Open the DMG
-   open apps/desktop/src-tauri/target/release/bundle/dmg/AI\ Studio_*.dmg
-   # Drag "AI Studio" to Applications folder
-   ```
-
-3. **Or copy directly**:
-   ```bash
-   cp -r "apps/desktop/src-tauri/target/release/bundle/macos/AI Studio.app" /Applications/
-   ```
-
-4. **First launch**: Right-click → Open (bypasses Gatekeeper for unsigned apps)
-
-### Windows Installation
-
-1. Build creates:
-   - `bundle/msi/AI Studio_X.X.X_x64_en-US.msi` - MSI installer
-   - `bundle/nsis/AI Studio_X.X.X_x64-setup.exe` - NSIS installer
-
-2. **Install via MSI**:
-   - Double-click the `.msi` file
-   - Follow the installation wizard
-   - App installs to `C:\Program Files\AI Studio\`
-
-3. **Or run portable**:
-   - Use `target/release/ai-studio.exe` directly
-
-### Linux Installation
-
-1. Build creates:
-   - `bundle/deb/ai-studio_X.X.X_amd64.deb` - Debian package
-   - `bundle/appimage/ai-studio_X.X.X_amd64.AppImage` - Portable AppImage
-
-2. **Install via .deb (Debian/Ubuntu)**:
-   ```bash
-   sudo dpkg -i apps/desktop/src-tauri/target/release/bundle/deb/ai-studio_*.deb
-   # Fix dependencies if needed:
-   sudo apt-get install -f
-   ```
-
-3. **Or run AppImage (Any distro)**:
-   ```bash
-   chmod +x apps/desktop/src-tauri/target/release/bundle/appimage/ai-studio_*.AppImage
-   ./ai-studio_*.AppImage
-   ```
+| Provider | Models | Get API Key |
+|----------|--------|-------------|
+| **Ollama** | llama3.2, mistral, codellama | [ollama.ai](https://ollama.ai) |
+| **Anthropic** | claude-sonnet-4, claude-opus-4 | [console.anthropic.com](https://console.anthropic.com) |
+| **OpenAI** | gpt-4o, o1 | [platform.openai.com](https://platform.openai.com/api-keys) |
+| **Google AI** | gemini-2.0-flash, gemini-1.5-pro | [aistudio.google.com](https://aistudio.google.com/apikey) |
 
 ---
 
-## License
+## 📡 API Reference
 
-MIT
+### Chat
+
+```bash
+# Start a conversation
+curl -X POST http://localhost:8765/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello!", "provider": "ollama"}'
+
+# List providers
+curl http://localhost:8765/providers
+
+# Health check
+curl http://localhost:8765/status
+```
+
+### Tools
+
+```bash
+# Shell command
+curl -X POST http://localhost:8765/tools/shell \
+  -d '{"command": "ls -la"}'
+
+# Read file
+curl -X POST http://localhost:8765/tools/filesystem \
+  -d '{"action": "read", "path": "README.md"}'
+
+# Browser automation
+curl -X POST http://localhost:8765/tools/browser/start
+curl -X POST http://localhost:8765/tools/browser \
+  -d '{"action": "navigate", "url": "https://example.com"}'
+```
+
+### Telegram Bot
+
+Chat with your AI from Telegram:
+1. Create bot via [@BotFather](https://t.me/BotFather)
+2. Set `TELEGRAM_BOT_TOKEN=your_token`
+3. Run: `python -m channels.telegram`
+
+**Commands:** `/start`, `/clear`, `/provider <name>`, `/model <name>`, `/status`
 
 ---
 
-Built with ❤️ using Tauri, React, and TypeScript.
+## 🛠️ Development
+
+### Project Structure
+
+```
+ai-studio-template/
+├── apps/
+│   ├── desktop/          # Tauri native shell
+│   ├── ui/               # React frontend
+│   └── sidecar/          # Python AI backend
+│       ├── agent/
+│       │   ├── providers/  # LLM providers
+│       │   ├── tools/      # Shell, browser, filesystem
+│       │   └── chat.py     # Chat service
+│       ├── channels/       # Telegram, etc.
+│       └── server.py       # FastAPI server
+├── docs/
+│   └── specs/            # Roadmap, API docs
+└── docker-compose.yml
+```
+
+### Prerequisites
+
+| Tool | Version | Purpose |
+|------|---------|---------|
+| Node.js | 18+ | UI development |
+| Rust | Latest | Desktop app (Tauri) |
+| Python | 3.10+ | AI backend |
+| Docker | Latest | Container deployment |
+
+---
+
+## 🤝 Contributing
+
+Contributions welcome! Areas where help is needed:
+
+- 📱 **New Channels** — WhatsApp, Discord, Slack integrations
+- 🎤 **Voice** — Wake word, STT/TTS
+- 🧩 **Skills** — Plugin system for extensibility
+- 📚 **Docs** — Tutorials, examples
+
+---
+
+## 📄 License
+
+MIT License — Free for personal and commercial use.
+
+---
+
+<p align="center">
+  <strong>Built for developers who want AI on their terms.</strong>
+</p>
+
+<p align="center">
+  ⭐ Star if you find this useful!
+</p>

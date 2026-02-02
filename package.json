@@ -1,8 +1,8 @@
 {
-  "name": "ai-studio-framework",
+  "name": "ai-studio-template",
   "private": true,
-  "version": "0.2.0-alpha.1",
-  "description": "Production-grade AI Desktop Application Framework - Extensible, Cross-Platform, GPU-Ready",
+  "version": "0.1.0",
+  "description": "Production-grade AI Desktop Application Template",
   "type": "module",
   "workspaces": [
     "apps/ui",

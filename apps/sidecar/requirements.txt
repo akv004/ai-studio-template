@@ -9,5 +9,8 @@ httpx>=0.26.0
 # Telegram bot (optional channel)
 python-telegram-bot>=21.0
 
+# Browser automation (optional)
+playwright>=1.40.0
+
 # Development
 python-dotenv>=1.0.0

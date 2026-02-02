@@ -232,6 +232,153 @@ async def clear_conversation(conversation_id: str):
 
 
 # ============================================================================
+# Tools Endpoints
+# ============================================================================
+
+from agent.tools import ShellTool, BrowserTool, FilesystemTool
+
+# Initialize tools with restricted mode by default
+shell_tool = ShellTool(mode=os.getenv("TOOLS_MODE", "restricted"))
+filesystem_tool = FilesystemTool(mode=os.getenv("TOOLS_MODE", "restricted"))
+browser_tool = BrowserTool(headless=True)
+
+
+class ShellRequest(BaseModel):
+    """Shell command request"""
+    command: str
+    timeout: Optional[float] = 30.0
+    cwd: Optional[str] = None
+
+
+class FilesystemRequest(BaseModel):
+    """Filesystem operation request"""
+    action: str  # read, write, delete, list_dir, mkdir, exists, copy, move
+    path: str
+    content: Optional[str] = None  # For write/append
+    dest: Optional[str] = None  # For copy/move
+
+
+class BrowserRequest(BaseModel):
+    """Browser action request"""
+    action: str  # navigate, screenshot, click, fill, extract_text, get_html, evaluate
+    url: Optional[str] = None
+    selector: Optional[str] = None
+    value: Optional[str] = None
+    script: Optional[str] = None
+
+
+@app.post("/tools/shell")
+async def run_shell(request: ShellRequest):
+    """
+    Execute a shell command.
+    
+    Mode is controlled by TOOLS_MODE env var: sandboxed, restricted (default), full
+    """
+    result = await shell_tool.run(
+        command=request.command,
+        timeout=request.timeout,
+        cwd=request.cwd,
+    )
+    return {
+        "command": result.command,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+        "return_code": result.return_code,
+        "timed_out": result.timed_out,
+    }
+
+
+@app.post("/tools/filesystem")
+async def run_filesystem(request: FilesystemRequest):
+    """
+    Perform filesystem operations.
+    
+    Actions: read, write, append, delete, list_dir, mkdir, exists, copy, move
+    """
+    action = request.action.lower()
+    
+    if action == "read":
+        result = filesystem_tool.read(request.path)
+    elif action == "write":
+        result = filesystem_tool.write(request.path, request.content or "")
+    elif action == "append":
+        result = filesystem_tool.append(request.path, request.content or "")
+    elif action == "delete":
+        result = filesystem_tool.delete(request.path)
+    elif action == "list_dir":
+        result = filesystem_tool.list_dir(request.path)
+    elif action == "mkdir":
+        result = filesystem_tool.mkdir(request.path)
+    elif action == "exists":
+        result = filesystem_tool.exists(request.path)
+    elif action == "copy":
+        result = filesystem_tool.copy(request.path, request.dest or "")
+    elif action == "move":
+        result = filesystem_tool.move(request.path, request.dest or "")
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+    
+    return {
+        "success": result.success,
+        "action": result.action,
+        "path": result.path,
+        "data": result.data,
+        "error": result.error,
+    }
+
+
+@app.post("/tools/browser/start")
+async def browser_start():
+    """Start the browser instance"""
+    result = await browser_tool.start()
+    return {"success": result.success, "error": result.error}
+
+
+@app.post("/tools/browser/stop")
+async def browser_stop():
+    """Stop the browser instance"""
+    result = await browser_tool.stop()
+    return {"success": result.success, "error": result.error}
+
+
+@app.post("/tools/browser")
+async def run_browser(request: BrowserRequest):
+    """
+    Perform browser actions.
+    
+    Actions: navigate, screenshot, click, fill, extract_text, get_html, evaluate, wait_for
+    """
+    action = request.action.lower()
+    
+    if action == "navigate":
+        result = await browser_tool.navigate(request.url or "")
+    elif action == "screenshot":
+        result = await browser_tool.screenshot()
+    elif action == "click":
+        result = await browser_tool.click(request.selector or "")
+    elif action == "fill":
+        result = await browser_tool.fill(request.selector or "", request.value or "")
+    elif action == "extract_text":
+        result = await browser_tool.extract_text(request.selector or "body")
+    elif action == "get_html":
+        result = await browser_tool.get_html(request.selector or "body")
+    elif action == "evaluate":
+        result = await browser_tool.evaluate(request.script or "")
+    elif action == "wait_for":
+        result = await browser_tool.wait_for(request.selector or "")
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
+    
+    return {
+        "success": result.success,
+        "action": result.action,
+        "data": result.data,
+        "screenshot": result.screenshot,
+        "error": result.error,
+    }
+
+
+# ============================================================================
 # Main Entry Point
 # ============================================================================
 

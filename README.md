@@ -349,9 +349,9 @@ This creates platform-specific installers in `apps/desktop/src-tauri/target/rele
 ## 🗺️ Roadmap
 
 ### v0.2.0 - Framework Foundation (Current)
-- [x] Core architecture design
-- [x] Module system specification
-- [x] Provider abstraction design
+- [x] Core architecture design *(spec complete)*
+- [x] Module system specification *(spec complete)*
+- [x] Provider abstraction design *(spec complete)*
 - [ ] Event bus implementation
 - [ ] Config file support
 

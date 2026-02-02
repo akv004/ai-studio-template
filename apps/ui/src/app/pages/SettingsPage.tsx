@@ -1,31 +1,89 @@
 import { useState } from 'react';
-import { Cpu, Keyboard, Palette, FolderOpen, Zap } from 'lucide-react';
+import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 
-type SettingsTab = 'models' | 'paths' | 'performance' | 'hotkeys' | 'appearance';
+type SettingsTab = 'providers' | 'models' | 'paths' | 'performance' | 'hotkeys' | 'appearance';
 
 interface HotkeyConfig {
     action: string;
     shortcut: string;
 }
 
+interface ProviderConfig {
+    id: string;
+    name: string;
+    icon: string;
+    description: string;
+    apiKeyEnv: string;
+    models: string[];
+    defaultModel: string;
+    docsUrl: string;
+}
+
 /**
  * Settings Page
  * 
  * Features:
+ * - AI Providers configuration (NEW)
  * - Models configuration
  * - Paths settings
  * - Performance toggles
  * - Hotkeys customization
  */
 export function SettingsPage() {
-    const [activeTab, setActiveTab] = useState<SettingsTab>('models');
+    const [activeTab, setActiveTab] = useState<SettingsTab>('providers');
+    const [providerStatus, setProviderStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
+    const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
 
     const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
-        { id: 'models', label: 'Models', icon: Cpu },
+        { id: 'providers', label: 'AI Providers', icon: Cloud },
+        { id: 'models', label: 'Local Models', icon: Cpu },
         { id: 'paths', label: 'Paths', icon: FolderOpen },
         { id: 'performance', label: 'Performance', icon: Zap },
         { id: 'hotkeys', label: 'Hotkeys', icon: Keyboard },
         { id: 'appearance', label: 'Appearance', icon: Palette },
+    ];
+
+    const providers: ProviderConfig[] = [
+        {
+            id: 'ollama',
+            name: 'Ollama (Local)',
+            icon: '🦙',
+            description: 'Run LLMs locally on your machine',
+            apiKeyEnv: 'OLLAMA_HOST',
+            models: ['llama3.2', 'llama3.1:70b', 'mistral', 'codellama', 'qwen2.5'],
+            defaultModel: 'llama3.2',
+            docsUrl: 'https://ollama.ai',
+        },
+        {
+            id: 'anthropic',
+            name: 'Anthropic',
+            icon: '🔮',
+            description: 'Claude models - Best for coding and analysis',
+            apiKeyEnv: 'ANTHROPIC_API_KEY',
+            models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-3-haiku-20240307'],
+            defaultModel: 'claude-sonnet-4-20250514',
+            docsUrl: 'https://console.anthropic.com',
+        },
+        {
+            id: 'openai',
+            name: 'OpenAI',
+            icon: '🤖',
+            description: 'GPT models - Versatile general-purpose AI',
+            apiKeyEnv: 'OPENAI_API_KEY',
+            models: ['gpt-4o', 'gpt-4o-mini', 'o1-preview', 'o1-mini'],
+            defaultModel: 'gpt-4o',
+            docsUrl: 'https://platform.openai.com/api-keys',
+        },
+        {
+            id: 'google',
+            name: 'Google AI Studio',
+            icon: '✨',
+            description: 'Gemini models - Google\'s multimodal AI',
+            apiKeyEnv: 'GOOGLE_API_KEY',
+            models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash'],
+            defaultModel: 'gemini-2.0-flash',
+            docsUrl: 'https://aistudio.google.com/apikey',
+        },
     ];
 
     const models = [
@@ -46,6 +104,45 @@ export function SettingsPage() {
         { action: 'New Project', shortcut: '⌘N' },
         { action: 'Start Training', shortcut: '⌘⇧T' },
     ];
+
+    const testConnection = async (providerId: string) => {
+        setProviderStatus(prev => ({ ...prev, [providerId]: 'testing' }));
+
+        try {
+            const response = await fetch('http://localhost:8765/providers');
+            const data = await response.json();
+
+            if (data.providers?.includes(providerId)) {
+                setProviderStatus(prev => ({ ...prev, [providerId]: 'success' }));
+            } else {
+                setProviderStatus(prev => ({ ...prev, [providerId]: 'error' }));
+            }
+        } catch {
+            setProviderStatus(prev => ({ ...prev, [providerId]: 'error' }));
+        }
+
+        setTimeout(() => {
+            setProviderStatus(prev => ({ ...prev, [providerId]: 'idle' }));
+        }, 3000);
+    };
+
+    const toggleApiKeyVisibility = (providerId: string) => {
+        setShowApiKeys(prev => ({ ...prev, [providerId]: !prev[providerId] }));
+    };
+
+    const renderProviderStatus = (providerId: string) => {
+        const status = providerStatus[providerId];
+        switch (status) {
+            case 'testing':
+                return <Loader2 className="w-4 h-4 animate-spin text-[var(--accent-primary)]" />;
+            case 'success':
+                return <Check className="w-4 h-4 text-green-400" />;
+            case 'error':
+                return <AlertCircle className="w-4 h-4 text-red-400" />;
+            default:
+                return null;
+        }
+    };
 
     return (
         <div className="animate-fade-in">
@@ -80,6 +177,100 @@ export function SettingsPage() {
                         </span>
                     </div>
                     <div className="panel-content">
+                        {activeTab === 'providers' && (
+                            <div className="space-y-6">
+                                <p className="text-sm text-[var(--text-secondary)]">
+                                    Configure AI providers for chat, code generation, and agent tasks.
+                                    API keys are stored locally and never sent to external servers.
+                                </p>
+
+                                {providers.map((provider) => (
+                                    <div
+                                        key={provider.id}
+                                        className="p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]"
+                                    >
+                                        {/* Provider Header */}
+                                        <div className="flex items-center justify-between mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-2xl">{provider.icon}</span>
+                                                <div>
+                                                    <div className="font-medium">{provider.name}</div>
+                                                    <div className="text-xs text-[var(--text-muted)]">
+                                                        {provider.description}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                {renderProviderStatus(provider.id)}
+                                                <button
+                                                    className="btn btn-secondary btn-sm"
+                                                    onClick={() => testConnection(provider.id)}
+                                                    disabled={providerStatus[provider.id] === 'testing'}
+                                                >
+                                                    Test
+                                                </button>
+                                                <a
+                                                    href={provider.docsUrl}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="btn btn-secondary btn-sm"
+                                                >
+                                                    Get Key
+                                                </a>
+                                            </div>
+                                        </div>
+
+                                        {/* API Key Input */}
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                                                    {provider.id === 'ollama' ? 'Host URL' : 'API Key'}
+                                                </label>
+                                                <div className="relative">
+                                                    <input
+                                                        type={showApiKeys[provider.id] ? 'text' : 'password'}
+                                                        className="input w-full pr-10"
+                                                        placeholder={provider.id === 'ollama' ? 'http://localhost:11434' : `Enter ${provider.apiKeyEnv}`}
+                                                        defaultValue={provider.id === 'ollama' ? 'http://localhost:11434' : ''}
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                                                        onClick={() => toggleApiKeyVisibility(provider.id)}
+                                                    >
+                                                        {showApiKeys[provider.id] ? (
+                                                            <EyeOff className="w-4 h-4" />
+                                                        ) : (
+                                                            <Eye className="w-4 h-4" />
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                                                    Default Model
+                                                </label>
+                                                <select className="input w-full" defaultValue={provider.defaultModel}>
+                                                    {provider.models.map((model) => (
+                                                        <option key={model} value={model}>
+                                                            {model}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+
+                                {/* Save Button */}
+                                <div className="flex justify-end pt-4 border-t border-[var(--border-subtle)]">
+                                    <button className="btn btn-primary">
+                                        Save Provider Settings
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {activeTab === 'models' && (
                             <div className="space-y-4">
                                 <p className="text-sm text-[var(--text-secondary)] mb-4">
@@ -247,3 +438,4 @@ export function SettingsPage() {
         </div>
     );
 }
+

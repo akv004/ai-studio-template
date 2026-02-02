@@ -119,13 +119,82 @@ npm run tauri:dev
 > ⏱️ First build takes ~3-5 minutes (compiles Rust dependencies)  
 > Subsequent runs are instant.
 
-### Option C: Run Python Sidecar (Mock AI Server)
+### Option C: Run AI Agent Backend
+
+The AI sidecar is a **multi-provider LLM agent** with local and cloud support:
 
 ```bash
-npm run sidecar
-# Or directly:
-python apps/sidecar/server.py
+# Install dependencies
+cd apps/sidecar && pip install -r requirements.txt
+
+# Run the agent server
+python server.py
+# API docs at: http://localhost:8765/docs
 ```
+
+### Option D: Docker Compose (Recommended for Local LLM)
+
+Run everything with Docker, including Ollama for local LLM:
+
+```bash
+# CPU mode
+docker compose up
+
+# GPU mode (requires nvidia-container-toolkit)
+docker compose --profile gpu up
+
+# With Telegram bot
+TELEGRAM_BOT_TOKEN=your_token docker compose --profile telegram up
+```
+
+---
+
+## 🤖 AI Agent Infrastructure
+
+### Multi-Provider LLM Support
+
+The sidecar supports multiple LLM providers:
+
+| Provider | Type | Configuration |
+|----------|------|---------------|
+| **Ollama** | Local | `OLLAMA_HOST`, `OLLAMA_MODEL` |
+| **Anthropic** | Cloud | `ANTHROPIC_API_KEY` |
+| **OpenAI** | Cloud | `OPENAI_API_KEY` |
+
+### API Endpoints
+
+```bash
+# Chat with conversation memory
+curl -X POST http://localhost:8765/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello!", "provider": "ollama"}'
+
+# List available providers
+curl http://localhost:8765/providers
+
+# Health check
+curl http://localhost:8765/status
+```
+
+### Telegram Bot Integration
+
+1. Create a bot via [@BotFather](https://t.me/BotFather) on Telegram
+2. Set your bot token:
+   ```bash
+   export TELEGRAM_BOT_TOKEN=your_token
+   ```
+3. Run the bot:
+   ```bash
+   cd apps/sidecar
+   python -m channels.telegram
+   ```
+
+**Bot Commands:**
+- `/start` - Show help
+- `/clear` - Clear conversation
+- `/provider <name>` - Switch provider
+- `/model <name>` - Set model
+- `/status` - Show settings
 
 ---
 
@@ -153,9 +222,15 @@ ai-studio-template/
 │   │   │   └── commands/         # Keyboard shortcuts
 │   │   └── vite.config.ts
 │   │
-│   └── sidecar/              # Python AI mock server
-│       ├── server.py
-│       └── mock_responses/
+│   └── sidecar/              # AI Agent Backend (Multi-Provider LLM)
+│       ├── agent/
+│       │   ├── providers/       # Ollama, Anthropic, OpenAI
+│       │   └── chat.py          # Chat service with memory
+│       ├── channels/
+│       │   └── telegram.py      # Telegram bot integration
+│       ├── server.py            # FastAPI server
+│       ├── Dockerfile
+│       └── requirements.txt
 │
 ├── packages/
 │   └── shared/               # Shared types & schemas

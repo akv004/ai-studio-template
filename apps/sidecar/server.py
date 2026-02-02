@@ -1,144 +1,249 @@
 """
-AI Studio - Python Sidecar Server (Mock)
-========================================
+AI Studio - Python Sidecar Server
+=================================
 
-This is a mock HTTP server that simulates AI model inference.
-In production, this would interface with actual ML frameworks
-like PyTorch, TensorFlow, or ONNX Runtime.
+FastAPI-based server providing multi-provider LLM chat capabilities.
+Connects to local LLMs (Ollama) and cloud providers (Anthropic, OpenAI).
 
-Currently returns mock JSON responses for all endpoints.
+Run modes:
+- Development: `python server.py`
+- Docker: `docker compose up`
 """
 
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import json
-import time
-import random
-from pathlib import Path
+import os
+import uuid
+from contextlib import asynccontextmanager
+from typing import Optional
 
-# Mock response directory
-MOCK_DIR = Path(__file__).parent / "mock_responses"
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
-
-class MockAIHandler(BaseHTTPRequestHandler):
-    """HTTP request handler with mock AI responses"""
-
-    def _send_json(self, data: dict, status: int = 200):
-        """Send JSON response"""
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-        self.wfile.write(json.dumps(data).encode())
-
-    def _load_mock(self, name: str) -> dict:
-        """Load mock response from file"""
-        mock_file = MOCK_DIR / f"{name}.json"
-        if mock_file.exists():
-            return json.loads(mock_file.read_text())
-        return {"error": f"Mock not found: {name}"}
-
-    def do_GET(self):
-        """Handle GET requests"""
-        # Simulate network delay
-        time.sleep(random.uniform(0.1, 0.3))
-
-        if self.path == "/health":
-            self._send_json({"status": "healthy", "version": "0.1.0"})
-
-        elif self.path == "/models":
-            self._send_json(self._load_mock("models"))
-
-        elif self.path == "/status":
-            self._send_json({
-                "gpu_available": True,
-                "gpu_memory_used": random.randint(2000, 6000),
-                "gpu_memory_total": 8192,
-                "active_models": ["yolov8", "whisper-base"],
-                "queue_length": random.randint(0, 5)
-            })
-
-        else:
-            self._send_json({"error": "Not found"}, 404)
-
-    def do_POST(self):
-        """Handle POST requests"""
-        # Simulate inference delay
-        time.sleep(random.uniform(0.2, 0.5))
-
-        content_length = int(self.headers.get("Content-Length", 0))
-        body = self.rfile.read(content_length)
-        
-        try:
-            request_data = json.loads(body) if body else {}
-        except json.JSONDecodeError:
-            request_data = {}
-
-        if self.path == "/inference/vision":
-            self._send_json(self._load_mock("vision_inference"))
-
-        elif self.path == "/inference/audio":
-            self._send_json(self._load_mock("audio_inference"))
-
-        elif self.path == "/inference/text":
-            self._send_json(self._load_mock("text_inference"))
-
-        elif self.path == "/train/start":
-            self._send_json({
-                "run_id": f"run_{int(time.time())}",
-                "status": "started",
-                "message": "Training job queued successfully"
-            })
-
-        elif self.path == "/train/status":
-            run_id = request_data.get("run_id", "unknown")
-            self._send_json({
-                "run_id": run_id,
-                "status": "running",
-                "epoch": random.randint(1, 100),
-                "loss": round(random.uniform(0.01, 0.5), 4),
-                "accuracy": round(random.uniform(0.8, 0.99), 4)
-            })
-
-        else:
-            self._send_json({"error": "Not found"}, 404)
-
-    def do_OPTIONS(self):
-        """Handle CORS preflight"""
-        self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
-
-    def log_message(self, format, *args):
-        """Custom logging format"""
-        print(f"[AI Sidecar] {self.address_string()} - {args[0]}")
+from agent.chat import ChatService
+from agent.providers import (
+    OllamaProvider,
+    AnthropicProvider,
+    OpenAIProvider,
+    Message,
+)
 
 
-def main():
-    """Run the mock AI server"""
-    host = "127.0.0.1"
-    port = 8765
+# ============================================================================
+# Request/Response Models
+# ============================================================================
 
-    # Ensure mock responses directory exists
-    MOCK_DIR.mkdir(exist_ok=True)
+class ChatRequest(BaseModel):
+    """Chat completion request"""
+    conversation_id: Optional[str] = None
+    message: str
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    temperature: float = 0.7
+    system_prompt: Optional[str] = None
 
-    server = HTTPServer((host, port), MockAIHandler)
-    print(f"🤖 AI Studio Sidecar (Mock) running at http://{host}:{port}")
-    print("   Endpoints:")
-    print("   - GET  /health        - Health check")
-    print("   - GET  /models        - List available models")
-    print("   - GET  /status        - GPU/queue status")
-    print("   - POST /inference/*   - Run inference")
-    print("   - POST /train/*       - Training operations")
-    print("\n   Press Ctrl+C to stop\n")
 
+class ChatMessageRequest(BaseModel):
+    """Direct message request (no conversation)"""
+    messages: list[dict]
+    provider: Optional[str] = "ollama"
+    model: Optional[str] = None
+    temperature: float = 0.7
+
+
+class ChatResponse(BaseModel):
+    """Chat completion response"""
+    conversation_id: str
+    content: str
+    model: str
+    provider: str
+    usage: Optional[dict] = None
+
+
+# ============================================================================
+# Application Setup
+# ============================================================================
+
+chat_service: ChatService = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize services on startup"""
+    global chat_service
+    chat_service = ChatService()
+    
+    # Configure Ollama (local LLM)
+    ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2")
+    chat_service.register_provider(OllamaProvider(
+        base_url=ollama_host,
+        default_model=ollama_model,
+    ))
+    
+    # Configure Anthropic (if API key is set)
+    if os.getenv("ANTHROPIC_API_KEY"):
+        chat_service.register_provider(AnthropicProvider())
+        print("✓ Anthropic provider enabled")
+    
+    # Configure OpenAI (if API key is set)
+    if os.getenv("OPENAI_API_KEY"):
+        chat_service.register_provider(OpenAIProvider())
+        print("✓ OpenAI provider enabled")
+    
+    print(f"🤖 AI Studio Sidecar initialized")
+    print(f"   Ollama: {ollama_host} (model: {ollama_model})")
+    
+    yield
+
+
+app = FastAPI(
+    title="AI Studio Agent",
+    description="Multi-provider LLM agent server",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+# CORS for Tauri/React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ============================================================================
+# Health & Status Endpoints
+# ============================================================================
+
+@app.get("/health")
+async def health():
+    """Health check endpoint"""
+    return {"status": "healthy", "version": "0.1.0"}
+
+
+@app.get("/status")
+async def status():
+    """Detailed status including provider health"""
+    provider_health = await chat_service.health_check()
+    return {
+        "status": "healthy",
+        "providers": provider_health,
+        "active_conversations": len(chat_service.conversations),
+    }
+
+
+@app.get("/providers")
+async def list_providers():
+    """List available LLM providers and their models"""
+    return {"providers": chat_service.list_providers()}
+
+
+# ============================================================================
+# Chat Endpoints
+# ============================================================================
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(request: ChatRequest):
+    """
+    Send a chat message and get a response.
+    
+    Creates a new conversation if conversation_id is not provided.
+    Maintains conversation history for follow-up messages.
+    """
     try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\n👋 Shutting down...")
-        server.shutdown()
+        # Generate conversation ID if not provided
+        conversation_id = request.conversation_id or f"conv_{uuid.uuid4().hex[:8]}"
+        
+        # Create conversation with system prompt if provided
+        if request.system_prompt and conversation_id not in chat_service.conversations:
+            chat_service.create_conversation(
+                conversation_id,
+                provider_name=request.provider,
+                system_prompt=request.system_prompt,
+            )
+        
+        # Get response
+        response = await chat_service.chat(
+            conversation_id=conversation_id,
+            user_message=request.message,
+            provider_name=request.provider,
+            model=request.model,
+            temperature=request.temperature,
+        )
+        
+        return ChatResponse(
+            conversation_id=conversation_id,
+            content=response.content,
+            model=response.model,
+            provider=response.provider,
+            usage=response.usage,
+        )
+    
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
+
+@app.post("/chat/direct")
+async def chat_direct(request: ChatMessageRequest):
+    """
+    Direct chat without conversation history.
+    
+    Useful for one-off queries or when managing history client-side.
+    """
+    try:
+        messages = [Message(role=m["role"], content=m["content"]) for m in request.messages]
+        provider = chat_service.get_provider(request.provider or "ollama")
+        
+        response = await provider.chat(
+            messages=messages,
+            model=request.model,
+            temperature=request.temperature,
+        )
+        
+        return {
+            "content": response.content,
+            "model": response.model,
+            "provider": response.provider,
+            "usage": response.usage,
+        }
+    
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+
+@app.delete("/chat/{conversation_id}")
+async def delete_conversation(conversation_id: str):
+    """Delete a conversation"""
+    chat_service.delete_conversation(conversation_id)
+    return {"status": "deleted", "conversation_id": conversation_id}
+
+
+@app.post("/chat/{conversation_id}/clear")
+async def clear_conversation(conversation_id: str):
+    """Clear a conversation's history"""
+    chat_service.clear_conversation(conversation_id)
+    return {"status": "cleared", "conversation_id": conversation_id}
+
+
+# ============================================================================
+# Main Entry Point
+# ============================================================================
 
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    
+    host = os.getenv("HOST", "127.0.0.1")
+    port = int(os.getenv("PORT", "8765"))
+    
+    print(f"\n🚀 Starting AI Studio Agent Server")
+    print(f"   URL: http://{host}:{port}")
+    print(f"   Docs: http://{host}:{port}/docs")
+    print(f"\n   Press Ctrl+C to stop\n")
+    
+    uvicorn.run(app, host=host, port=port)

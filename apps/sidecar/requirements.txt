@@ -1,0 +1,13 @@
+# Python dependencies for AI Studio Sidecar
+
+# Core
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+pydantic>=2.5.0
+httpx>=0.26.0
+
+# Telegram bot (optional channel)
+python-telegram-bot>=21.0
+
+# Development
+python-dotenv>=1.0.0

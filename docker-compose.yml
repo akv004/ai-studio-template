@@ -1,0 +1,90 @@
+version: "3.8"
+
+# AI Studio Agent Services
+# ========================
+# Run: docker compose up
+# GPU: docker compose --profile gpu up
+
+services:
+  # ============================================================================
+  # Ollama - Local LLM Runtime
+  # ============================================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ai-studio-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    # GPU support (requires nvidia-container-toolkit)
+    # Uncomment for GPU acceleration:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # Ollama with explicit GPU (use --profile gpu)
+  ollama-gpu:
+    image: ollama/ollama:latest
+    container_name: ai-studio-ollama-gpu
+    profiles: ["gpu"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+  # ============================================================================
+  # AI Studio Sidecar - Agent Backend
+  # ============================================================================
+  sidecar:
+    build: ./apps/sidecar
+    container_name: ai-studio-sidecar
+    ports:
+      - "8765:8765"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8765
+      - OLLAMA_HOST=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2
+      # Cloud providers (optional - set in .env file)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  # ============================================================================
+  # Telegram Bot (optional - use --profile telegram)
+  # ============================================================================
+  telegram-bot:
+    build: ./apps/sidecar
+    container_name: ai-studio-telegram
+    profiles: ["telegram"]
+    command: ["python", "-m", "channels.telegram"]
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_PROVIDER=${TELEGRAM_PROVIDER:-ollama}
+      - TELEGRAM_MODEL=${TELEGRAM_MODEL:-llama3.2}
+      # Cloud providers (optional)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+volumes:
+  ollama_data:
+    name: ai-studio-ollama-data

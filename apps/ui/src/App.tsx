@@ -1,8 +1,10 @@
 
 import { AppShell } from './app/layout/AppShell';
 import { CommandPalette } from './app/layout/CommandPalette';
+import { ToolApprovalModal } from './app/layout/ToolApprovalModal';
 import { useKeyboardShortcuts } from './commands';
 import { useAppStore } from './state/store';
+import { useEffect, useMemo, useState } from 'react';
 
 // Page imports
 import { ProjectsPage } from './app/pages/ProjectsPage';
@@ -21,9 +23,57 @@ import { SettingsPage } from './app/pages/SettingsPage';
  */
 function App() {
   const { activeModule, isCommandPaletteOpen } = useAppStore();
+  const [toolApprovalQueue, setToolApprovalQueue] = useState<
+    Array<{ id: string; method: string; path: string; body?: unknown }>
+  >([]);
+
+  const activeToolApproval = useMemo(() => toolApprovalQueue[0] ?? null, [toolApprovalQueue]);
 
   // Initialize keyboard shortcuts
   useKeyboardShortcuts();
+
+  // Listen for tool approval requests from the desktop backend (Tauri only).
+  useEffect(() => {
+    let unlisten: undefined | (() => void);
+
+    (async () => {
+      try {
+        const { listen } = await import('@tauri-apps/api/event');
+        unlisten = await listen<{
+          id: string;
+          method: string;
+          path: string;
+          body?: unknown;
+        }>('tool_approval_requested', (event) => {
+          setToolApprovalQueue((q) => [...q, event.payload]);
+        });
+      } catch {
+        // Not running under Tauri (or events unavailable).
+      }
+    })();
+
+    return () => {
+      try {
+        unlisten?.();
+      } catch {
+        // ignore
+      }
+    };
+  }, []);
+
+  const decideToolApproval = async (approve: boolean) => {
+    const request = toolApprovalQueue[0];
+    if (!request) return;
+
+    setToolApprovalQueue((q) => q.slice(1));
+
+    try {
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('approve_tool_request', { id: request.id, approve });
+    } catch {
+      // If not running under Tauri or the request timed out, ignore.
+    }
+  };
 
   // Dynamic page rendering based on active module
   const renderPage = () => {
@@ -55,6 +105,15 @@ function App() {
 
       {/* Command Palette Overlay */}
       {isCommandPaletteOpen && <CommandPalette />}
+
+      {/* Tool Approval Modal (Desktop only) */}
+      {activeToolApproval && (
+        <ToolApprovalModal
+          request={activeToolApproval}
+          onApprove={() => decideToolApproval(true)}
+          onDeny={() => decideToolApproval(false)}
+        />
+      )}
     </>
   );
 }

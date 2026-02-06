@@ -200,8 +200,8 @@ export function CanvasDemo() {
         const rect = canvasRef.current?.getBoundingClientRect();
         if (!rect) return;
 
-        const x = (e.clientX - rect.left) * (window.devicePixelRatio || 1);
-        const y = (e.clientY - rect.top) * (window.devicePixelRatio || 1);
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
 
         // Check if clicked on a node
         const clickedNode = mockNodes.find(node =>

@@ -15,8 +15,9 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from agent.chat import ChatService
@@ -109,11 +110,29 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS for Tauri/React frontend
+# Optional auth token injected by the desktop app.
+AI_STUDIO_TOKEN = os.getenv("AI_STUDIO_TOKEN")
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    if not AI_STUDIO_TOKEN:
+        return await call_next(request)
+
+    # Allow unauthenticated health checks (used for startup probing).
+    if request.url.path == "/health":
+        return await call_next(request)
+
+    token = request.headers.get("x-ai-studio-token")
+    if token != AI_STUDIO_TOKEN:
+        return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    return await call_next(request)
+
+# CORS for Tauri/React frontend (used mainly when running UI in a browser).
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["tauri://localhost", "http://localhost:1420"] if AI_STUDIO_TOKEN else ["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

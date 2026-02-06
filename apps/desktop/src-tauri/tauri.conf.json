@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.aistudio.app",
   "build": {
-    "beforeDevCommand": "npm run dev --prefix ../../apps/ui",
+    "beforeDevCommand": "npm run dev --prefix ../../ui",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build --prefix ../../apps/ui",
+    "beforeBuildCommand": "npm run build --prefix ../../ui",
     "frontendDist": "../../ui/dist"
   },
   "app": {

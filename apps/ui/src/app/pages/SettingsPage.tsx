@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
+import { checkProviderAvailable, fetchApi } from '../../services/api';
 
 type SettingsTab = 'providers' | 'models' | 'paths' | 'performance' | 'hotkeys' | 'appearance';
 
@@ -33,6 +34,8 @@ export function SettingsPage() {
     const [activeTab, setActiveTab] = useState<SettingsTab>('providers');
     const [providerStatus, setProviderStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
     const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
+    const [toolDemoOutput, setToolDemoOutput] = useState<string>('');
+    const [toolDemoStatus, setToolDemoStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
 
     const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
         { id: 'providers', label: 'AI Providers', icon: Cloud },
@@ -109,10 +112,9 @@ export function SettingsPage() {
         setProviderStatus(prev => ({ ...prev, [providerId]: 'testing' }));
 
         try {
-            const response = await fetch('http://localhost:8765/providers');
-            const data = await response.json();
+            const available = await checkProviderAvailable(providerId);
 
-            if (data.providers?.includes(providerId)) {
+            if (available) {
                 setProviderStatus(prev => ({ ...prev, [providerId]: 'success' }));
             } else {
                 setProviderStatus(prev => ({ ...prev, [providerId]: 'error' }));
@@ -124,6 +126,22 @@ export function SettingsPage() {
         setTimeout(() => {
             setProviderStatus(prev => ({ ...prev, [providerId]: 'idle' }));
         }, 3000);
+    };
+
+    const runToolApprovalDemo = async () => {
+        setToolDemoStatus('running');
+        setToolDemoOutput('');
+        try {
+            const result = await fetchApi('/tools/shell', {
+                method: 'POST',
+                body: JSON.stringify({ command: 'pwd' }),
+            });
+            setToolDemoOutput(JSON.stringify(result, null, 2));
+            setToolDemoStatus('done');
+        } catch (e) {
+            setToolDemoOutput(e instanceof Error ? e.message : String(e));
+            setToolDemoStatus('error');
+        }
     };
 
     const toggleApiKeyVisibility = (providerId: string) => {
@@ -267,6 +285,29 @@ export function SettingsPage() {
                                     <button className="btn btn-primary">
                                         Save Provider Settings
                                     </button>
+                                </div>
+
+                                {/* Tool approval demo (Desktop) */}
+                                <div className="pt-4 border-t border-[var(--border-subtle)] space-y-2">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                            <div className="font-medium text-sm">Tool approval demo</div>
+                                            <div className="text-xs text-[var(--text-muted)]">
+                                                Runs a safe shell command via the sidecar. Desktop should prompt for approval.
+                                            </div>
+                                        </div>
+                                        <button
+                                            className="btn btn-secondary btn-sm"
+                                            onClick={runToolApprovalDemo}
+                                            disabled={toolDemoStatus === 'running'}
+                                        >
+                                            {toolDemoStatus === 'running' ? 'Running…' : 'Run "pwd"'}
+                                        </button>
+                                    </div>
+
+                                    {toolDemoOutput && (
+                                        <pre className="modal-pre">{toolDemoOutput}</pre>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -438,4 +479,3 @@ export function SettingsPage() {
         </div>
     );
 }
-

@@ -1,8 +1,12 @@
 {
   "name": "ai-studio-template",
-  "private": true,
   "version": "0.1.0",
-  "description": "Production-grade AI Desktop Application Template",
+  "license": "MIT",
+  "description": "The open-source IDE for AI agents",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akv004/ai-studio-template.git"
+  },
   "type": "module",
   "workspaces": [
     "apps/ui",

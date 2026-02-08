@@ -2,23 +2,19 @@
   <img src="docs/screenshots/screenshot-1-main-dashboard.png" alt="AI Studio" width="800">
 </p>
 
-<h1 align="center">🧠 AI Studio</h1>
+<h1 align="center">AI Studio</h1>
 
 <p align="center">
-  <strong>Your Personal AI Assistant. Any OS. Any Provider. Local-First.</strong>
+  <strong>The open-source IDE for AI agents.</strong><br>
+  Build, run, debug, and compare AI agents — with full visibility into every decision and dollar spent.
 </p>
 
 <p align="center">
-  A production-grade, cross-platform AI desktop application built with <b>Tauri + React + TypeScript</b>.<br>
-  Run LLMs locally, connect to cloud providers, and take full control of your AI experience.
-</p>
-
-<p align="center">
-  <a href="#-features">Features</a> •
-  <a href="#-screenshots">Screenshots</a> •
-  <a href="#-installation-guide">Install</a> •
-  <a href="#%EF%B8%8F-architecture">Architecture</a> •
-  <a href="#-ai-agent-infrastructure">AI Agent</a>
+  <a href="#what-can-you-do-with-ai-studio">What It Does</a> &middot;
+  <a href="#why-ai-studio">Why AI Studio</a> &middot;
+  <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#architecture">Architecture</a> &middot;
+  <a href="#roadmap">Roadmap</a>
 </p>
 
 <p align="center">
@@ -30,55 +26,147 @@
 
 ---
 
-> 🎯 **Purpose**: Architecture + scaffolding for a 5-10 year foundation. Not a fully working product, but a professional starting point.
+## What can you do with AI Studio?
+
+**See everything your AI agent does.**
+
+> You say: "Refactor the auth module to use JWT"
+>
+> The agent reads 3 files, installs a package, writes 2 files. You see every step in the Inspector — every tool call, every file read, every approval decision. The agent used 2,341 tokens and cost you $0.012. It took 4.8 seconds.
+>
+> Something wrong? Click any step. See the exact input and output. Click **Branch from here**. Try a different approach. Compare results side-by-side.
+
+**Hybrid Intelligence — the right model for each step.**
+
+> Simple question? Runs on your local Llama (free, private). Complex code? Routes to Claude Sonnet. Need vision? GPT-4o. You set a monthly budget — AI Studio picks the best model automatically and never surprises you with a bill.
+
+**Control what your agent can do.**
+
+> Read files? Auto-approved. Write files? You approve each one. `rm -rf`? Blocked. Always. Every decision logged and auditable.
+
+**Compare models side-by-side.**
+
+> Same prompt. Claude vs GPT vs Gemini vs local Llama. Compare output quality, speed, and cost in a split-screen view. Make data-driven decisions.
+
+**Run agents at scale.**
+
+> Batch 50 tasks. Auto-approve safe operations. See which ones failed and why. Export results. Total cost: $0.58.
+
+---
+
+## Why AI Studio?
+
+| | ChatGPT / Claude | OpenClaw | Cursor | **AI Studio** |
+|---|---|---|---|---|
+| Can it use tools (files, shell, APIs)? | No | Yes | Limited | **Yes (MCP + built-in)** |
+| Can you see what it did? | No | No | No | **Full Inspector** |
+| Can you replay / branch? | No | No | No | **Yes** |
+| Can you compare models? | No | No | No | **Side-by-side** |
+| Hybrid intelligence (auto-pick model)? | No | No | No | **Yes** |
+| Cost tracking per message? | No | No | No | **Yes** |
+| Approval rules for safety? | N/A | Minimal | N/A | **Full rules engine** |
+| Local-first (data stays on machine)? | No | Yes | No | **Yes** |
+| Open source and free? | No | Yes | No | **Yes** |
+
+---
 
 ## Features
 
-- ✅ **Cross-platform**: macOS, Windows, Linux
-- ✅ **Professional GUI**: Node graphs, timelines, media panels
-- ✅ **GPU-ready**: Canvas/WebGL now, WebGPU architecture ready
-- ✅ **Clean separation**: UI, OS access, AI, and rendering layers
-- ✅ **Extensible**: Vision, Audio, Agents, Training, Projects
-- ✅ **Mock-first**: All data mocked for rapid prototyping
+### Agent Inspector (Flagship)
+
+The **Chrome DevTools for AI agents**. No other tool gives you this level of visibility:
+
+- **Event Timeline** — every message, LLM call, tool execution as a navigable timeline
+- **Tool Call Deep-Dive** — click any tool call to see input, output, approval status, duration
+- **Token & Cost Tracking** — per-turn and cumulative, with model pricing
+- **Replay** — re-run from any point with the same or modified context
+- **Branch & Compare** — fork from any point, try different models, diff results side-by-side
+- **Export** — full session as JSON or Markdown
+
+### Hybrid Intelligence
+
+AI Studio auto-picks the best model for each step:
+
+- **Simple questions** &rarr; Local Llama (free, private, fast)
+- **Complex code** &rarr; Claude Sonnet (best at code)
+- **Vision tasks** &rarr; GPT-4o (strong vision)
+- **Large context** &rarr; Gemini Flash (1M context, cheap)
+- **Budget controls** — set monthly limits, per-agent budgets, automatic fallback to local when budget runs low
+
+### MCP-Native Tools
+
+Built on [Model Context Protocol](https://modelcontextprotocol.io/) — the open standard for AI tool integration:
+
+- Connect any MCP server (GitHub, Postgres, Filesystem, Brave Search, and growing)
+- Built-in tools: shell, filesystem, browser
+- One-click setup from curated server list
+- Full approval workflow for every tool call
+
+### 5 Focused Modules
+
+| Module | What It Does |
+|--------|-------------|
+| **Agents** | Create and configure AI agents (model, prompt, tools, permissions) |
+| **Sessions** | Interactive chat with real-time tool approval and streaming |
+| **Runs** | Headless batch execution — CI/CD for agents |
+| **Inspector** | Deep-dive into any session: timeline, traces, cost, replay |
+| **Settings** | Providers, MCP servers, budget, preferences |
 
 ---
 
-## 📸 Screenshots
-
-### Main Dashboard
-![Main Dashboard](docs/screenshots/screenshot-1-main-dashboard.png)
-
-### Canvas Demo (Node Graph)
-![Canvas Demo](docs/screenshots/screenshot-2-canvas-demo.png)
-
-### Vision Module
-![Vision Module](docs/screenshots/screenshot-4-vision.png)
-
-### Agents
-![Agents](docs/screenshots/agents.png)
-
-### Training
-![Training](docs/screenshots/screenshot-training.png)
-
-### Settings - AI Providers
-![Settings - AI Providers](docs/screenshots/setting_providers.png)
-
----
-
-## 🚀 Installation Guide
+## Quick Start
 
 ### Prerequisites
 
-| Tool | Version | Purpose |
-|------|---------|---------|
-| **Node.js** | 18+ | JavaScript runtime |
-| **npm** | 9+ | Package manager |
-| **Rust** | Latest stable | Native desktop shell (Tauri) |
-| **Python** | 3.10+ | AI sidecar (optional) |
+| Tool | Version | Required |
+|------|---------|----------|
+| **Node.js** | 18+ | Yes |
+| **Rust** | Latest stable | Yes (for Tauri desktop) |
+| **Python** | 3.10+ | Yes (for AI sidecar) |
 
-### Step 1: Install Node.js
+### Install
 
-If not installed, download from [nodejs.org](https://nodejs.org/) or use:
+```bash
+# 1. Clone
+git clone https://github.com/akv004/ai-studio-template.git
+cd ai-studio-template
+
+# 2. Install dependencies
+npm install
+
+# 3. Install Python dependencies
+pip install -r apps/sidecar/requirements.txt
+
+# 4. Run (full desktop app)
+npm run tauri:dev
+```
+
+First build takes ~3-5 minutes (Rust compilation). After that, it's instant.
+
+### Other Run Modes
+
+```bash
+# Web UI only (for frontend development)
+npm run dev
+
+# Sidecar only (API development)
+cd apps/sidecar && python server.py
+# Swagger docs at http://localhost:8765/docs
+
+# Docker (sidecar + Ollama)
+docker compose up
+```
+
+### Connect a Model
+
+**Local (free)**: Install [Ollama](https://ollama.ai), pull a model (`ollama pull llama3.2`), AI Studio auto-detects it.
+
+**Cloud**: Open Settings, add your API key for Anthropic, OpenAI, or Google AI.
+
+<details>
+<summary><strong>Detailed Setup Guide</strong> (first-time setup, per-OS instructions)</summary>
+
+#### Install Node.js
 
 ```bash
 # macOS (Homebrew)
@@ -86,86 +174,36 @@ brew install node
 
 # Windows (Chocolatey)
 choco install nodejs
+
+# Or download from https://nodejs.org/
 ```
 
-### Step 2: Install Rust (Required for Desktop App)
-
-Rust is needed to compile the native Tauri shell:
+#### Install Rust (Required for Tauri)
 
 ```bash
 # macOS / Linux
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 # When prompted, select: 1) Proceed with standard installation
-```
-
-After installation, **restart your terminal** or run:
-```bash
+# Then restart your terminal or run:
 source ~/.cargo/env
-```
 
-Verify installation:
-```bash
+# Verify
 rustc --version
-# Should show: rustc 1.XX.X
 ```
 
-### Step 3: Install Tauri CLI
+#### Install Tauri CLI
 
 ```bash
 cargo install tauri-cli
 ```
 
-> ⏱️ First time takes ~2-3 minutes (compiles 700+ crates)
+> First time takes ~2-3 minutes (compiles 700+ crates).
 
-### Step 4: Clone & Install Dependencies
+</details>
 
-```bash
-git clone <your-repo-url>
-cd ai-studio-template
-npm install
-```
-
----
-
-## 🏃 Running the Application
-
-### Option A: Browser Only (Quick Development)
-
-Best for UI development without Rust:
-
-```bash
-npm run dev
-# Opens at http://localhost:1420
-```
-
-### Option B: Native Desktop App (Full Experience)
-
-Runs as a real macOS/Windows/Linux application:
-
-```bash
-npm run tauri:dev
-```
-
-> ⏱️ First build takes ~3-5 minutes (compiles Rust dependencies)  
-> Subsequent runs are instant.
-
-### Option C: Run AI Agent Backend
-
-The AI sidecar is a **multi-provider LLM agent** with local and cloud support:
-
-```bash
-# Install dependencies
-cd apps/sidecar && pip install -r requirements.txt
-
-# Run the agent server
-python server.py
-# API docs at: http://localhost:8765/docs
-```
-
-### Option D: Docker Compose (Recommended for Local LLM)
-
-Run everything with Docker, including Ollama for local LLM:
+<details>
+<summary><strong>Docker Setup</strong> (sidecar + Ollama, GPU support)</summary>
 
 ```bash
 # CPU mode
@@ -173,49 +211,12 @@ docker compose up
 
 # GPU mode (requires nvidia-container-toolkit)
 docker compose --profile gpu up
-
-# With Telegram bot
-TELEGRAM_BOT_TOKEN=your_token docker compose --profile telegram up
 ```
 
----
+</details>
 
-## 🤖 AI Agent Infrastructure
-
-### Multi-Provider LLM Support
-
-The sidecar supports multiple LLM providers:
-
-| Provider | Type | Configuration |
-|----------|------|---------------|
-| **Ollama** | Local | `OLLAMA_HOST`, `OLLAMA_MODEL` |
-| **Anthropic** | Cloud | `ANTHROPIC_API_KEY` |
-| **OpenAI** | Cloud | `OPENAI_API_KEY` |
-| **Google AI** | Cloud | `GOOGLE_API_KEY` |
-
-### Tools API
-
-The agent includes tools for shell commands, browser automation, and filesystem access:
-
-```bash
-# Execute shell commands
-curl -X POST http://localhost:8765/tools/shell \
-  -H "Content-Type: application/json" \
-  -d '{"command": "ls -la"}'
-
-# Read a file
-curl -X POST http://localhost:8765/tools/filesystem \
-  -H "Content-Type: application/json" \
-  -d '{"action": "read", "path": "README.md"}'
-
-# Browser automation (start, navigate, screenshot)
-curl -X POST http://localhost:8765/tools/browser/start
-curl -X POST http://localhost:8765/tools/browser \
-  -H "Content-Type: application/json" \
-  -d '{"action": "navigate", "url": "https://example.com"}'
-```
-
-### API Endpoints
+<details>
+<summary><strong>Sidecar API Examples</strong> (for development and testing)</summary>
 
 ```bash
 # Chat with conversation memory
@@ -228,227 +229,162 @@ curl http://localhost:8765/providers
 
 # Health check
 curl http://localhost:8765/status
+
+# Execute shell command (via tool)
+curl -X POST http://localhost:8765/tools/shell \
+  -H "Content-Type: application/json" \
+  -d '{"command": "ls -la"}'
+
+# Read a file (via tool)
+curl -X POST http://localhost:8765/tools/filesystem \
+  -H "Content-Type: application/json" \
+  -d '{"action": "read", "path": "README.md"}'
 ```
 
-### Telegram Bot Integration
+Swagger docs available at `http://localhost:8765/docs` when sidecar is running.
 
-1. Create a bot via [@BotFather](https://t.me/BotFather) on Telegram
-2. Set your bot token:
-   ```bash
-   export TELEGRAM_BOT_TOKEN=your_token
-   ```
-3. Run the bot:
-   ```bash
-   cd apps/sidecar
-   python -m channels.telegram
-   ```
-
-**Bot Commands:**
-- `/start` - Show help
-- `/clear` - Clear conversation
-- `/provider <name>` - Switch provider
-- `/model <name>` - Set model
-- `/status` - Show settings
+</details>
 
 ---
 
-## 📁 Project Structure
+## Architecture
+
+```
+┌──────────────────────────────────────────────────┐
+│              UI Layer (React + Tauri)             │
+│  Agents  |  Sessions  |  Runs  |  Inspector      │
+└────────────────────┬─────────────────────────────┘
+                     │ Tauri IPC
+┌────────────────────┴─────────────────────────────┐
+│            Desktop Layer (Rust/Tauri)             │
+│  SQLite DB  |  Tool Approval  |  Event Bridge    │
+└────────────────────┬─────────────────────────────┘
+                     │ HTTP + WebSocket
+┌────────────────────┴─────────────────────────────┐
+│            Agent Layer (Python Sidecar)           │
+│  LLM Providers  |  MCP Client  |  Event Emitter  │
+└──────────────────────────────────────────────────┘
+```
+
+**3 layers, clear responsibilities:**
+
+- **UI (React)** — what you see. Never talks to the sidecar directly.
+- **Desktop (Rust/Tauri)** — security boundary. Owns persistence (SQLite), tool approval, event bridging.
+- **Agent (Python)** — does the work. Calls LLMs, executes tools, emits events.
+
+**Key design decisions:**
+- **Local-first**: All data in SQLite on your machine. No cloud, no account.
+- **Event-sourced**: Every agent action is a typed event. Inspector reads from the event log.
+- **MCP-native**: Tools are MCP servers. Interoperable with Claude Desktop, Cursor, Zed, etc.
+- **Hybrid intelligence**: Smart router picks the best model per step with budget awareness.
+
+### Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Desktop Shell | Tauri 2.0 (Rust) |
+| UI | React 19 + TypeScript + Vite 7 |
+| Styling | Tailwind CSS 4 |
+| State | Zustand |
+| Database | SQLite (via rusqlite) |
+| AI Backend | FastAPI (Python 3.10+) |
+| LLM Providers | Ollama, Anthropic, OpenAI, Google AI |
+| Tool System | Model Context Protocol (MCP) |
+
+---
+
+## Project Structure
 
 ```
 ai-studio-template/
 ├── apps/
-│   ├── desktop/              # Tauri + Rust backend
-│   │   └── src-tauri/
-│   │       ├── src/
-│   │       │   ├── main.rs       # Entry point
-│   │       │   ├── lib.rs        # Core logic
-│   │       │   ├── commands.rs   # IPC handlers
-│   │       │   └── system.rs     # OS info
-│   │       └── tauri.conf.json
-│   │
-│   ├── ui/                   # React + TypeScript + Vite
-│   │   ├── src/
-│   │   │   ├── app/
-│   │   │   │   ├── layout/       # Shell, Header, Sidebar
-│   │   │   │   └── pages/        # Module pages
-│   │   │   ├── canvas/           # Rendering abstraction
-│   │   │   ├── state/            # Zustand store
-│   │   │   └── commands/         # Keyboard shortcuts
-│   │   └── vite.config.ts
-│   │
-│   └── sidecar/              # AI Agent Backend (Multi-Provider LLM)
-│       ├── agent/
-│       │   ├── providers/       # Ollama, Anthropic, OpenAI
-│       │   └── chat.py          # Chat service with memory
-│       ├── channels/
-│       │   └── telegram.py      # Telegram bot integration
-│       ├── server.py            # FastAPI server
-│       ├── Dockerfile
-│       └── requirements.txt
-│
+│   ├── ui/                  # React frontend (5 modules)
+│   ├── desktop/src-tauri/   # Tauri/Rust (persistence, security, IPC)
+│   └── sidecar/             # Python (LLM providers, MCP, tools, events)
 ├── packages/
-│   └── shared/               # Shared types & schemas
-│
-├── data/
-│   └── sample-projects/      # Mock project data
-│
-└── package.json              # Monorepo workspace config
+│   └── shared/              # Shared TypeScript types
+├── docs/
+│   └── specs/               # 11 design specifications
+└── package.json             # Monorepo workspace config
 ```
 
 ---
 
-## 🎨 UI Modules
+## Design Specs
 
-| Module | Description | Key Features |
-|--------|-------------|--------------|
-| **Projects** | Project management | List, create, open, JSON persistence |
-| **Vision** | Image analysis | Preview canvas, detection overlays |
-| **Audio** | Audio processing | Waveform display, transcription |
-| **Agents** | AI agent management | Status monitoring, chat interface |
-| **Training** | Model training | Dataset management, progress tracking |
-| **Runs** | Pipeline execution | Phase timeline, live logs |
-| **Settings** | Configuration | Models, paths, hotkeys, appearance |
+The product is designed spec-first. Every feature has a detailed specification:
+
+| Spec | Covers |
+|------|--------|
+| [Product Vision](docs/specs/product-vision.md) | Direction, pillars, competitive positioning |
+| [Architecture](docs/specs/architecture.md) | 3-layer system, data flows, security |
+| [Event System](docs/specs/event-system.md) | Typed events, transport, cost calculation |
+| [Data Model](docs/specs/data-model.md) | SQLite schema, migrations, branching |
+| [Agent Inspector](docs/specs/agent-inspector.md) | Flagship: timeline, replay, branch, export |
+| [MCP Integration](docs/specs/mcp-integration.md) | Tool system, discovery, approval |
+| [Hybrid Intelligence](docs/specs/hybrid-intelligence.md) | Smart routing, budget, savings |
+| [API Contracts](docs/specs/api-contracts.md) | Every IPC command, endpoint, WebSocket |
+| [UI Design](docs/specs/ui-design.md) | Wireframes, colors, interactions |
+| [Use Cases](docs/specs/use-cases.md) | Real-world scenarios, demo script |
+| [Phase Plan](docs/specs/phase-plan.md) | Implementation roadmap (Phase 0-3) |
 
 ---
 
-## ⌨️ Keyboard Shortcuts
+## Roadmap
+
+| Phase | Focus | Status |
+|-------|-------|--------|
+| **Phase 0** | Specs + codebase cleanup | Done |
+| **Phase 1** | Core loop — agents, sessions, persistence, events, basic inspector, MCP | In progress |
+| **Phase 2** | Power features — full inspector (replay, branch, compare), runs, hybrid intelligence | Planned |
+| **Phase 3** | Ecosystem — plugins, templates, one-click installer, community launch | Planned |
+
+See [Phase Plan](docs/specs/phase-plan.md) for the full task breakdown.
+
+---
+
+## Keyboard Shortcuts
 
 | Shortcut | Action |
 |----------|--------|
-| `⌘K` / `Ctrl+K` | Open Command Palette |
-| `⌘1-6` | Navigate to modules |
-| `⌘,` | Open Settings |
-| `⌘N` | New Project |
+| `Cmd+K` | Command Palette |
+| `Cmd+1-4` | Navigate modules |
+| `Cmd+,` | Settings |
+| `Cmd+N` | New agent |
+| `Cmd+Shift+N` | New session |
+| `Cmd+I` | Inspector for current session |
+| `Cmd+Enter` | Send message |
+| `Cmd+Shift+Enter` | Approve tool request |
 
 ---
 
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        AI STUDIO                                │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │                    React UI Layer                        │   │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        │   │
-│  │  │Projects │ │ Vision  │ │ Agents  │ │Training │  ...   │   │
-│  │  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘        │   │
-│  │       │           │           │           │              │   │
-│  │  ┌────┴───────────┴───────────┴───────────┴────┐        │   │
-│  │  │           State Management (Zustand)         │        │   │
-│  │  └─────────────────────┬───────────────────────┘        │   │
-│  │                        │                                 │   │
-│  │  ┌─────────────────────┴───────────────────────┐        │   │
-│  │  │        Canvas Rendering Layer               │        │   │
-│  │  │  ┌──────────────┐    ┌──────────────────┐   │        │   │
-│  │  │  │CanvasRenderer│    │WebGPURenderer.stub│  │        │   │
-│  │  │  └──────────────┘    └──────────────────┘   │        │   │
-│  │  └─────────────────────────────────────────────┘        │   │
-│  └─────────────────────────────────────────────────────────┘   │
-├─────────────────────────────────────────────────────────────────┤
-│  ┌──────────────────┐              ┌──────────────────┐        │
-│  │   Tauri / Rust   │◄────IPC────►│  Python Sidecar  │        │
-│  │   (OS Access)    │              │  (AI Inference)  │        │
-│  └──────────────────┘              └──────────────────┘        │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Technology | Purpose |
-|-------|------------|---------|
-| Desktop Shell | Tauri 2.0 + Rust | Native OS access, windowing |
-| UI Framework | React 19 + TypeScript | Component-based UI |
-| Build Tool | Vite 7 | Fast HMR, optimized builds |
-| Styling | Tailwind CSS 4 | Utility-first CSS |
-| State | Zustand | Lightweight state management |
-| Rendering | Canvas 2D (abstracted) | Node graphs, timelines |
-| AI Interface | Python HTTP Server | Future ML integration |
-
----
-
-## 🔧 Troubleshooting
-
-### "cargo: command not found"
-```bash
-source ~/.cargo/env
-# Or restart your terminal
-```
-
-### "Port 1420 is already in use"
-```bash
-# Kill the process using the port
-lsof -ti:1420 | xargs kill -9
-```
-
-### Rust compilation taking too long
-First-time compilation is slow (~3-5 min). Subsequent builds are fast.
-
----
-
-## 📦 Building for Production
+## Building for Production
 
 ```bash
-# Build production bundle
 npm run tauri:build
 ```
 
-This creates platform-specific installers in `apps/desktop/src-tauri/target/release/bundle/`.
+Creates platform-specific installers:
+- **macOS**: `.dmg` + `.app` bundle
+- **Windows**: `.msi` + `.exe` installer
+- **Linux**: `.deb` + `.AppImage`
 
-### macOS Installation
+---
 
-1. Build creates:
-   - `bundle/macos/AI Studio.app` - Application bundle
-   - `bundle/dmg/AI Studio_X.X.X_aarch64.dmg` - Installer disk image
+## Troubleshooting
 
-2. **Install via DMG (Recommended)**:
-   ```bash
-   # Open the DMG
-   open apps/desktop/src-tauri/target/release/bundle/dmg/AI\ Studio_*.dmg
-   # Drag "AI Studio" to Applications folder
-   ```
+| Issue | Fix |
+|-------|-----|
+| `cargo: command not found` | Run `source ~/.cargo/env` or restart terminal |
+| Port 1420 already in use | `lsof -ti:1420 \| xargs kill -9` |
+| First Rust build is slow | Normal (~3-5 min). Subsequent builds are instant. |
+| Sidecar won't start | Check Python 3.10+ installed, `pip install -r apps/sidecar/requirements.txt` |
 
-3. **Or copy directly**:
-   ```bash
-   cp -r "apps/desktop/src-tauri/target/release/bundle/macos/AI Studio.app" /Applications/
-   ```
+---
 
-4. **First launch**: Right-click → Open (bypasses Gatekeeper for unsigned apps)
+## Contributing
 
-### Windows Installation
-
-1. Build creates:
-   - `bundle/msi/AI Studio_X.X.X_x64_en-US.msi` - MSI installer
-   - `bundle/nsis/AI Studio_X.X.X_x64-setup.exe` - NSIS installer
-
-2. **Install via MSI**:
-   - Double-click the `.msi` file
-   - Follow the installation wizard
-   - App installs to `C:\Program Files\AI Studio\`
-
-3. **Or run portable**:
-   - Use `target/release/ai-studio.exe` directly
-
-### Linux Installation
-
-1. Build creates:
-   - `bundle/deb/ai-studio_X.X.X_amd64.deb` - Debian package
-   - `bundle/appimage/ai-studio_X.X.X_amd64.AppImage` - Portable AppImage
-
-2. **Install via .deb (Debian/Ubuntu)**:
-   ```bash
-   sudo dpkg -i apps/desktop/src-tauri/target/release/bundle/deb/ai-studio_*.deb
-   # Fix dependencies if needed:
-   sudo apt-get install -f
-   ```
-
-3. **Or run AppImage (Any distro)**:
-   ```bash
-   chmod +x apps/desktop/src-tauri/target/release/bundle/appimage/ai-studio_*.AppImage
-   ./ai-studio_*.AppImage
-   ```
+We welcome contributions! Check the [Phase Plan](docs/specs/phase-plan.md) for open tasks, or look at issues labeled `good first issue`.
 
 ---
 
@@ -458,4 +394,7 @@ MIT
 
 ---
 
-Built with ❤️ using Tauri, React, and TypeScript.
+<p align="center">
+  <strong>AI Studio</strong> — See everything. Control everything. Spend less.<br>
+  Built with Tauri, React, and Python.
+</p>

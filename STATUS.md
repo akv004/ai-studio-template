@@ -4,7 +4,7 @@
 > New sessions: read this first to know where things stand.
 
 ## Last Updated
-2026-02-08 18:45 — committed Phase 1 foundation (d3684bf)
+2026-02-08 19:15 — fixed isTauri() + createSession error handling (a681b59)
 
 ## What's Done
 
@@ -45,7 +45,7 @@
 - [ ] **Inspector timeline** — page exists but no event visualization
 - [ ] **Sessions page** — skeleton only, needs session list + chat view
 - [ ] **Test the full flow** — create agent with API key → start session → send message → see response
-- [ ] **Verify provider test connection** — Settings page calls sidecar, needs end-to-end test
+- [ ] **Verify provider test connection** — isTauri() bug fixed (a681b59), needs retest
 
 ### Medium Priority
 - [ ] Runs execution — only list_runs exists, no create/execute
@@ -59,10 +59,14 @@
 - [ ] Export/import sessions
 - [ ] Hybrid intelligence (smart model routing)
 
+## Bugs Fixed This Session
+- **isTauri() wrong check** (a681b59): Was checking `window.__TAURI__` (v1) instead of `__TAURI_INTERNALS__` (v2). Caused test connection to bypass Tauri IPC → direct HTTP to sidecar without auth token → 401.
+- **createSession silent failure** (a681b59): Store didn't set error state on failure. Now errors are visible in UI.
+
 ## Last Session Notes
-- Was working on: adding agents with Google API key and testing provider integration
-- Last files touched: sidecar.rs, AgentsPage.tsx, SettingsPage.tsx, google.py, anthropic.py, server.py
-- Session ended due to context exhaustion ("prompt too long")
+- Fixed two bugs: test connection 401 and create session doing nothing
+- Next: retest both flows with `npm run tauri:dev`
+- Previous session was working on: adding agents with Google API key and testing provider integration
 
 ## Build / Run
 ```bash

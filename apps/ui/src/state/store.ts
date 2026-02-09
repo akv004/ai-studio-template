@@ -80,6 +80,11 @@ interface AppState {
     fetchSettings: () => Promise<void>;
     saveSetting: (key: string, value: string) => Promise<void>;
 
+    // Inspector navigation (set by Sessions "Inspect" button)
+    inspectorSessionId: string | null;
+    openInspector: (sessionId: string) => void;
+    clearInspectorSession: () => void;
+
     // Error tracking
     error: string | null;
     clearError: () => void;
@@ -239,6 +244,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     // System Info
     systemInfo: null,
     setSystemInfo: (info) => set({ systemInfo: info }),
+
+    // Inspector navigation
+    inspectorSessionId: null,
+    openInspector: (sessionId) => set({ inspectorSessionId: sessionId, activeModule: 'inspector' }),
+    clearInspectorSession: () => set({ inspectorSessionId: null }),
 
     // Error
     error: null,

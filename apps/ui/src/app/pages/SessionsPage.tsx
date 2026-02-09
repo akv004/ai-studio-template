@@ -1,4 +1,4 @@
-import { Plus, MessageSquare, Send, Loader2, Trash2 } from 'lucide-react';
+import { Plus, MessageSquare, Send, Loader2, Trash2, Search } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../state/store';
 
@@ -12,7 +12,7 @@ export function SessionsPage() {
         sessions, sessionsLoading, fetchSessions, createSession, deleteSession,
         agents, fetchAgents,
         messages, messagesLoading, fetchMessages, sendMessage, sending,
-        error,
+        error, openInspector,
     } = useAppStore();
     const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
     const [input, setInput] = useState('');
@@ -147,12 +147,22 @@ export function SessionsPage() {
                             >
                                 <div className="flex items-center justify-between">
                                     <div className="font-medium text-sm truncate flex-1">{session.title}</div>
-                                    <button
-                                        className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition-all"
-                                        onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }}
-                                    >
-                                        <Trash2 className="w-3 h-3" />
-                                    </button>
+                                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+                                        <button
+                                            className="p-1 hover:text-[var(--accent-primary)] transition-colors"
+                                            onClick={(e) => { e.stopPropagation(); openInspector(session.id); }}
+                                            title="Inspect session"
+                                        >
+                                            <Search className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                            className="p-1 hover:text-red-400 transition-colors"
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }}
+                                            title="Delete session"
+                                        >
+                                            <Trash2 className="w-3 h-3" />
+                                        </button>
+                                    </div>
                                 </div>
                                 <div className="text-xs text-[var(--text-muted)] mt-1">
                                     {session.agentName} &middot; {session.messageCount} messages

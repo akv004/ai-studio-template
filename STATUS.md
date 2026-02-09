@@ -12,8 +12,8 @@
 | 1A: SQLite + CRUD | `data-model.md` | DONE |
 | 1B: Event system | `event-system.md` | PARTIAL — recording works, no WebSocket |
 | 1C: Agent CRUD UI | `ui-design.md` | DONE |
-| 1D: Chat sessions | `api-contracts.md` | Backend DONE, **UI needs testing** |
-| 1E: Basic Inspector | `agent-inspector.md` | Skeleton only |
+| 1D: Chat sessions | `api-contracts.md` | DONE — full flow verified (Google/Gemini) |
+| 1E: Basic Inspector | `agent-inspector.md` | **IN PROGRESS** |
 | 1F: MCP tools | `mcp-integration.md` | Not started |
 
 ---
@@ -22,10 +22,11 @@
 
 > What we're actively working on right now.
 
-- [ ] **Verify chat flow end-to-end** — isTauri() and createSession bugs were fixed (a681b59), needs retest with `pnpm tauri dev`
-  - Test: Settings → save Google API key → test connection (should not 401 now)
-  - Test: Agents → create agent with Google provider → Sessions → create session → send message → see response
-  - If errors appear, they should now be visible in the UI (error state was added)
+- [x] ~~Verify chat flow end-to-end~~ — DONE, working with Google/Gemini
+- [ ] **Build Inspector timeline** (`agent-inspector.md`) — event list, detail panel, stats bar
+  - Pick a session → load events → render color-coded timeline
+  - Click event → show full detail (input, output, metadata)
+  - Stats bar: token counts, cost, duration, model
 
 ---
 
@@ -34,8 +35,8 @@
 > Ordered by priority. Work top-down. Each item notes which spec to read.
 
 ### P0 — Must have for Phase 1 demo
-1. **Chat flow fixes** — whatever breaks during testing above
-2. **Inspector timeline** (`agent-inspector.md`) — show events for a session, click to see detail
+1. ~~Chat flow fixes~~ — DONE
+2. **Inspector timeline** (`agent-inspector.md`) — show events for a session, click to see detail ← **NOW**
 3. **Inspector stats bar** (`agent-inspector.md`) — token counts, cost, duration, models used
 
 ### P1 — Important for Phase 1 completeness
@@ -47,6 +48,7 @@
 7. Cost calculation in events — populate `cost_usd` field based on model pricing
 8. Runs execution — create/execute endpoints + UI
 9. Error handling polish across IPC commands
+10. **Dev: DB wipe command** — Tauri command + Settings UI button to reset SQLite (drop all data, re-init schema). Useful during dev.
 
 ---
 
@@ -87,14 +89,16 @@
 
 ## Last Session Notes
 
-**Date**: 2026-02-08
+**Date**: 2026-02-08 (session 3)
 **What happened**:
-- Committed Phase 1 foundation (d3684bf) — was all uncommitted from previous session
-- Fixed isTauri() bug (was causing 401 on test connection)
-- Fixed createSession silent failure (errors now visible)
-- Set up project management workflow (CLAUDE.md + STATUS.md)
+- Chat flow verified working end-to-end (Google/Gemini — "I am a large language model, trained by Google")
+- Started building Inspector timeline (flagship feature)
+
+**Previous sessions**:
+- Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
+- Session 2: PM workflow (CLAUDE.md + STATUS.md), dogfooding insight (d7808e7)
 
 **Next session should**:
-1. Run `pnpm tauri dev` and test the full chat flow (Google provider)
-2. If chat works → start Inspector timeline (read `agent-inspector.md` first)
-3. If chat breaks → fix it, that's the critical path
+1. If Inspector not finished → continue building it
+2. Test Inspector with real session events
+3. Move to MCP tools (P1)

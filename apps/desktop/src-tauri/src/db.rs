@@ -68,6 +68,9 @@ impl Database {
         if version < 1 {
             self.migrate_v1(&conn)?;
         }
+        if version < 2 {
+            self.migrate_v2(&conn)?;
+        }
 
         Ok(())
     }
@@ -189,6 +192,31 @@ impl Database {
         ).map_err(|e| format!("Migration v1 failed: {e}"))?;
 
         println!("[db] Migrated to schema v1");
+        Ok(())
+    }
+
+    /// V2: MCP servers table
+    fn migrate_v2(&self, conn: &Connection) -> Result<(), String> {
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS mcp_servers (
+                id         TEXT PRIMARY KEY,
+                name       TEXT NOT NULL UNIQUE,
+                transport  TEXT NOT NULL DEFAULT 'stdio',
+                command    TEXT,
+                args       TEXT NOT NULL DEFAULT '[]',
+                url        TEXT,
+                env        TEXT NOT NULL DEFAULT '{}',
+                enabled    INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '2');
+            "
+        ).map_err(|e| format!("Migration v2 failed: {e}"))?;
+
+        println!("[db] Migrated to schema v2 (mcp_servers)");
         Ok(())
     }
 }

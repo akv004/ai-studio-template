@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff, Save } from 'lucide-react';
+import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff, Save, Plug, Plus, Trash2, Power, PowerOff } from 'lucide-react';
 import { useAppStore } from '../../state/store';
 import { fetchApi } from '../../services/api';
 
-type SettingsTab = 'providers' | 'models' | 'paths' | 'performance' | 'hotkeys' | 'appearance';
+type SettingsTab = 'providers' | 'mcp' | 'models' | 'paths' | 'performance' | 'hotkeys' | 'appearance';
 
 interface HotkeyConfig {
     action: string;
@@ -39,19 +39,22 @@ interface ProviderConfig {
  * - Hotkeys customization
  */
 export function SettingsPage() {
-    const { settings, fetchSettings, saveSetting } = useAppStore();
+    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer } = useAppStore();
     const [activeTab, setActiveTab] = useState<SettingsTab>('providers');
     const [providerStatus, setProviderStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
     const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
     const [toolDemoOutput, setToolDemoOutput] = useState<string>('');
     const [toolDemoStatus, setToolDemoStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+    // MCP form state
+    const [mcpForm, setMcpForm] = useState({ name: '', command: '', args: '' });
+    const [mcpAdding, setMcpAdding] = useState(false);
     // Provider form state — keyed by "provider_id.field_key"
     const [formValues, setFormValues] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
-    // Load settings from SQLite on mount
-    useEffect(() => { fetchSettings(); }, [fetchSettings]);
+    // Load settings + MCP servers from SQLite on mount
+    useEffect(() => { fetchSettings(); fetchMcpServers(); }, [fetchSettings, fetchMcpServers]);
 
     // Sync stored settings → form state (only when settings load)
     useEffect(() => {
@@ -98,6 +101,7 @@ export function SettingsPage() {
 
     const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
         { id: 'providers', label: 'AI Providers', icon: Cloud },
+        { id: 'mcp', label: 'MCP Servers', icon: Plug },
         { id: 'models', label: 'Local Models', icon: Cpu },
         { id: 'paths', label: 'Paths', icon: FolderOpen },
         { id: 'performance', label: 'Performance', icon: Zap },
@@ -238,6 +242,27 @@ export function SettingsPage() {
 
     const toggleApiKeyVisibility = (providerId: string) => {
         setShowApiKeys(prev => ({ ...prev, [providerId]: !prev[providerId] }));
+    };
+
+    const handleAddMcpServer = async () => {
+        if (!mcpForm.name.trim() || !mcpForm.command.trim()) return;
+        setMcpAdding(true);
+        try {
+            const args = mcpForm.args.trim()
+                ? mcpForm.args.split(/\s+/)
+                : [];
+            await addMcpServer({
+                name: mcpForm.name.trim(),
+                command: mcpForm.command.trim(),
+                args,
+            });
+            setMcpForm({ name: '', command: '', args: '' });
+        } catch { /* error in store */ }
+        setMcpAdding(false);
+    };
+
+    const handleToggleMcpServer = async (id: string, enabled: boolean) => {
+        await updateMcpServer(id, { enabled });
     };
 
     const renderProviderStatus = (providerId: string) => {
@@ -424,6 +449,115 @@ export function SettingsPage() {
                                     {toolDemoOutput && (
                                         <pre className="modal-pre">{toolDemoOutput}</pre>
                                     )}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'mcp' && (
+                            <div className="space-y-6">
+                                <p className="text-sm text-[var(--text-secondary)]">
+                                    Add external MCP (Model Context Protocol) servers to give agents access to tools like databases, APIs, and file systems.
+                                </p>
+
+                                {/* Add new server form */}
+                                <div className="p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] space-y-3">
+                                    <div className="font-medium text-sm">Add MCP Server</div>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Name</label>
+                                            <input
+                                                className="input w-full"
+                                                placeholder="e.g. filesystem"
+                                                value={mcpForm.name}
+                                                onChange={e => setMcpForm(f => ({ ...f, name: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Command</label>
+                                            <input
+                                                className="input w-full"
+                                                placeholder="e.g. npx or python"
+                                                value={mcpForm.command}
+                                                onChange={e => setMcpForm(f => ({ ...f, command: e.target.value }))}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Args (space-separated)</label>
+                                            <input
+                                                className="input w-full"
+                                                placeholder="e.g. @modelcontextprotocol/server-filesystem /tmp"
+                                                value={mcpForm.args}
+                                                onChange={e => setMcpForm(f => ({ ...f, args: e.target.value }))}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex justify-end">
+                                        <button
+                                            className="btn btn-primary btn-sm"
+                                            onClick={handleAddMcpServer}
+                                            disabled={mcpAdding || !mcpForm.name.trim() || !mcpForm.command.trim()}
+                                        >
+                                            {mcpAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                                            Add Server
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Server list */}
+                                {mcpServersLoading ? (
+                                    <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                                        <Loader2 className="w-4 h-4 animate-spin" /> Loading servers...
+                                    </div>
+                                ) : mcpServers.length === 0 ? (
+                                    <div className="text-center py-8 text-[var(--text-muted)]">
+                                        <Plug className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                        <p className="text-sm">No MCP servers configured yet</p>
+                                        <p className="text-xs mt-1">Add a server above to give your agents access to external tools</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {mcpServers.map((server) => (
+                                            <div
+                                                key={server.id}
+                                                className="flex items-center justify-between p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-2 h-2 rounded-full ${server.enabled ? 'bg-green-400' : 'bg-gray-500'}`} />
+                                                    <div>
+                                                        <div className="font-medium text-sm">{server.name}</div>
+                                                        <div className="text-xs text-[var(--text-muted)] font-mono">
+                                                            {server.command} {server.args.join(' ')}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-[var(--text-muted)]">{server.transport}</span>
+                                                    <button
+                                                        className="btn btn-secondary btn-sm"
+                                                        onClick={() => handleToggleMcpServer(server.id, !server.enabled)}
+                                                        title={server.enabled ? 'Disable' : 'Enable'}
+                                                    >
+                                                        {server.enabled ? <Power className="w-4 h-4 text-green-400" /> : <PowerOff className="w-4 h-4" />}
+                                                    </button>
+                                                    <button
+                                                        className="btn btn-secondary btn-sm text-red-400 hover:text-red-300"
+                                                        onClick={() => removeMcpServer(server.id)}
+                                                        title="Remove"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Built-in tools info */}
+                                <div className="p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+                                    <div className="text-xs text-[var(--text-muted)]">
+                                        <strong>Built-in tools:</strong> shell, read_file, write_file, list_directory are always available when tool calling is enabled.
+                                        External MCP servers provide additional capabilities.
+                                    </div>
                                 </div>
                             </div>
                         )}

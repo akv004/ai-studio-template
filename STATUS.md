@@ -14,7 +14,7 @@
 | 1C: Agent CRUD UI | `ui-design.md` | DONE |
 | 1D: Chat sessions | `api-contracts.md` | DONE — full flow verified (Google/Gemini) |
 | 1E: Basic Inspector | `agent-inspector.md` | DONE — timeline, detail, stats, filters, export |
-| 1F: MCP tools | `mcp-integration.md` | Not started |
+| 1F: MCP tools | `mcp-integration.md` | DONE — tool calling, MCP client, Settings UI |
 
 ---
 
@@ -24,7 +24,7 @@
 
 - [x] ~~Verify chat flow end-to-end~~ — DONE, working with Google/Gemini
 - [x] ~~Build Inspector timeline~~ — DONE (3285434), color-coded, type-specific details, filters, stats
-- [ ] **MCP tool discovery + execution** (`mcp-integration.md`) — register tools, execute via sidecar
+- [x] ~~MCP tool discovery + execution~~ — DONE: tool registry, multi-turn tool loop, MCP client, Settings UI
 
 ---
 
@@ -38,8 +38,8 @@
 3. ~~Inspector stats bar~~ — DONE (included in #2)
 
 ### P1 — Important for Phase 1 completeness
-4. **MCP tool discovery + execution** (`mcp-integration.md`) — register tools, execute via sidecar, approval gate
-5. **MCP settings UI** (`mcp-integration.md`) — tool list, enable/disable, approval rules
+4. ~~MCP tool discovery + execution~~ — DONE
+5. ~~MCP settings UI~~ — DONE (Settings → MCP Servers tab)
 6. **Event WebSocket bridge** (`event-system.md`) — live event streaming to Inspector
 
 ### P2 — Nice to have before Phase 2
@@ -55,9 +55,13 @@
 **Phase 0**: Restructured to 5 pillars, removed old modules, wrote 11 specs.
 
 **Phase 1 (so far)**:
-- SQLite DB (WAL mode, full schema), all CRUD commands, send_message chat loop, event recording
+- SQLite DB (WAL mode, full schema v2), all CRUD commands, send_message chat loop, event recording
 - Sidecar: 5 providers (Anthropic, Google, Azure, Local, Ollama), chat/test endpoints, tool stubs
-- UI: Agents page CRUD, Settings page (provider keys + test), Sessions page (chat UI), sidebar, Zustand→IPC
+- MCP: Tool registry, built-in tools (shell/fs), MCP stdio client, multi-turn tool calling loop
+- Provider tool calling: Anthropic + Google with full tool_use support, others interface-ready
+- DB: mcp_servers table, CRUD commands, shared TypeScript types
+- UI: Agents page CRUD, Settings page (provider keys + MCP servers), Sessions page (chat UI), sidebar, Zustand→IPC
+- Inspector: timeline, detail panels, stats, filters, export, keyboard nav
 - Shared types updated, old types removed
 
 ---
@@ -88,17 +92,21 @@
 
 ## Last Session Notes
 
-**Date**: 2026-02-08 (session 3)
+**Date**: 2026-02-08 (session 4)
 **What happened**:
-- Chat flow verified working end-to-end (Google/Gemini)
-- Built full Inspector (3285434): timeline, type-specific detail panels, filter chips, stats bar, keyboard nav, JSON export, "Inspect" button from Sessions
-- All P0 items DONE. Moving to P1.
+- Full MCP implementation: tool registry, built-in tools, MCP stdio client, multi-turn tool loop
+- Provider tool calling: Anthropic (tool_use blocks) + Google (functionCall parts)
+- DB schema v2: mcp_servers table with CRUD commands
+- Rust send_message: sends tools_enabled, records tool.requested + tool.completed events
+- Sidecar: /mcp/connect, /mcp/disconnect, /mcp/tools endpoints, chat_with_tools loop
+- UI: MCP Servers tab in Settings (add/remove/enable/disable), Zustand store wired
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
 - Session 2: PM workflow (CLAUDE.md + STATUS.md), dogfooding insight (d7808e7)
+- Session 3: Inspector (3285434), node editor decision (755575e)
 
 **Next session should**:
-1. Test Inspector with real session events via `pnpm tauri dev`
-2. Start MCP tool discovery + execution (P1 #4, read `mcp-integration.md`)
-3. If Inspector needs polish → fix it first
+1. Event WebSocket bridge (P1 #6) — live event streaming to Inspector
+2. Test full MCP flow via `pnpm tauri dev`
+3. Cost calculation in events (P2 #7)

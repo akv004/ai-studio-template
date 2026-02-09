@@ -119,3 +119,44 @@ export interface SendMessageResponse {
     userMessage: Message;
     assistantMessage: Message;
 }
+
+// ============================================
+// MCP SERVER TYPES
+// ============================================
+
+export type McpTransport = 'stdio' | 'sse' | 'streamable-http';
+
+/**
+ * MCP Server configuration — stored in SQLite, managed via Settings
+ */
+export interface McpServer {
+    id: string;
+    name: string;
+    transport: McpTransport;
+    command: string | null;
+    args: string[];
+    url: string | null;
+    env: Record<string, string>;
+    enabled: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreateMcpServerRequest {
+    name: string;
+    transport?: McpTransport;
+    command?: string;
+    args?: string[];
+    url?: string;
+    env?: Record<string, string>;
+}
+
+export interface UpdateMcpServerRequest {
+    name?: string;
+    transport?: McpTransport;
+    command?: string;
+    args?: string[];
+    url?: string;
+    env?: Record<string, string>;
+    enabled?: boolean;
+}

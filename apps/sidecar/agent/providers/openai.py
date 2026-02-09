@@ -36,6 +36,7 @@ class OpenAIProvider(AgentProvider):
         model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
+        tools: Optional[list[dict]] = None,
     ) -> ChatResponse:
         """Send chat request to OpenAI"""
         if not self.api_key:

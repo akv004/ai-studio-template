@@ -38,6 +38,7 @@ class AzureOpenAIProvider(AgentProvider):
         model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
+        tools: Optional[list[dict]] = None,
     ) -> ChatResponse:
         """Send chat request to Azure OpenAI"""
         if not self.api_key or not self.endpoint:

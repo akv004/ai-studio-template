@@ -4,6 +4,7 @@ AI Studio - Python Sidecar Server
 
 FastAPI-based server providing multi-provider LLM chat capabilities.
 Connects to local LLMs (Ollama) and cloud providers (Anthropic, OpenAI).
+MCP-native tool system with built-in + external tools.
 
 Run modes:
 - Development: `python server.py`
@@ -31,6 +32,8 @@ from agent.providers import (
     AgentProvider,
     Message,
 )
+from agent.mcp import ToolRegistry, McpClientManager, register_builtin_tools
+from agent.tools import ShellTool, FilesystemTool
 
 
 # ============================================================================
@@ -49,6 +52,8 @@ class ChatRequest(BaseModel):
     api_key: Optional[str] = None
     base_url: Optional[str] = None
     extra_config: Optional[dict] = None
+    # Tool support
+    tools_enabled: bool = False
 
 
 class ChatMessageRequest(BaseModel):
@@ -66,6 +71,22 @@ class ChatResponse(BaseModel):
     model: str
     provider: str
     usage: Optional[dict] = None
+    tool_calls: Optional[list[dict]] = None
+
+
+class McpConnectRequest(BaseModel):
+    """Request to connect to an MCP server"""
+    name: str
+    transport: str = "stdio"
+    command: Optional[str] = None
+    args: list[str] = []
+    url: Optional[str] = None
+    env: dict[str, str] = {}
+
+
+class McpDisconnectRequest(BaseModel):
+    """Request to disconnect from an MCP server"""
+    name: str
 
 
 # ============================================================================
@@ -73,14 +94,24 @@ class ChatResponse(BaseModel):
 # ============================================================================
 
 chat_service: ChatService = None
+tool_registry: ToolRegistry = None
+mcp_client: McpClientManager = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize services on startup"""
-    global chat_service
+    global chat_service, tool_registry, mcp_client
     chat_service = ChatService()
-    
+    tool_registry = ToolRegistry()
+    mcp_client = McpClientManager(tool_registry)
+
+    # Register built-in tools
+    shell_tool = ShellTool(mode=os.getenv("TOOLS_MODE", "restricted"))
+    fs_tool = FilesystemTool(mode=os.getenv("TOOLS_MODE", "restricted"))
+    register_builtin_tools(tool_registry, shell_tool, fs_tool)
+    print(f"[mcp] Registered {len(tool_registry.get_all())} built-in tools")
+
     # Configure Ollama (local LLM)
     ollama_host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
     ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2")
@@ -88,32 +119,35 @@ async def lifespan(app: FastAPI):
         base_url=ollama_host,
         default_model=ollama_model,
     ))
-    
+
     # Configure Anthropic (if API key is set)
     if os.getenv("ANTHROPIC_API_KEY"):
         chat_service.register_provider(AnthropicProvider())
         print("✓ Anthropic provider enabled")
-    
+
     # Configure OpenAI (if API key is set)
     if os.getenv("OPENAI_API_KEY"):
         chat_service.register_provider(OpenAIProvider())
         print("✓ OpenAI provider enabled")
-    
+
     # Configure Google AI / Gemini (if API key is set)
     if os.getenv("GOOGLE_API_KEY"):
         chat_service.register_provider(GoogleProvider())
         print("✓ Google AI (Gemini) provider enabled")
-    
+
     print(f"🤖 AI Studio Sidecar initialized")
     print(f"   Ollama: {ollama_host} (model: {ollama_model})")
-    
+
     yield
+
+    # Cleanup: disconnect all MCP servers
+    await mcp_client.shutdown()
 
 
 app = FastAPI(
     title="AI Studio Agent",
-    description="Multi-provider LLM agent server",
-    version="0.1.0",
+    description="Multi-provider LLM agent server with MCP tool support",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -193,16 +227,20 @@ def create_provider_for_request(
 @app.get("/health")
 async def health():
     """Health check endpoint"""
-    return {"status": "healthy", "version": "0.1.0"}
+    return {"status": "healthy", "version": "0.2.0"}
 
 
 @app.get("/status")
 async def status():
-    """Detailed status including provider health"""
+    """Detailed status including provider health and MCP"""
     provider_health = await chat_service.health_check()
+    mcp_servers = {
+        name: "connected" for name in mcp_client.get_connected_servers()
+    }
     return {
         "status": "healthy",
         "providers": provider_health,
+        "mcp_servers": mcp_servers,
         "active_conversations": len(chat_service.conversations),
     }
 
@@ -249,9 +287,7 @@ async def test_provider(request: ProviderTestRequest):
 async def chat(request: ChatRequest):
     """
     Send a chat message and get a response.
-    
-    Creates a new conversation if conversation_id is not provided.
-    Maintains conversation history for follow-up messages.
+    Supports tool calling when tools_enabled=True.
     """
     try:
         # Generate conversation ID if not provided
@@ -275,23 +311,70 @@ async def chat(request: ChatRequest):
                 system_prompt=request.system_prompt,
             )
 
-        # Get response
-        response = await chat_service.chat(
-            conversation_id=conversation_id,
-            user_message=request.message,
-            provider_name=request.provider,
-            model=request.model,
-            temperature=request.temperature,
-        )
-        
-        return ChatResponse(
-            conversation_id=conversation_id,
-            content=response.content,
-            model=response.model,
-            provider=response.provider,
-            usage=response.usage,
-        )
-    
+        # Get tool definitions for the provider
+        tool_definitions = None
+        if request.tools_enabled and tool_registry and len(tool_registry.get_all()) > 0:
+            if request.provider == "anthropic":
+                tool_definitions = tool_registry.get_anthropic_tools()
+            elif request.provider == "google":
+                tool_definitions = tool_registry.get_google_tools()
+            # Other providers: tools not yet supported, silently skip
+
+        if tool_definitions:
+            # Use tool-calling loop
+            result = await chat_service.chat_with_tools(
+                conversation_id=conversation_id,
+                user_message=request.message,
+                provider_name=request.provider,
+                model=request.model,
+                temperature=request.temperature,
+                tool_definitions=tool_definitions,
+                tool_registry=tool_registry,
+                mcp_client=mcp_client,
+            )
+
+            # Serialize tool calls for the response
+            serialized_tools = [
+                {
+                    "tool_call_id": tc.tool_call_id,
+                    "tool_name": tc.display_name,
+                    "tool_input": tc.tool_input,
+                    "tool_output": tc.tool_output,
+                    "duration_ms": tc.duration_ms,
+                    "error": tc.error,
+                }
+                for tc in result.tool_calls
+            ]
+
+            return ChatResponse(
+                conversation_id=conversation_id,
+                content=result.response.content,
+                model=result.response.model,
+                provider=result.response.provider,
+                usage={
+                    "prompt_tokens": result.total_input_tokens,
+                    "completion_tokens": result.total_output_tokens,
+                },
+                tool_calls=serialized_tools if serialized_tools else None,
+            )
+        else:
+            # Simple chat (no tools)
+            response = await chat_service.chat(
+                conversation_id=conversation_id,
+                user_message=request.message,
+                provider_name=request.provider,
+                model=request.model,
+                temperature=request.temperature,
+            )
+
+            return ChatResponse(
+                conversation_id=conversation_id,
+                content=response.content,
+                model=response.model,
+                provider=response.provider,
+                usage=response.usage,
+            )
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -300,28 +383,24 @@ async def chat(request: ChatRequest):
 
 @app.post("/chat/direct")
 async def chat_direct(request: ChatMessageRequest):
-    """
-    Direct chat without conversation history.
-    
-    Useful for one-off queries or when managing history client-side.
-    """
+    """Direct chat without conversation history."""
     try:
         messages = [Message(role=m["role"], content=m["content"]) for m in request.messages]
         provider = chat_service.get_provider(request.provider or "ollama")
-        
+
         response = await provider.chat(
             messages=messages,
             model=request.model,
             temperature=request.temperature,
         )
-        
+
         return {
             "content": response.content,
             "model": response.model,
             "provider": response.provider,
             "usage": response.usage,
         }
-    
+
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -343,14 +422,47 @@ async def clear_conversation(conversation_id: str):
 
 
 # ============================================================================
-# Tools Endpoints
+# MCP Endpoints
 # ============================================================================
 
-from agent.tools import ShellTool, BrowserTool, FilesystemTool
+@app.post("/mcp/connect")
+async def mcp_connect(request: McpConnectRequest):
+    """Connect to an MCP server and discover its tools."""
+    from agent.mcp.client import McpServerConfig
+    config = McpServerConfig(
+        name=request.name,
+        transport=request.transport,
+        command=request.command,
+        args=request.args,
+        url=request.url,
+        env=request.env,
+    )
+    result = await mcp_client.connect(config)
+    return result
+
+
+@app.post("/mcp/disconnect")
+async def mcp_disconnect(request: McpDisconnectRequest):
+    """Disconnect from an MCP server."""
+    await mcp_client.disconnect(request.name)
+    return {"status": "disconnected", "name": request.name}
+
+
+@app.get("/mcp/tools")
+async def mcp_tools():
+    """List all available tools (built-in + MCP)."""
+    return {"tools": tool_registry.to_summary()}
+
+
+# ============================================================================
+# Tools Endpoints (Legacy — direct tool access)
+# ============================================================================
 
 # Initialize tools with restricted mode by default
 shell_tool = ShellTool(mode=os.getenv("TOOLS_MODE", "restricted"))
 filesystem_tool = FilesystemTool(mode=os.getenv("TOOLS_MODE", "restricted"))
+
+from agent.tools import BrowserTool
 browser_tool = BrowserTool(headless=True)
 
 
@@ -380,11 +492,7 @@ class BrowserRequest(BaseModel):
 
 @app.post("/tools/shell")
 async def run_shell(request: ShellRequest):
-    """
-    Execute a shell command.
-    
-    Mode is controlled by TOOLS_MODE env var: sandboxed, restricted (default), full
-    """
+    """Execute a shell command."""
     result = await shell_tool.run(
         command=request.command,
         timeout=request.timeout,
@@ -401,13 +509,9 @@ async def run_shell(request: ShellRequest):
 
 @app.post("/tools/filesystem")
 async def run_filesystem(request: FilesystemRequest):
-    """
-    Perform filesystem operations.
-    
-    Actions: read, write, append, delete, list_dir, mkdir, exists, copy, move
-    """
+    """Perform filesystem operations."""
     action = request.action.lower()
-    
+
     if action == "read":
         result = filesystem_tool.read(request.path)
     elif action == "write":
@@ -428,7 +532,7 @@ async def run_filesystem(request: FilesystemRequest):
         result = filesystem_tool.move(request.path, request.dest or "")
     else:
         raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
-    
+
     return {
         "success": result.success,
         "action": result.action,
@@ -454,13 +558,9 @@ async def browser_stop():
 
 @app.post("/tools/browser")
 async def run_browser(request: BrowserRequest):
-    """
-    Perform browser actions.
-    
-    Actions: navigate, screenshot, click, fill, extract_text, get_html, evaluate, wait_for
-    """
+    """Perform browser actions."""
     action = request.action.lower()
-    
+
     if action == "navigate":
         result = await browser_tool.navigate(request.url or "")
     elif action == "screenshot":
@@ -479,7 +579,7 @@ async def run_browser(request: BrowserRequest):
         result = await browser_tool.wait_for(request.selector or "")
     else:
         raise HTTPException(status_code=400, detail=f"Unknown action: {action}")
-    
+
     return {
         "success": result.success,
         "action": result.action,
@@ -495,13 +595,13 @@ async def run_browser(request: BrowserRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    
+
     host = os.getenv("HOST", "127.0.0.1")
     port = int(os.getenv("PORT", "8765"))
-    
+
     print(f"\n🚀 Starting AI Studio Agent Server")
     print(f"   URL: http://{host}:{port}")
     print(f"   Docs: http://{host}:{port}/docs")
     print(f"\n   Press Ctrl+C to stop\n")
-    
+
     uvicorn.run(app, host=host, port=port)

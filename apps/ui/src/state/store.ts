@@ -3,6 +3,7 @@ import type {
     Agent, Session, Run, Message,
     Event as StudioEvent, SessionStats,
     CreateAgentRequest, SendMessageResponse,
+    McpServer, CreateMcpServerRequest, UpdateMcpServerRequest,
 } from '@ai-studio/shared';
 
 // ============================================
@@ -79,6 +80,14 @@ interface AppState {
     settingsLoading: boolean;
     fetchSettings: () => Promise<void>;
     saveSetting: (key: string, value: string) => Promise<void>;
+
+    // MCP Servers
+    mcpServers: McpServer[];
+    mcpServersLoading: boolean;
+    fetchMcpServers: () => Promise<void>;
+    addMcpServer: (req: CreateMcpServerRequest) => Promise<McpServer>;
+    updateMcpServer: (id: string, req: UpdateMcpServerRequest) => Promise<void>;
+    removeMcpServer: (id: string) => Promise<void>;
 
     // Inspector navigation (set by Sessions "Inspect" button)
     inspectorSessionId: string | null;
@@ -239,6 +248,33 @@ export const useAppStore = create<AppState>((set, get) => ({
     saveSetting: async (key, value) => {
         await invoke<void>('set_setting', { key, value });
         set((s) => ({ settings: { ...s.settings, [key]: value } }));
+    },
+
+    // MCP Servers
+    mcpServers: [],
+    mcpServersLoading: false,
+    fetchMcpServers: async () => {
+        set({ mcpServersLoading: true });
+        try {
+            const servers = await invoke<McpServer[]>('list_mcp_servers');
+            set({ mcpServers: servers, mcpServersLoading: false });
+        } catch (e) {
+            set({ mcpServersLoading: false, error: `Failed to load MCP servers: ${e}` });
+        }
+    },
+    addMcpServer: async (req) => {
+        const server = await invoke<McpServer>('add_mcp_server', { server: req });
+        set((s) => ({ mcpServers: [...s.mcpServers, server] }));
+        return server;
+    },
+    updateMcpServer: async (id, req) => {
+        await invoke<void>('update_mcp_server', { id, update: req });
+        // Refresh list to get updated data
+        get().fetchMcpServers();
+    },
+    removeMcpServer: async (id) => {
+        await invoke<void>('remove_mcp_server', { id });
+        set((s) => ({ mcpServers: s.mcpServers.filter((srv) => srv.id !== id) }));
     },
 
     // System Info

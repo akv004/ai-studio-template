@@ -37,6 +37,7 @@ class OllamaProvider(AgentProvider):
         model: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
+        tools: Optional[list[dict]] = None,
     ) -> ChatResponse:
         """Send chat request to Ollama"""
         model = model or self.default_model

@@ -67,6 +67,11 @@ pub fn run() {
             list_provider_keys,
             set_provider_key,
             delete_provider_key,
+            // MCP Servers
+            list_mcp_servers,
+            add_mcp_server,
+            update_mcp_server,
+            remove_mcp_server,
             // Sidecar
             sidecar_start,
             sidecar_stop,

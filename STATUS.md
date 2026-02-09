@@ -32,7 +32,7 @@
 |------|------|--------|
 | Runs execution | `api-contracts.md` | DONE |
 | DB wipe command | — | DONE |
-| Error handling polish | `ui-design.md` | Next |
+| Error handling polish | `ui-design.md` | DONE |
 | Session branching | `data-model.md` | Backlog |
 | Inspector improvements | `agent-inspector.md` | Backlog |
 
@@ -40,10 +40,9 @@
 
 ## Backlog (work top-down)
 
-1. Error handling polish across IPC commands — `ui-design.md`
-2. Session branching — `data-model.md`
-3. Inspector improvements (replay, better detail panels) — `agent-inspector.md`
-4. Phase 3: Node editor architecture — `product-vision.md`
+1. Session branching — `data-model.md`
+2. Inspector improvements (replay, better detail panels) — `agent-inspector.md`
+3. Phase 3: Node editor architecture — `product-vision.md`
 
 ---
 
@@ -53,7 +52,9 @@
 
 **Phase 1** (COMPLETE): SQLite + CRUD (d3684bf) → chat sessions verified w/ Gemini → Inspector flagship (3285434) → MCP tool system (827e514) → event bridge + cost calc (ed629cf) → runs + DB wipe (ac9803d).
 
-Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store.
+**Phase 2** (IN PROGRESS): Error handling polish + toasts (e4a8567).
+
+Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling across all IPC calls.
 
 ---
 
@@ -83,16 +84,15 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-08 (session 5)
+**Date**: 2026-02-09 (session 6)
 **What happened**:
-- Runs execution (P2 #8): create_run, cancel_run, get_run Rust commands
-- Async run execution: create_run spawns background task → calls sidecar /chat → updates run status via events
-- Run status events: Tauri emits `run_status_changed` → UI auto-refreshes run list
-- New Run UI: agent selector, name, input textarea, start button with loading state
-- Run detail: cancel button (for pending/running), inspect button (links to Inspector), output/error/stats display
-- DB wipe (P2 #10): wipe_database command deletes all data from all tables
-- Settings Danger Zone: red-bordered section with confirmation dialog for DB wipe
-- CreateRunRequest shared type added to packages/shared
+- Error handling polish (P2 #9): wrapped 9 unhandled store functions with try/catch + error state
+- Toast notification system: Toasts.tsx component, slide-in-right animation (200ms per spec), auto-dismiss 5s
+- Error auto-clear on page navigation (setActiveModule clears error state)
+- SettingsPage: testConnection errors now surface via toast (was console.error only)
+- RunsPage: cancelRun handler wrapped to catch rejected promises
+- All MCP operations (add/update/remove) now show success/error toasts
+- Build verified: TypeScript + Vite both pass clean
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -100,10 +100,11 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 - Session 3: Inspector (3285434), node editor decision (755575e)
 - Session 4a: MCP tool system (827e514)
 - Session 4b: Event bridge + cost calc (ed629cf)
-- Session 5: Runs execution + DB wipe
+- Session 5: Runs execution + DB wipe (ac9803d)
+- Session 6: Error handling polish + toasts (e4a8567)
 
 **Next session should**:
-1. Test full flow via `pnpm tauri dev` — MCP + events + cost + runs
-2. Error handling polish (P2 #9) — wrap all IPC calls with proper error states
-3. Phase 2 polish: session branching, run → inspector link improvements
+1. Test full flow via `pnpm tauri dev` — MCP + events + cost + runs + toasts
+2. Session branching — `data-model.md`
+3. Inspector improvements (replay, better detail panels) — `agent-inspector.md`
 4. Phase 3 planning: node editor architecture

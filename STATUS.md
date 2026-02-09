@@ -33,6 +33,9 @@
 | Runs execution | `api-contracts.md` | DONE |
 | DB wipe command | — | DONE |
 | Error handling polish | `ui-design.md` | DONE |
+| Agents schema alignment | `data-model.md` | Backlog |
+| Sidecar error events | `event-system.md` | Backlog |
+| Onboarding / first-run UX | `ui-design.md` | Backlog |
 | Session branching | `data-model.md` | Backlog |
 | Inspector improvements | `agent-inspector.md` | Backlog |
 
@@ -40,9 +43,12 @@
 
 ## Backlog (work top-down)
 
-1. Session branching — `data-model.md`
-2. Inspector improvements (replay, better detail panels) — `agent-inspector.md`
-3. Phase 3: Node editor architecture — `product-vision.md`
+1. Agents schema alignment — `data-model.md` — split `tools` JSON into `tools_mode`, `mcp_servers`, `approval_rules` per spec (do before branching touches DB)
+2. Sidecar error events — `event-system.md` — emit `agent.error` / `system.error` for LLM-level crashes (only `tool.error` exists today)
+3. Onboarding / first-run UX — `ui-design.md` — welcome modal or guided empty state when no agents exist (spec has 3-step wizard)
+4. Session branching — `data-model.md`
+5. Inspector improvements (replay, better detail panels) — `agent-inspector.md`
+6. Phase 3: Node editor architecture — `product-vision.md`
 
 ---
 
@@ -70,6 +76,7 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 | 2026-02-08 | Chat sessions store messages in SQLite, not sidecar | Sidecar is stateless per-request; Rust owns persistence and history replay |
 | 2026-02-08 | Dogfooding validation: STATUS.md/CLAUDE.md workflow mirrors what AI Studio solves | We hit the exact pain points (lost session context, no visibility, no replay) that the product addresses. Proves the market need. Priority: get to Inspector ASAP — it's the core value prop. |
 | 2026-02-08 | **NODE EDITOR = core product direction** (Phase 3 build, but shapes all architecture) | "Unreal Blueprints for AI agents." Visual node graph where: LLM models, MCP tools, routers, approval gates, data transforms are all pluggable nodes. Users build AI pipelines by connecting nodes — no code. Live execution shows data flowing through nodes with cost/tokens per node. Inspiration: Maya Hypershade, UE Blueprints, Houdini, ComfyUI. This is the 10k-star feature. Current timeline Inspector evolves INTO this. Everything we build (MCP tools, hybrid routing, events) must be node-compatible. |
+| 2026-02-09 | Gemini 3 Pro design review — triaged | 3 items added to P2 backlog (schema alignment, sidecar error events, onboarding). 2 claims rejected: Command Palette already exists; INSERT OR IGNORE is correct. Hybrid intelligence & approval_rules already planned for P3. |
 
 ---
 
@@ -93,6 +100,7 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 - RunsPage: cancelRun handler wrapped to catch rejected promises
 - All MCP operations (add/update/remove) now show success/error toasts
 - Build verified: TypeScript + Vite both pass clean
+- Triaged Gemini 3 Pro design review → 3 items added to backlog, 2 rejected
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -101,10 +109,11 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 - Session 4a: MCP tool system (827e514)
 - Session 4b: Event bridge + cost calc (ed629cf)
 - Session 5: Runs execution + DB wipe (ac9803d)
-- Session 6: Error handling polish + toasts (e4a8567)
+- Session 6: Error handling polish + toasts (e4a8567), design review triage
 
 **Next session should**:
-1. Test full flow via `pnpm tauri dev` — MCP + events + cost + runs + toasts
-2. Session branching — `data-model.md`
-3. Inspector improvements (replay, better detail panels) — `agent-inspector.md`
-4. Phase 3 planning: node editor architecture
+1. Agents schema alignment — split `tools` → `tools_mode`/`mcp_servers`/`approval_rules` in db.rs + migration
+2. Sidecar error events — emit `agent.error`/`system.error` for LLM crashes
+3. Onboarding / first-run UX — welcome state or guided flow
+4. Session branching — `data-model.md`
+5. Inspector improvements — `agent-inspector.md`

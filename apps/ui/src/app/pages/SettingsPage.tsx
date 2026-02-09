@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
-import { checkProviderAvailable, fetchApi } from '../../services/api';
+import { useState, useEffect, useCallback } from 'react';
+import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff, Save } from 'lucide-react';
+import { useAppStore } from '../../state/store';
+import { fetchApi } from '../../services/api';
 
 type SettingsTab = 'providers' | 'models' | 'paths' | 'performance' | 'hotkeys' | 'appearance';
 
@@ -9,12 +10,19 @@ interface HotkeyConfig {
     shortcut: string;
 }
 
+interface ProviderField {
+    key: string;
+    label: string;
+    placeholder: string;
+    secret?: boolean;
+}
+
 interface ProviderConfig {
     id: string;
     name: string;
     icon: string;
     description: string;
-    apiKeyEnv: string;
+    fields: ProviderField[];
     models: string[];
     defaultModel: string;
     docsUrl: string;
@@ -31,11 +39,62 @@ interface ProviderConfig {
  * - Hotkeys customization
  */
 export function SettingsPage() {
+    const { settings, fetchSettings, saveSetting } = useAppStore();
     const [activeTab, setActiveTab] = useState<SettingsTab>('providers');
     const [providerStatus, setProviderStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
     const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
     const [toolDemoOutput, setToolDemoOutput] = useState<string>('');
     const [toolDemoStatus, setToolDemoStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle');
+    // Provider form state — keyed by "provider_id.field_key"
+    const [formValues, setFormValues] = useState<Record<string, string>>({});
+    const [saving, setSaving] = useState(false);
+    const [saveSuccess, setSaveSuccess] = useState(false);
+
+    // Load settings from SQLite on mount
+    useEffect(() => { fetchSettings(); }, [fetchSettings]);
+
+    // Sync stored settings → form state (only when settings load)
+    useEffect(() => {
+        const vals: Record<string, string> = {};
+        for (const [key, value] of Object.entries(settings)) {
+            if (key.startsWith('provider.')) {
+                // key format: "provider.{id}.{field}" → form key: "{id}.{field}"
+                const rest = key.slice('provider.'.length);
+                vals[rest] = value;
+            }
+        }
+        setFormValues(prev => {
+            // Only update if there are new keys from DB (don't overwrite user edits)
+            const merged = { ...prev };
+            for (const [k, v] of Object.entries(vals)) {
+                if (!(k in merged)) merged[k] = v;
+            }
+            return Object.keys(merged).length === Object.keys(prev).length ? prev : merged;
+        });
+    }, [settings]);
+
+    const getFieldValue = useCallback((providerId: string, fieldKey: string) => {
+        return formValues[`${providerId}.${fieldKey}`] || '';
+    }, [formValues]);
+
+    const setFieldValue = useCallback((providerId: string, fieldKey: string, value: string) => {
+        setFormValues(prev => ({ ...prev, [`${providerId}.${fieldKey}`]: value }));
+        setSaveSuccess(false);
+    }, []);
+
+    const handleSaveProviders = async () => {
+        setSaving(true);
+        try {
+            for (const [formKey, value] of Object.entries(formValues)) {
+                if (value.trim()) {
+                    await saveSetting(`provider.${formKey}`, value);
+                }
+            }
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 3000);
+        } catch { /* error in store */ }
+        setSaving(false);
+    };
 
     const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
         { id: 'providers', label: 'AI Providers', icon: Cloud },
@@ -48,44 +107,57 @@ export function SettingsPage() {
 
     const providers: ProviderConfig[] = [
         {
-            id: 'ollama',
-            name: 'Ollama (Local)',
-            icon: '🦙',
-            description: 'Run LLMs locally on your machine',
-            apiKeyEnv: 'OLLAMA_HOST',
-            models: ['llama3.2', 'llama3.1:70b', 'mistral', 'codellama', 'qwen2.5'],
-            defaultModel: 'llama3.2',
-            docsUrl: 'https://ollama.ai',
-        },
-        {
             id: 'anthropic',
             name: 'Anthropic',
             icon: '🔮',
             description: 'Claude models - Best for coding and analysis',
-            apiKeyEnv: 'ANTHROPIC_API_KEY',
-            models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-3-haiku-20240307'],
+            fields: [
+                { key: 'api_key', label: 'API Key', placeholder: 'sk-ant-...', secret: true },
+            ],
+            models: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-haiku-4-5-20251001'],
             defaultModel: 'claude-sonnet-4-20250514',
             docsUrl: 'https://console.anthropic.com',
-        },
-        {
-            id: 'openai',
-            name: 'OpenAI',
-            icon: '🤖',
-            description: 'GPT models - Versatile general-purpose AI',
-            apiKeyEnv: 'OPENAI_API_KEY',
-            models: ['gpt-4o', 'gpt-4o-mini', 'o1-preview', 'o1-mini'],
-            defaultModel: 'gpt-4o',
-            docsUrl: 'https://platform.openai.com/api-keys',
         },
         {
             id: 'google',
             name: 'Google AI Studio',
             icon: '✨',
             description: 'Gemini models - Google\'s multimodal AI',
-            apiKeyEnv: 'GOOGLE_API_KEY',
+            fields: [
+                { key: 'api_key', label: 'API Key', placeholder: 'AIza...', secret: true },
+            ],
             models: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash'],
             defaultModel: 'gemini-2.0-flash',
             docsUrl: 'https://aistudio.google.com/apikey',
+        },
+        {
+            id: 'azure_openai',
+            name: 'Azure OpenAI',
+            icon: '☁️',
+            description: 'OpenAI models via Azure - Enterprise grade',
+            fields: [
+                { key: 'endpoint', label: 'Endpoint', placeholder: 'https://myorg-openai-eastus2.openai.azure.com' },
+                { key: 'api_key', label: 'API Key', placeholder: 'AZURE_OPENAI_API_KEY', secret: true },
+                { key: 'deployment', label: 'Deployment Name', placeholder: 'gpt-4o-mini' },
+                { key: 'api_version', label: 'API Version', placeholder: '2024-08-01-preview' },
+            ],
+            models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-35-turbo'],
+            defaultModel: 'gpt-4o',
+            docsUrl: 'https://portal.azure.com/#view/Microsoft_Azure_ProjectOxford/CognitiveServicesHub',
+        },
+        {
+            id: 'local',
+            name: 'Local / OpenAI-Compatible',
+            icon: '🖥️',
+            description: 'Ollama, vLLM, LM Studio, or any OpenAI-compatible server',
+            fields: [
+                { key: 'base_url', label: 'Base URL', placeholder: 'http://localhost:11434/v1' },
+                { key: 'api_key', label: 'API Key (optional)', placeholder: 'leave empty if not required', secret: true },
+                { key: 'model_name', label: 'Model Name', placeholder: 'llama3.2 or qwen3-vl-8b' },
+            ],
+            models: [],
+            defaultModel: '',
+            docsUrl: 'https://ollama.ai',
         },
     ];
 
@@ -97,28 +169,47 @@ export function SettingsPage() {
 
     const hotkeys: HotkeyConfig[] = [
         { action: 'Open Command Palette', shortcut: '⌘K' },
-        { action: 'Navigate to Projects', shortcut: '⌘1' },
-        { action: 'Navigate to Vision', shortcut: '⌘2' },
-        { action: 'Navigate to Audio', shortcut: '⌘3' },
-        { action: 'Navigate to Agents', shortcut: '⌘4' },
-        { action: 'Navigate to Training', shortcut: '⌘5' },
-        { action: 'Navigate to Runs', shortcut: '⌘6' },
+        { action: 'Navigate to Agents', shortcut: '⌘1' },
+        { action: 'Navigate to Sessions', shortcut: '⌘2' },
+        { action: 'Navigate to Runs', shortcut: '⌘3' },
+        { action: 'Navigate to Inspector', shortcut: '⌘4' },
         { action: 'Open Settings', shortcut: '⌘,' },
-        { action: 'New Project', shortcut: '⌘N' },
-        { action: 'Start Training', shortcut: '⌘⇧T' },
+        { action: 'New Agent', shortcut: '⌘N' },
+        { action: 'New Session', shortcut: '⌘⇧N' },
     ];
 
     const testConnection = async (providerId: string) => {
         setProviderStatus(prev => ({ ...prev, [providerId]: 'testing' }));
 
         try {
-            const available = await checkProviderAvailable(providerId);
-
-            if (available) {
-                setProviderStatus(prev => ({ ...prev, [providerId]: 'success' }));
-            } else {
-                setProviderStatus(prev => ({ ...prev, [providerId]: 'error' }));
+            // Build config from current form values
+            const apiKey = getFieldValue(providerId, 'api_key');
+            const baseUrl = getFieldValue(providerId, 'base_url') || getFieldValue(providerId, 'endpoint');
+            const extraConfig: Record<string, string> = {};
+            const providerCfg = providers.find(p => p.id === providerId);
+            if (providerCfg) {
+                for (const field of providerCfg.fields) {
+                    if (field.key !== 'api_key' && field.key !== 'base_url' && field.key !== 'endpoint') {
+                        const val = getFieldValue(providerId, field.key);
+                        if (val) extraConfig[field.key] = val;
+                    }
+                }
             }
+
+            const result = await fetchApi<{ success: boolean; message: string }>('/providers/test', {
+                method: 'POST',
+                body: JSON.stringify({
+                    provider: providerId,
+                    api_key: apiKey || undefined,
+                    base_url: baseUrl || undefined,
+                    extra_config: Object.keys(extraConfig).length > 0 ? extraConfig : undefined,
+                }),
+            });
+
+            setProviderStatus(prev => ({
+                ...prev,
+                [providerId]: result.success ? 'success' : 'error',
+            }));
         } catch {
             setProviderStatus(prev => ({ ...prev, [providerId]: 'error' }));
         }
@@ -238,52 +329,76 @@ export function SettingsPage() {
                                             </div>
                                         </div>
 
-                                        {/* API Key Input */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div>
-                                                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
-                                                    {provider.id === 'ollama' ? 'Host URL' : 'API Key'}
-                                                </label>
-                                                <div className="relative">
-                                                    <input
-                                                        type={showApiKeys[provider.id] ? 'text' : 'password'}
-                                                        className="input w-full pr-10"
-                                                        placeholder={provider.id === 'ollama' ? 'http://localhost:11434' : `Enter ${provider.apiKeyEnv}`}
-                                                        defaultValue={provider.id === 'ollama' ? 'http://localhost:11434' : ''}
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                                                        onClick={() => toggleApiKeyVisibility(provider.id)}
-                                                    >
-                                                        {showApiKeys[provider.id] ? (
-                                                            <EyeOff className="w-4 h-4" />
-                                                        ) : (
-                                                            <Eye className="w-4 h-4" />
+                                        {/* Config Fields */}
+                                        <div className={`grid gap-4 ${provider.fields.length > 2 ? 'grid-cols-2' : provider.fields.length === 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                            {provider.fields.map((field) => (
+                                                <div key={field.key}>
+                                                    <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                                                        {field.label}
+                                                    </label>
+                                                    <div className="relative">
+                                                        <input
+                                                            type={field.secret && !showApiKeys[`${provider.id}.${field.key}`] ? 'password' : 'text'}
+                                                            className="input w-full pr-10"
+                                                            placeholder={field.placeholder}
+                                                            value={getFieldValue(provider.id, field.key)}
+                                                            onChange={e => setFieldValue(provider.id, field.key, e.target.value)}
+                                                        />
+                                                        {field.secret && (
+                                                            <button
+                                                                type="button"
+                                                                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                                                                onClick={() => toggleApiKeyVisibility(`${provider.id}.${field.key}`)}
+                                                            >
+                                                                {showApiKeys[`${provider.id}.${field.key}`] ? (
+                                                                    <EyeOff className="w-4 h-4" />
+                                                                ) : (
+                                                                    <Eye className="w-4 h-4" />
+                                                                )}
+                                                            </button>
                                                         )}
-                                                    </button>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                            <div>
-                                                <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
-                                                    Default Model
-                                                </label>
-                                                <select className="input w-full" defaultValue={provider.defaultModel}>
-                                                    {provider.models.map((model) => (
-                                                        <option key={model} value={model}>
-                                                            {model}
-                                                        </option>
-                                                    ))}
-                                                </select>
-                                            </div>
+                                            ))}
+                                            {provider.models.length > 0 && (
+                                                <div>
+                                                    <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">
+                                                        Default Model
+                                                    </label>
+                                                    <select
+                                                        className="input w-full"
+                                                        value={getFieldValue(provider.id, 'default_model') || provider.defaultModel}
+                                                        onChange={e => setFieldValue(provider.id, 'default_model', e.target.value)}
+                                                    >
+                                                        {provider.models.map((model) => (
+                                                            <option key={model} value={model}>
+                                                                {model}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 ))}
 
                                 {/* Save Button */}
-                                <div className="flex justify-end pt-4 border-t border-[var(--border-subtle)]">
-                                    <button className="btn btn-primary">
-                                        Save Provider Settings
+                                <div className="flex items-center justify-end gap-3 pt-4 border-t border-[var(--border-subtle)]">
+                                    {saveSuccess && (
+                                        <span className="flex items-center gap-1 text-sm text-green-400">
+                                            <Check className="w-4 h-4" /> Saved
+                                        </span>
+                                    )}
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={handleSaveProviders}
+                                        disabled={saving}
+                                    >
+                                        {saving ? (
+                                            <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</>
+                                        ) : (
+                                            <><Save className="w-4 h-4" /> Save Provider Settings</>
+                                        )}
                                     </button>
                                 </div>
 

@@ -85,8 +85,21 @@ class AnthropicProvider(AgentProvider):
             )
     
     async def health(self) -> bool:
-        """Check if API key is valid (lightweight check)"""
-        return bool(self.api_key)
+        """Check if API key is valid by calling the models endpoint"""
+        if not self.api_key:
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.get(
+                    f"{self.base_url}/v1/models",
+                    headers={
+                        "x-api-key": self.api_key,
+                        "anthropic-version": "2023-06-01",
+                    },
+                )
+                return r.status_code == 200
+        except Exception:
+            return False
     
     def list_models(self) -> list[str]:
         """List available Claude models"""

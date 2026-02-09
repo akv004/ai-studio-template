@@ -101,8 +101,18 @@ class GoogleProvider(AgentProvider):
             )
     
     async def health(self) -> bool:
-        """Check if API key is valid"""
-        return bool(self.api_key)
+        """Check if API key is valid by listing models"""
+        if not self.api_key:
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                r = await client.get(
+                    f"{self.base_url}/models",
+                    params={"key": self.api_key},
+                )
+                return r.status_code == 200
+        except Exception:
+            return False
     
     def list_models(self) -> list[str]:
         """List available Gemini models"""

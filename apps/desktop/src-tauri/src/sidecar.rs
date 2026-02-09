@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::Arc;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager, State, Window};
+use tauri::{AppHandle, Emitter, State, Window};
 use tokio::sync::{oneshot, Mutex};
 use uuid::Uuid;
 
@@ -26,7 +26,7 @@ pub struct SidecarProxyResponse {
     text: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Clone)]
 pub struct ToolApprovalRequest {
     id: String,
     method: String,
@@ -105,9 +105,16 @@ impl SidecarManager {
         }
 
         let cwd = Self::repo_root_from_manifest();
+        // Prefer the project-local venv (apps/sidecar/.venv/bin/python)
+        let venv_python = cwd.join("apps/sidecar/.venv/bin/python");
         let python_override = std::env::var("AI_STUDIO_PYTHON").ok();
         let python_candidates = python_override
             .into_iter()
+            .chain(
+                venv_python
+                    .exists()
+                    .then(|| venv_python.to_string_lossy().to_string()),
+            )
             .chain(["python3".to_string(), "python".to_string()]);
 
         let mut last_err: Option<String> = None;
@@ -210,6 +217,48 @@ impl SidecarManager {
     pub(crate) async fn token(&self) -> Option<String> {
         let inner = self.inner.lock().await;
         inner.token.clone()
+    }
+
+    /// Direct HTTP request to sidecar — used by send_message (bypasses tool approval gate).
+    pub(crate) async fn proxy_request(
+        &self,
+        method: &str,
+        path: &str,
+        body: Option<serde_json::Value>,
+    ) -> Result<serde_json::Value, String> {
+        let base_url = {
+            let inner = self.inner.lock().await;
+            inner.base_url()
+        };
+        let url = format!("{base_url}{path}");
+        let token = self.token().await;
+
+        let client = reqwest::Client::new();
+        let http_method = reqwest::Method::from_bytes(method.as_bytes())
+            .map_err(|_| "Invalid HTTP method".to_string())?;
+        let mut builder = client.request(http_method, &url);
+        if let Some(t) = token {
+            builder = builder.header("x-ai-studio-token", t);
+        }
+        if let Some(b) = body {
+            builder = builder.json(&b);
+        }
+
+        let resp = builder
+            .send()
+            .await
+            .map_err(|e| format!("Sidecar request failed: {e}"))?;
+
+        let status = resp.status();
+        let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+
+        if !status.is_success() {
+            let text = String::from_utf8_lossy(&bytes);
+            return Err(format!("Sidecar returned {status}: {text}"));
+        }
+
+        serde_json::from_slice(&bytes)
+            .map_err(|e| format!("Failed to parse sidecar response: {e}"))
     }
 }
 

@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.aistudio.app",
   "build": {
-    "beforeDevCommand": "npm run dev --prefix ../../ui",
+    "beforeDevCommand": "cd ../ui && npx vite --port 1420",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build --prefix ../../ui",
+    "beforeBuildCommand": "cd ../ui && npx vite build",
     "frontendDist": "../../ui/dist"
   },
   "app": {

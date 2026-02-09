@@ -1,55 +1,1024 @@
 // ============================================
-// TAURI COMMANDS
-// IPC command handlers for UI communication
+// TAURI COMMANDS — Agent, Session, Run, Settings CRUD
+// All backed by real SQLite persistence
 // ============================================
 
+use crate::db::{Database, now_iso};
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
-/// Simple greeting command for testing IPC
-#[tauri::command]
-pub fn greet(name: &str) -> String {
-    format!("Hello, {}! Welcome to AI Studio.", name)
-}
+// ============================================
+// AGENT TYPES
+// ============================================
 
-/// Project data structure
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Project {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Agent {
     pub id: String,
     pub name: String,
     pub description: String,
+    pub provider: String,
+    pub model: String,
+    pub system_prompt: String,
+    pub temperature: f64,
+    pub max_tokens: i64,
+    pub tools: Vec<String>,
     pub created_at: String,
+    pub updated_at: String,
+    pub is_archived: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateAgentRequest {
+    pub name: String,
+    pub provider: String,
+    pub model: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub system_prompt: String,
+    #[serde(default = "default_temperature")]
+    pub temperature: f64,
+    #[serde(default = "default_max_tokens")]
+    pub max_tokens: i64,
+    #[serde(default)]
+    pub tools: Vec<String>,
+}
+
+fn default_temperature() -> f64 { 0.7 }
+fn default_max_tokens() -> i64 { 4096 }
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAgentRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub system_prompt: Option<String>,
+    pub temperature: Option<f64>,
+    pub max_tokens: Option<i64>,
+    pub tools: Option<Vec<String>>,
+}
+
+// ============================================
+// AGENT COMMANDS
+// ============================================
+
+#[tauri::command]
+pub fn list_agents(db: tauri::State<'_, Database>) -> Result<Vec<Agent>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, description, provider, model, system_prompt,
+                    temperature, max_tokens, tools, created_at, updated_at, is_archived
+             FROM agents WHERE is_archived = 0
+             ORDER BY updated_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let agents = stmt
+        .query_map([], |row| {
+            let tools_json: String = row.get(8)?;
+            let tools: Vec<String> =
+                serde_json::from_str(&tools_json).unwrap_or_default();
+            Ok(Agent {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                provider: row.get(3)?,
+                model: row.get(4)?,
+                system_prompt: row.get(5)?,
+                temperature: row.get(6)?,
+                max_tokens: row.get(7)?,
+                tools,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+                is_archived: row.get::<_, i32>(11)? != 0,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(agents)
+}
+
+#[tauri::command]
+pub fn get_agent(db: tauri::State<'_, Database>, id: String) -> Result<Agent, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.query_row(
+        "SELECT id, name, description, provider, model, system_prompt,
+                temperature, max_tokens, tools, created_at, updated_at, is_archived
+         FROM agents WHERE id = ?1",
+        params![id],
+        |row| {
+            let tools_json: String = row.get(8)?;
+            let tools: Vec<String> =
+                serde_json::from_str(&tools_json).unwrap_or_default();
+            Ok(Agent {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                description: row.get(2)?,
+                provider: row.get(3)?,
+                model: row.get(4)?,
+                system_prompt: row.get(5)?,
+                temperature: row.get(6)?,
+                max_tokens: row.get(7)?,
+                tools,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+                is_archived: row.get::<_, i32>(11)? != 0,
+            })
+        },
+    )
+    .map_err(|e| format!("Agent not found: {e}"))
+}
+
+#[tauri::command]
+pub fn create_agent(
+    db: tauri::State<'_, Database>,
+    agent: CreateAgentRequest,
+) -> Result<Agent, String> {
+    let id = Uuid::new_v4().to_string();
+    let now = now_iso();
+    let tools_json = serde_json::to_string(&agent.tools).unwrap_or_else(|_| "[]".to_string());
+
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO agents (id, name, description, provider, model, system_prompt,
+                             temperature, max_tokens, tools, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+        params![
+            id,
+            agent.name,
+            agent.description,
+            agent.provider,
+            agent.model,
+            agent.system_prompt,
+            agent.temperature,
+            agent.max_tokens,
+            tools_json,
+            now,
+            now,
+        ],
+    )
+    .map_err(|e| format!("Failed to create agent: {e}"))?;
+
+    Ok(Agent {
+        id,
+        name: agent.name,
+        description: agent.description,
+        provider: agent.provider,
+        model: agent.model,
+        system_prompt: agent.system_prompt,
+        temperature: agent.temperature,
+        max_tokens: agent.max_tokens,
+        tools: agent.tools,
+        created_at: now.clone(),
+        updated_at: now,
+        is_archived: false,
+    })
+}
+
+#[tauri::command]
+pub fn update_agent(
+    db: tauri::State<'_, Database>,
+    id: String,
+    updates: UpdateAgentRequest,
+) -> Result<Agent, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = now_iso();
+
+    let mut sets = vec!["updated_at = ?1".to_string()];
+    let mut param_index = 2u32;
+    let mut values: Vec<Box<dyn rusqlite::types::ToSql>> = vec![Box::new(now.clone())];
+
+    if let Some(ref name) = updates.name {
+        sets.push(format!("name = ?{param_index}"));
+        values.push(Box::new(name.clone()));
+        param_index += 1;
+    }
+    if let Some(ref desc) = updates.description {
+        sets.push(format!("description = ?{param_index}"));
+        values.push(Box::new(desc.clone()));
+        param_index += 1;
+    }
+    if let Some(ref provider) = updates.provider {
+        sets.push(format!("provider = ?{param_index}"));
+        values.push(Box::new(provider.clone()));
+        param_index += 1;
+    }
+    if let Some(ref model) = updates.model {
+        sets.push(format!("model = ?{param_index}"));
+        values.push(Box::new(model.clone()));
+        param_index += 1;
+    }
+    if let Some(ref prompt) = updates.system_prompt {
+        sets.push(format!("system_prompt = ?{param_index}"));
+        values.push(Box::new(prompt.clone()));
+        param_index += 1;
+    }
+    if let Some(temp) = updates.temperature {
+        sets.push(format!("temperature = ?{param_index}"));
+        values.push(Box::new(temp));
+        param_index += 1;
+    }
+    if let Some(max_t) = updates.max_tokens {
+        sets.push(format!("max_tokens = ?{param_index}"));
+        values.push(Box::new(max_t));
+        param_index += 1;
+    }
+    if let Some(ref tools) = updates.tools {
+        let tools_json = serde_json::to_string(tools).unwrap_or_else(|_| "[]".to_string());
+        sets.push(format!("tools = ?{param_index}"));
+        values.push(Box::new(tools_json));
+        param_index += 1;
+    }
+
+    let sql = format!(
+        "UPDATE agents SET {} WHERE id = ?{param_index}",
+        sets.join(", ")
+    );
+    values.push(Box::new(id.clone()));
+
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = values.iter().map(|v| v.as_ref()).collect();
+    let rows = conn
+        .execute(&sql, param_refs.as_slice())
+        .map_err(|e| format!("Failed to update agent: {e}"))?;
+
+    if rows == 0 {
+        return Err("Agent not found".to_string());
+    }
+
+    drop(conn);
+    get_agent(db, id)
+}
+
+#[tauri::command]
+pub fn delete_agent(db: tauri::State<'_, Database>, id: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = now_iso();
+    let rows = conn
+        .execute(
+            "UPDATE agents SET is_archived = 1, updated_at = ?1 WHERE id = ?2",
+            params![now, id],
+        )
+        .map_err(|e| format!("Failed to archive agent: {e}"))?;
+
+    if rows == 0 {
+        return Err("Agent not found".to_string());
+    }
+    Ok(())
+}
+
+// ============================================
+// SESSION TYPES
+// ============================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Session {
+    pub id: String,
+    pub agent_id: String,
+    pub title: String,
+    pub status: String,
+    pub message_count: i64,
+    pub event_count: i64,
+    pub total_input_tokens: i64,
+    pub total_output_tokens: i64,
+    pub total_cost_usd: f64,
+    pub created_at: String,
+    pub updated_at: String,
+    pub ended_at: Option<String>,
+    pub agent_name: Option<String>,
+    pub agent_model: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Message {
+    pub id: String,
+    pub session_id: String,
+    pub seq: i64,
+    pub role: String,
+    pub content: String,
+    pub model: Option<String>,
+    pub provider: Option<String>,
+    pub input_tokens: Option<i64>,
+    pub output_tokens: Option<i64>,
+    pub cost_usd: Option<f64>,
+    pub duration_ms: Option<i64>,
+    pub created_at: String,
+}
+
+// ============================================
+// SESSION COMMANDS
+// ============================================
+
+#[tauri::command]
+pub fn list_sessions(db: tauri::State<'_, Database>) -> Result<Vec<Session>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT s.id, s.agent_id, s.title, s.status, s.message_count,
+                    s.event_count, s.total_input_tokens, s.total_output_tokens,
+                    s.total_cost_usd, s.created_at, s.updated_at, s.ended_at,
+                    a.name, a.model
+             FROM sessions s
+             LEFT JOIN agents a ON a.id = s.agent_id
+             WHERE s.status != 'archived'
+             ORDER BY s.updated_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let sessions = stmt
+        .query_map([], |row| {
+            Ok(Session {
+                id: row.get(0)?,
+                agent_id: row.get(1)?,
+                title: row.get(2)?,
+                status: row.get(3)?,
+                message_count: row.get(4)?,
+                event_count: row.get(5)?,
+                total_input_tokens: row.get(6)?,
+                total_output_tokens: row.get(7)?,
+                total_cost_usd: row.get(8)?,
+                created_at: row.get(9)?,
+                updated_at: row.get(10)?,
+                ended_at: row.get(11)?,
+                agent_name: row.get(12)?,
+                agent_model: row.get(13)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(sessions)
+}
+
+#[tauri::command]
+pub fn create_session(
+    db: tauri::State<'_, Database>,
+    agent_id: String,
+    title: Option<String>,
+) -> Result<Session, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let id = Uuid::new_v4().to_string();
+    let now = now_iso();
+
+    let (agent_name, agent_model): (String, String) = conn
+        .query_row(
+            "SELECT name, model FROM agents WHERE id = ?1 AND is_archived = 0",
+            params![agent_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Agent not found".to_string())?;
+
+    let session_title = title.unwrap_or_else(|| format!("Chat with {agent_name}"));
+
+    conn.execute(
+        "INSERT INTO sessions (id, agent_id, title, status, created_at, updated_at)
+         VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+        params![id, agent_id, session_title, now, now],
+    )
+    .map_err(|e| format!("Failed to create session: {e}"))?;
+
+    Ok(Session {
+        id,
+        agent_id,
+        title: session_title,
+        status: "active".to_string(),
+        message_count: 0,
+        event_count: 0,
+        total_input_tokens: 0,
+        total_output_tokens: 0,
+        total_cost_usd: 0.0,
+        created_at: now.clone(),
+        updated_at: now,
+        ended_at: None,
+        agent_name: Some(agent_name),
+        agent_model: Some(agent_model),
+    })
+}
+
+#[tauri::command]
+pub fn get_session_messages(
+    db: tauri::State<'_, Database>,
+    session_id: String,
+) -> Result<Vec<Message>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, session_id, seq, role, content, model, provider,
+                    input_tokens, output_tokens, cost_usd, duration_ms, created_at
+             FROM messages WHERE session_id = ?1
+             ORDER BY seq ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let messages = stmt
+        .query_map(params![session_id], |row| {
+            Ok(Message {
+                id: row.get(0)?,
+                session_id: row.get(1)?,
+                seq: row.get(2)?,
+                role: row.get(3)?,
+                content: row.get(4)?,
+                model: row.get(5)?,
+                provider: row.get(6)?,
+                input_tokens: row.get(7)?,
+                output_tokens: row.get(8)?,
+                cost_usd: row.get(9)?,
+                duration_ms: row.get(10)?,
+                created_at: row.get(11)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(messages)
+}
+
+#[tauri::command]
+pub fn delete_session(db: tauri::State<'_, Database>, id: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let rows = conn
+        .execute("DELETE FROM sessions WHERE id = ?1", params![id])
+        .map_err(|e| format!("Failed to delete session: {e}"))?;
+    if rows == 0 {
+        return Err("Session not found".to_string());
+    }
+    Ok(())
+}
+
+// ============================================
+// EVENT COMMANDS (Inspector reads these)
+// ============================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Event {
+    pub event_id: String,
+    #[serde(rename = "type")]
+    pub event_type: String,
+    pub ts: String,
+    pub session_id: String,
+    pub source: String,
+    pub seq: i64,
+    pub payload: serde_json::Value,
+    pub cost_usd: Option<f64>,
+}
+
+#[tauri::command]
+pub fn get_session_events(
+    db: tauri::State<'_, Database>,
+    session_id: String,
+) -> Result<Vec<Event>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT event_id, type, ts, session_id, source, seq, payload, cost_usd
+             FROM events WHERE session_id = ?1
+             ORDER BY seq ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let events = stmt
+        .query_map(params![session_id], |row| {
+            let payload_str: String = row.get(6)?;
+            let payload: serde_json::Value =
+                serde_json::from_str(&payload_str)
+                    .unwrap_or(serde_json::Value::Object(Default::default()));
+            Ok(Event {
+                event_id: row.get(0)?,
+                event_type: row.get(1)?,
+                ts: row.get(2)?,
+                session_id: row.get(3)?,
+                source: row.get(4)?,
+                seq: row.get(5)?,
+                payload,
+                cost_usd: row.get(7)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(events)
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionStats {
+    pub total_events: i64,
+    pub total_messages: i64,
+    pub total_input_tokens: i64,
+    pub total_output_tokens: i64,
+    pub total_cost_usd: f64,
+    pub models_used: Vec<String>,
+}
+
+#[tauri::command]
+pub fn get_session_stats(
+    db: tauri::State<'_, Database>,
+    session_id: String,
+) -> Result<SessionStats, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let (total_events, total_messages, total_input, total_output, total_cost): (
+        i64, i64, i64, i64, f64,
+    ) = conn
+        .query_row(
+            "SELECT
+                (SELECT COUNT(*) FROM events WHERE session_id = ?1),
+                (SELECT COUNT(*) FROM messages WHERE session_id = ?1),
+                COALESCE((SELECT SUM(input_tokens) FROM messages WHERE session_id = ?1), 0),
+                COALESCE((SELECT SUM(output_tokens) FROM messages WHERE session_id = ?1), 0),
+                COALESCE((SELECT SUM(cost_usd) FROM messages WHERE session_id = ?1), 0.0)",
+            params![session_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+        )
+        .map_err(|e| e.to_string())?;
+
+    let mut stmt = conn
+        .prepare("SELECT DISTINCT model FROM messages WHERE session_id = ?1 AND model IS NOT NULL")
+        .map_err(|e| e.to_string())?;
+    let models: Vec<String> = stmt
+        .query_map(params![session_id], |row| row.get(0))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(SessionStats {
+        total_events,
+        total_messages,
+        total_input_tokens: total_input,
+        total_output_tokens: total_output,
+        total_cost_usd: total_cost,
+        models_used: models,
+    })
+}
+
+// ============================================
+// RUN COMMANDS
+// ============================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Run {
+    pub id: String,
+    pub agent_id: String,
+    pub session_id: Option<String>,
+    pub name: String,
+    pub input: String,
+    pub status: String,
+    pub output: Option<String>,
+    pub error: Option<String>,
+    pub total_events: i64,
+    pub total_tokens: i64,
+    pub total_cost_usd: f64,
+    pub duration_ms: Option<i64>,
+    pub created_at: String,
+    pub started_at: Option<String>,
+    pub completed_at: Option<String>,
+    pub agent_name: Option<String>,
+}
+
+#[tauri::command]
+pub fn list_runs(db: tauri::State<'_, Database>) -> Result<Vec<Run>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT r.id, r.agent_id, r.session_id, r.name, r.input, r.status,
+                    r.output, r.error, r.total_events, r.total_tokens,
+                    r.total_cost_usd, r.duration_ms, r.created_at,
+                    r.started_at, r.completed_at, a.name
+             FROM runs r
+             LEFT JOIN agents a ON a.id = r.agent_id
+             ORDER BY r.created_at DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let runs = stmt
+        .query_map([], |row| {
+            Ok(Run {
+                id: row.get(0)?,
+                agent_id: row.get(1)?,
+                session_id: row.get(2)?,
+                name: row.get(3)?,
+                input: row.get(4)?,
+                status: row.get(5)?,
+                output: row.get(6)?,
+                error: row.get(7)?,
+                total_events: row.get(8)?,
+                total_tokens: row.get(9)?,
+                total_cost_usd: row.get(10)?,
+                duration_ms: row.get(11)?,
+                created_at: row.get(12)?,
+                started_at: row.get(13)?,
+                completed_at: row.get(14)?,
+                agent_name: row.get(15)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(runs)
+}
+
+// ============================================
+// SETTINGS COMMANDS
+// ============================================
+
+#[tauri::command]
+pub fn get_all_settings(db: tauri::State<'_, Database>) -> Result<serde_json::Value, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT key, value FROM settings")
+        .map_err(|e| e.to_string())?;
+
+    let mut map = serde_json::Map::new();
+    let rows = stmt
+        .query_map([], |row| {
+            let key: String = row.get(0)?;
+            let value: String = row.get(1)?;
+            Ok((key, value))
+        })
+        .map_err(|e| e.to_string())?;
+
+    for row in rows {
+        let (key, value) = row.map_err(|e| e.to_string())?;
+        let parsed: serde_json::Value =
+            serde_json::from_str(&value).unwrap_or(serde_json::Value::String(value));
+        map.insert(key, parsed);
+    }
+
+    Ok(serde_json::Value::Object(map))
+}
+
+#[tauri::command]
+pub fn set_setting(
+    db: tauri::State<'_, Database>,
+    key: String,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let value_str = serde_json::to_string(&value).map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (?1, ?2)",
+        params![key, value_str],
+    )
+    .map_err(|e| format!("Failed to save setting: {e}"))?;
+    Ok(())
+}
+
+// ============================================
+// PROVIDER KEY COMMANDS
+// ============================================
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderKeyInfo {
+    pub provider: String,
+    pub has_key: bool,
+    pub base_url: Option<String>,
     pub updated_at: String,
 }
 
-/// List all projects from the data directory
-/// Currently returns mock data
 #[tauri::command]
-pub fn list_projects() -> Vec<Project> {
-    // TODO: Implement actual file system reading
-    // For now, return mock data
-    vec![
-        Project {
-            id: "1".to_string(),
-            name: "Object Detection Pipeline".to_string(),
-            description: "Real-time object detection for autonomous navigation".to_string(),
-            created_at: "2024-01-15T10:00:00Z".to_string(),
-            updated_at: "2024-01-20T14:30:00Z".to_string(),
-        },
-        Project {
-            id: "2".to_string(),
-            name: "Voice Assistant".to_string(),
-            description: "Multi-language voice recognition and synthesis".to_string(),
-            created_at: "2024-01-10T08:00:00Z".to_string(),
-            updated_at: "2024-01-19T16:45:00Z".to_string(),
-        },
-    ]
+pub fn list_provider_keys(db: tauri::State<'_, Database>) -> Result<Vec<ProviderKeyInfo>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare("SELECT provider, base_url, updated_at FROM provider_keys")
+        .map_err(|e| e.to_string())?;
+
+    let keys = stmt
+        .query_map([], |row| {
+            Ok(ProviderKeyInfo {
+                provider: row.get(0)?,
+                has_key: true,
+                base_url: row.get(1)?,
+                updated_at: row.get(2)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(keys)
 }
 
-/// Save project to disk
-/// Currently a stub that returns success
 #[tauri::command]
-pub fn save_project(project: Project) -> Result<String, String> {
-    // TODO: Implement actual file system writing
-    println!("Saving project: {:?}", project);
-    Ok(format!("Project '{}' saved successfully", project.name))
+pub fn set_provider_key(
+    db: tauri::State<'_, Database>,
+    provider: String,
+    api_key: String,
+    base_url: Option<String>,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = now_iso();
+    conn.execute(
+        "INSERT OR REPLACE INTO provider_keys (provider, api_key, base_url, updated_at)
+         VALUES (?1, ?2, ?3, ?4)",
+        params![provider, api_key, base_url, now],
+    )
+    .map_err(|e| format!("Failed to save provider key: {e}"))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_provider_key(db: tauri::State<'_, Database>, provider: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "DELETE FROM provider_keys WHERE provider = ?1",
+        params![provider],
+    )
+    .map_err(|e| format!("Failed to delete provider key: {e}"))?;
+    Ok(())
+}
+
+// ============================================
+// SEND MESSAGE — the core chat loop
+// User → persist → sidecar LLM → persist response → record events
+// ============================================
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendMessageRequest {
+    pub session_id: String,
+    pub content: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SendMessageResponse {
+    pub user_message: Message,
+    pub assistant_message: Message,
+}
+
+#[tauri::command]
+pub async fn send_message(
+    db: tauri::State<'_, Database>,
+    sidecar: tauri::State<'_, crate::sidecar::SidecarManager>,
+    request: SendMessageRequest,
+) -> Result<SendMessageResponse, String> {
+    let now = now_iso();
+
+    // 1. Load session + agent info + provider config from settings
+    let (provider, model, system_prompt, provider_config) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let agent_id: String = conn
+            .query_row(
+                "SELECT agent_id FROM sessions WHERE id = ?1",
+                params![request.session_id],
+                |row| row.get(0),
+            )
+            .map_err(|_| "Session not found".to_string())?;
+
+        let (provider, model, system_prompt) = conn.query_row(
+            "SELECT provider, model, system_prompt FROM agents WHERE id = ?1",
+            params![agent_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)),
+        )
+        .map_err(|_| "Agent not found".to_string())?;
+
+        // Load provider settings (e.g. provider.google.api_key, provider.azure_openai.endpoint)
+        let prefix = format!("provider.{}.", provider);
+        let mut stmt = conn
+            .prepare("SELECT key, value FROM settings WHERE key LIKE ?1")
+            .map_err(|e| e.to_string())?;
+        let mut config = serde_json::Map::new();
+        let rows = stmt
+            .query_map(params![format!("{}%", prefix)], |row| {
+                let key: String = row.get(0)?;
+                let value: String = row.get(1)?;
+                Ok((key, value))
+            })
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            let (key, value) = row.map_err(|e| e.to_string())?;
+            // Strip prefix: "provider.google.api_key" → "api_key"
+            let field = key.strip_prefix(&prefix).unwrap_or(&key);
+            // Strip JSON quotes if the value was stored as a JSON string
+            let clean_value = value.trim_matches('"').to_string();
+            config.insert(field.to_string(), serde_json::Value::String(clean_value));
+        }
+
+        (provider, model, system_prompt, config)
+    };
+
+    // 2. Get next sequence number
+    let user_seq = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let max_seq: i64 = conn
+            .query_row(
+                "SELECT COALESCE(MAX(seq), 0) FROM messages WHERE session_id = ?1",
+                params![request.session_id],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+        max_seq + 1
+    };
+
+    // 3. Persist user message
+    let user_msg_id = Uuid::new_v4().to_string();
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO messages (id, session_id, seq, role, content, created_at)
+             VALUES (?1, ?2, ?3, 'user', ?4, ?5)",
+            params![user_msg_id, request.session_id, user_seq, request.content, now],
+        )
+        .map_err(|e| format!("Failed to save user message: {e}"))?;
+    }
+
+    let user_message = Message {
+        id: user_msg_id,
+        session_id: request.session_id.clone(),
+        seq: user_seq,
+        role: "user".to_string(),
+        content: request.content.clone(),
+        model: None,
+        provider: None,
+        input_tokens: None,
+        output_tokens: None,
+        cost_usd: None,
+        duration_ms: None,
+        created_at: now.clone(),
+    };
+
+    // 4. Record events
+    record_event(&db, &request.session_id, "message.user", "ui.user",
+        serde_json::json!({ "content": request.content }))?;
+    record_event(&db, &request.session_id, "llm.request.started", "desktop.chat",
+        serde_json::json!({ "model": model, "provider": provider }))?;
+
+    // 5. Call sidecar for real LLM response
+    let llm_start = std::time::Instant::now();
+    let api_key = provider_config.get("api_key").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let base_url = provider_config.get("base_url")
+        .or_else(|| provider_config.get("endpoint"))
+        .and_then(|v| v.as_str()).unwrap_or("").to_string();
+
+    // Build extra_config from remaining provider settings (deployment, api_version, model_name, etc.)
+    let mut extra_config = serde_json::Map::new();
+    for (k, v) in &provider_config {
+        if k != "api_key" && k != "base_url" && k != "endpoint" {
+            extra_config.insert(k.clone(), v.clone());
+        }
+    }
+
+    let mut chat_body = serde_json::json!({
+        "message": request.content,
+        "conversation_id": request.session_id,
+        "provider": provider,
+        "model": model,
+        "system_prompt": system_prompt,
+    });
+    // Only include credentials if we have an API key or base_url
+    if !api_key.is_empty() {
+        chat_body["api_key"] = serde_json::Value::String(api_key);
+    }
+    if !base_url.is_empty() {
+        chat_body["base_url"] = serde_json::Value::String(base_url);
+    }
+    if !extra_config.is_empty() {
+        chat_body["extra_config"] = serde_json::Value::Object(extra_config);
+    }
+
+    let resp = sidecar.proxy_request("POST", "/chat", Some(chat_body)).await
+        .map_err(|e| {
+            let _ = record_event(&db, &request.session_id, "llm.response.error", "desktop.chat",
+                serde_json::json!({ "error": format!("{e}") }));
+            format!("LLM call failed: {e}")
+        })?;
+
+    let duration_ms = llm_start.elapsed().as_millis() as i64;
+    let content = resp.get("content").and_then(|v| v.as_str()).unwrap_or("(no response)").to_string();
+    let usage = resp.get("usage");
+    let input_tokens = usage.and_then(|u| u.get("prompt_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
+    let output_tokens = usage.and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
+    let response_model = resp.get("model").and_then(|v| v.as_str()).unwrap_or(&model).to_string();
+
+    // 6. Persist assistant message
+    let assistant_seq = user_seq + 1;
+    let assistant_msg_id = Uuid::new_v4().to_string();
+    let resp_now = now_iso();
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO messages (id, session_id, seq, role, content, model, provider,
+                                   input_tokens, output_tokens, duration_ms, created_at)
+             VALUES (?1, ?2, ?3, 'assistant', ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                assistant_msg_id, request.session_id, assistant_seq,
+                content, response_model, provider,
+                input_tokens, output_tokens, duration_ms, resp_now,
+            ],
+        )
+        .map_err(|e| format!("Failed to save assistant message: {e}"))?;
+
+        conn.execute(
+            "UPDATE sessions SET
+                message_count = message_count + 2,
+                total_input_tokens = total_input_tokens + ?1,
+                total_output_tokens = total_output_tokens + ?2,
+                updated_at = ?3
+             WHERE id = ?4",
+            params![input_tokens, output_tokens, resp_now, request.session_id],
+        )
+        .map_err(|e| format!("Failed to update session: {e}"))?;
+    }
+
+    let assistant_message = Message {
+        id: assistant_msg_id,
+        session_id: request.session_id.clone(),
+        seq: assistant_seq,
+        role: "assistant".to_string(),
+        content: content.clone(),
+        model: Some(response_model.clone()),
+        provider: Some(provider.clone()),
+        input_tokens: Some(input_tokens),
+        output_tokens: Some(output_tokens),
+        cost_usd: None,
+        duration_ms: Some(duration_ms),
+        created_at: resp_now,
+    };
+
+    // 7. Record completion events
+    record_event(&db, &request.session_id, "llm.response.completed", "desktop.chat",
+        serde_json::json!({
+            "model": response_model, "provider": provider,
+            "input_tokens": input_tokens, "output_tokens": output_tokens,
+            "duration_ms": duration_ms,
+        }))?;
+    record_event(&db, &request.session_id, "message.assistant", "desktop.chat",
+        serde_json::json!({ "content": content, "model": response_model }))?;
+
+    Ok(SendMessageResponse { user_message, assistant_message })
+}
+
+// ============================================
+// EVENT HELPER
+// ============================================
+
+fn record_event(
+    db: &tauri::State<'_, Database>,
+    session_id: &str,
+    event_type: &str,
+    source: &str,
+    payload: serde_json::Value,
+) -> Result<Event, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let event_id = Uuid::new_v4().to_string();
+    let ts = now_iso();
+
+    let next_seq: i64 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(seq), 0) + 1 FROM events WHERE session_id = ?1",
+            params![session_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(1);
+
+    let cost_usd = payload.get("cost_usd").and_then(|v| v.as_f64());
+    let payload_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
+
+    conn.execute(
+        "INSERT INTO events (event_id, type, ts, session_id, source, seq, payload, cost_usd)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![event_id, event_type, ts, session_id, source, next_seq, payload_str, cost_usd],
+    )
+    .map_err(|e| format!("Failed to record event: {e}"))?;
+
+    conn.execute(
+        "UPDATE sessions SET event_count = event_count + 1 WHERE id = ?1",
+        params![session_id],
+    ).ok();
+
+    Ok(Event {
+        event_id,
+        event_type: event_type.to_string(),
+        ts,
+        session_id: session_id.to_string(),
+        source: source.to_string(),
+        seq: next_seq,
+        payload,
+        cost_usd,
+    })
+}
+
+// ============================================
+// SIMPLE COMMANDS (kept for testing)
+// ============================================
+
+#[tauri::command]
+pub fn greet(name: &str) -> String {
+    format!("Hello, {}! Welcome to AI Studio.", name)
 }

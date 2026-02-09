@@ -1,10 +1,8 @@
 import {
-    FolderOpen,
-    Eye,
-    AudioLines,
     Bot,
-    Dumbbell,
+    MessageSquare,
     Play,
+    Search,
     Settings
 } from 'lucide-react';
 import { useAppStore, type ModuleId } from '../../state/store';
@@ -17,22 +15,16 @@ interface NavItem {
 }
 
 const mainNavItems: NavItem[] = [
-    { id: 'projects', label: 'Projects', icon: FolderOpen, shortcut: '⌘1' },
-    { id: 'vision', label: 'Vision', icon: Eye, shortcut: '⌘2' },
-    { id: 'audio', label: 'Audio', icon: AudioLines, shortcut: '⌘3' },
-    { id: 'agents', label: 'Agents', icon: Bot, shortcut: '⌘4' },
-    { id: 'training', label: 'Training', icon: Dumbbell, shortcut: '⌘5' },
-    { id: 'runs', label: 'Runs', icon: Play, shortcut: '⌘6' },
+    { id: 'agents', label: 'Agents', icon: Bot, shortcut: '⌘1' },
+    { id: 'sessions', label: 'Sessions', icon: MessageSquare, shortcut: '⌘2' },
+    { id: 'runs', label: 'Runs', icon: Play, shortcut: '⌘3' },
+    { id: 'inspector', label: 'Inspector', icon: Search, shortcut: '⌘4' },
 ];
 
 /**
  * Sidebar Navigation
- * 
- * Main navigation with:
- * - Module navigation items
- * - Keyboard shortcut hints
- * - Active state indication
- * - Settings section at bottom
+ *
+ * 5-pillar navigation: Agents, Sessions, Runs, Inspector, Settings
  */
 export function Sidebar() {
     const { activeModule, setActiveModule } = useAppStore();

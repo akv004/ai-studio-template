@@ -1,51 +1,28 @@
 // ============================================
-// SHARED TYPES - RUNS / TIMELINE
-// Execution pipeline structures
+// SHARED TYPES - RUNS
+// Matches Rust backend struct (camelCase serialization)
 // ============================================
 
-/**
- * Run phase status
- */
-export type PhaseStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+export type RunStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
 
 /**
- * Log level
- */
-export type LogLevel = 'debug' | 'info' | 'warning' | 'error';
-
-/**
- * Run phase definition
- */
-export interface RunPhase {
-    id: string;
-    name: string;
-    status: PhaseStatus;
-    startedAt?: string;
-    completedAt?: string;
-    durationMs?: number;
-    logs: LogEntry[];
-}
-
-/**
- * Log entry
- */
-export interface LogEntry {
-    timestamp: string;
-    level: LogLevel;
-    message: string;
-    source?: string;
-}
-
-/**
- * Complete run/execution
+ * Run — a headless batch execution of an agent
  */
 export interface Run {
     id: string;
+    agentId: string;
+    sessionId: string | null;
     name: string;
-    projectId: string;
-    status: PhaseStatus;
-    phases: RunPhase[];
-    startedAt: string;
-    completedAt?: string;
-    totalDurationMs?: number;
+    input: string;
+    status: RunStatus;
+    output: string | null;
+    error: string | null;
+    totalEvents: number;
+    totalTokens: number;
+    totalCostUsd: number;
+    durationMs: number | null;
+    createdAt: string;
+    startedAt: string | null;
+    completedAt: string | null;
+    agentName: string | null;
 }

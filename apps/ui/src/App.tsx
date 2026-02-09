@@ -6,18 +6,16 @@ import { useKeyboardShortcuts } from './commands';
 import { useAppStore } from './state/store';
 import { useEffect, useMemo, useState } from 'react';
 
-// Page imports
-import { ProjectsPage } from './app/pages/ProjectsPage';
-import { VisionPage } from './app/pages/VisionPage';
-import { AudioPage } from './app/pages/AudioPage';
+// Page imports — 5 pillars
 import { AgentsPage } from './app/pages/AgentsPage';
-import { TrainingPage } from './app/pages/TrainingPage';
+import { SessionsPage } from './app/pages/SessionsPage';
 import { RunsPage } from './app/pages/RunsPage';
+import { InspectorPage } from './app/pages/InspectorPage';
 import { SettingsPage } from './app/pages/SettingsPage';
 
 /**
  * Main Application Component
- * 
+ *
  * Renders the app shell with dynamic page content based on active module.
  * Implements global keyboard shortcuts and command palette.
  */
@@ -78,22 +76,18 @@ function App() {
   // Dynamic page rendering based on active module
   const renderPage = () => {
     switch (activeModule) {
-      case 'projects':
-        return <ProjectsPage />;
-      case 'vision':
-        return <VisionPage />;
-      case 'audio':
-        return <AudioPage />;
       case 'agents':
         return <AgentsPage />;
-      case 'training':
-        return <TrainingPage />;
+      case 'sessions':
+        return <SessionsPage />;
       case 'runs':
         return <RunsPage />;
+      case 'inspector':
+        return <InspectorPage />;
       case 'settings':
         return <SettingsPage />;
       default:
-        return <ProjectsPage />;
+        return <AgentsPage />;
     }
   };
 

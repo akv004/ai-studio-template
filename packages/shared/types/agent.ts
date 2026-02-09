@@ -1,17 +1,7 @@
 // ============================================
-// SHARED TYPES - AGENT
-// AI Agent data structures
+// SHARED TYPES - AGENT, SESSION, MESSAGE
+// Matches Rust backend structs (camelCase serialization)
 // ============================================
-
-/**
- * Agent operational status
- */
-export type AgentStatus = 'running' | 'idle' | 'error' | 'offline' | 'starting';
-
-/**
- * Agent capability type
- */
-export type AgentCapability = 'vision' | 'audio' | 'text' | 'code' | 'multimodal';
 
 /**
  * AI Agent definition
@@ -19,32 +9,113 @@ export type AgentCapability = 'vision' | 'audio' | 'text' | 'code' | 'multimodal
 export interface Agent {
     id: string;
     name: string;
-    status: AgentStatus;
+    description: string;
+    provider: string;
     model: string;
-    capabilities: AgentCapability[];
-    lastActive: string;
-    memoryUsageMB?: number;
-    gpuUsagePercent?: number;
+    systemPrompt: string;
+    temperature: number;
+    maxTokens: number;
+    tools: string[];
+    createdAt: string;
+    updatedAt: string;
+    isArchived: boolean;
+}
+
+export interface CreateAgentRequest {
+    name: string;
+    provider: string;
+    model: string;
+    description?: string;
+    systemPrompt?: string;
+    temperature?: number;
+    maxTokens?: number;
+    tools?: string[];
+}
+
+export interface UpdateAgentRequest {
+    name?: string;
+    description?: string;
+    provider?: string;
+    model?: string;
+    systemPrompt?: string;
+    temperature?: number;
+    maxTokens?: number;
+    tools?: string[];
 }
 
 /**
- * Agent message in chat timeline
+ * Session — an interactive conversation with an agent
  */
-export interface AgentMessage {
+export interface Session {
     id: string;
     agentId: string;
-    role: 'user' | 'agent' | 'system';
+    title: string;
+    status: string;
+    messageCount: number;
+    eventCount: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalCostUsd: number;
+    createdAt: string;
+    updatedAt: string;
+    endedAt: string | null;
+    agentName: string | null;
+    agentModel: string | null;
+}
+
+/**
+ * Message in a session
+ */
+export interface Message {
+    id: string;
+    sessionId: string;
+    seq: number;
+    role: 'user' | 'assistant' | 'system';
     content: string;
-    timestamp: string;
-    metadata?: Record<string, unknown>;
+    model: string | null;
+    provider: string | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    costUsd: number | null;
+    durationMs: number | null;
+    createdAt: string;
 }
 
 /**
- * Agent chat session
+ * Event recorded by the inspector
  */
-export interface AgentSession {
-    id: string;
-    agentId: string;
-    startedAt: string;
-    messages: AgentMessage[];
+export interface Event {
+    eventId: string;
+    type: string;
+    ts: string;
+    sessionId: string;
+    source: string;
+    seq: number;
+    payload: Record<string, unknown>;
+    costUsd: number | null;
+}
+
+/**
+ * Aggregated stats for a session
+ */
+export interface SessionStats {
+    totalEvents: number;
+    totalMessages: number;
+    totalInputTokens: number;
+    totalOutputTokens: number;
+    totalCostUsd: number;
+    modelsUsed: string[];
+}
+
+/**
+ * Send message request/response
+ */
+export interface SendMessageRequest {
+    sessionId: string;
+    content: string;
+}
+
+export interface SendMessageResponse {
+    userMessage: Message;
+    assistantMessage: Message;
 }

@@ -26,6 +26,9 @@ from agent.providers import (
     AnthropicProvider,
     OpenAIProvider,
     GoogleProvider,
+    AzureOpenAIProvider,
+    LocalOpenAIProvider,
+    AgentProvider,
     Message,
 )
 
@@ -42,6 +45,10 @@ class ChatRequest(BaseModel):
     model: Optional[str] = None
     temperature: float = 0.7
     system_prompt: Optional[str] = None
+    # Per-request provider config (passed from Rust, loaded from SQLite settings)
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    extra_config: Optional[dict] = None
 
 
 class ChatMessageRequest(BaseModel):
@@ -139,6 +146,47 @@ app.add_middleware(
 
 
 # ============================================================================
+# Dynamic Provider Creation
+# ============================================================================
+
+def create_provider_for_request(
+    name: str,
+    api_key: Optional[str] = None,
+    base_url: Optional[str] = None,
+    extra_config: Optional[dict] = None,
+) -> AgentProvider:
+    """Create a provider instance from per-request config."""
+    cfg = extra_config or {}
+
+    if name == "anthropic":
+        return AnthropicProvider(api_key=api_key or "")
+    elif name == "google":
+        return GoogleProvider(api_key=api_key or "")
+    elif name == "azure_openai":
+        return AzureOpenAIProvider(
+            endpoint=base_url or cfg.get("endpoint", ""),
+            api_key=api_key or "",
+            deployment=cfg.get("deployment", ""),
+            api_version=cfg.get("api_version", "2024-02-01"),
+        )
+    elif name == "local":
+        return LocalOpenAIProvider(
+            base_url=base_url or cfg.get("base_url", "http://localhost:11434/v1"),
+            api_key=api_key or "",
+            model_name=cfg.get("model_name", ""),
+        )
+    elif name == "openai":
+        return OpenAIProvider(api_key=api_key or "")
+    elif name == "ollama":
+        return OllamaProvider(
+            base_url=base_url or "http://localhost:11434",
+            default_model=cfg.get("model_name", "llama3.2"),
+        )
+    else:
+        raise ValueError(f"Unknown provider: {name}")
+
+
+# ============================================================================
 # Health & Status Endpoints
 # ============================================================================
 
@@ -166,6 +214,34 @@ async def list_providers():
 
 
 # ============================================================================
+# Provider Test Endpoint
+# ============================================================================
+
+class ProviderTestRequest(BaseModel):
+    """Test a provider connection with given credentials"""
+    provider: str
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    extra_config: Optional[dict] = None
+
+
+@app.post("/providers/test")
+async def test_provider(request: ProviderTestRequest):
+    """Test if a provider connection works with the given config."""
+    try:
+        provider = create_provider_for_request(
+            name=request.provider,
+            api_key=request.api_key,
+            base_url=request.base_url,
+            extra_config=request.extra_config,
+        )
+        healthy = await provider.health()
+        return {"success": healthy, "message": "Connected" if healthy else "Health check failed"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+
+# ============================================================================
 # Chat Endpoints
 # ============================================================================
 
@@ -180,7 +256,17 @@ async def chat(request: ChatRequest):
     try:
         # Generate conversation ID if not provided
         conversation_id = request.conversation_id or f"conv_{uuid.uuid4().hex[:8]}"
-        
+
+        # If per-request API key provided, create and register provider on-the-fly
+        if request.api_key and request.provider:
+            provider = create_provider_for_request(
+                name=request.provider,
+                api_key=request.api_key,
+                base_url=request.base_url,
+                extra_config=request.extra_config,
+            )
+            chat_service.register_provider(provider)
+
         # Create conversation with system prompt if provided
         if request.system_prompt and conversation_id not in chat_service.conversations:
             chat_service.create_conversation(
@@ -188,7 +274,7 @@ async def chat(request: ChatRequest):
                 provider_name=request.provider,
                 system_prompt=request.system_prompt,
             )
-        
+
         # Get response
         response = await chat_service.chat(
             conversation_id=conversation_id,

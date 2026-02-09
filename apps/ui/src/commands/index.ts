@@ -23,48 +23,34 @@ export function useCommands(): Command[] {
     }, [setActiveModule]);
 
     return [
-        // Navigation Commands
-        {
-            id: 'nav-projects',
-            label: 'Go to Projects',
-            shortcut: '⌘1',
-            category: 'navigation',
-            action: () => navigateTo('projects'),
-        },
-        {
-            id: 'nav-vision',
-            label: 'Go to Vision',
-            shortcut: '⌘2',
-            category: 'navigation',
-            action: () => navigateTo('vision'),
-        },
-        {
-            id: 'nav-audio',
-            label: 'Go to Audio',
-            shortcut: '⌘3',
-            category: 'navigation',
-            action: () => navigateTo('audio'),
-        },
+        // Navigation Commands — 5 pillars
         {
             id: 'nav-agents',
             label: 'Go to Agents',
-            shortcut: '⌘4',
+            shortcut: '⌘1',
             category: 'navigation',
             action: () => navigateTo('agents'),
         },
         {
-            id: 'nav-training',
-            label: 'Go to Training',
-            shortcut: '⌘5',
+            id: 'nav-sessions',
+            label: 'Go to Sessions',
+            shortcut: '⌘2',
             category: 'navigation',
-            action: () => navigateTo('training'),
+            action: () => navigateTo('sessions'),
         },
         {
             id: 'nav-runs',
             label: 'Go to Runs',
-            shortcut: '⌘6',
+            shortcut: '⌘3',
             category: 'navigation',
             action: () => navigateTo('runs'),
+        },
+        {
+            id: 'nav-inspector',
+            label: 'Go to Inspector',
+            shortcut: '⌘4',
+            category: 'navigation',
+            action: () => navigateTo('inspector'),
         },
         {
             id: 'nav-settings',
@@ -75,23 +61,23 @@ export function useCommands(): Command[] {
         },
         // Action Commands
         {
-            id: 'new-project',
-            label: 'New Project',
+            id: 'new-agent',
+            label: 'New Agent',
             shortcut: '⌘N',
             category: 'action',
             action: () => {
-                console.log('Creating new project...');
-                navigateTo('projects');
+                console.log('Creating new agent...');
+                navigateTo('agents');
             },
         },
         {
-            id: 'start-training',
-            label: 'Start Training Run',
-            shortcut: '⌘⇧T',
+            id: 'new-session',
+            label: 'New Session',
+            shortcut: '⌘⇧N',
             category: 'action',
             action: () => {
-                console.log('Starting training...');
-                navigateTo('training');
+                console.log('Creating new session...');
+                navigateTo('sessions');
             },
         },
         // View Commands
@@ -139,12 +125,10 @@ export function useKeyboardShortcuts() {
             // Navigation shortcuts (only when command palette is closed)
             if (isMeta && !isCommandPaletteOpen) {
                 const shortcuts: Record<string, ModuleId> = {
-                    '1': 'projects',
-                    '2': 'vision',
-                    '3': 'audio',
-                    '4': 'agents',
-                    '5': 'training',
-                    '6': 'runs',
+                    '1': 'agents',
+                    '2': 'sessions',
+                    '3': 'runs',
+                    '4': 'inspector',
                     ',': 'settings',
                 };
 

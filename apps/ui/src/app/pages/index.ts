@@ -1,7 +1,5 @@
-export { ProjectsPage } from './ProjectsPage';
-export { VisionPage } from './VisionPage';
-export { AudioPage } from './AudioPage';
 export { AgentsPage } from './AgentsPage';
-export { TrainingPage } from './TrainingPage';
+export { SessionsPage } from './SessionsPage';
 export { RunsPage } from './RunsPage';
+export { InspectorPage } from './InspectorPage';
 export { SettingsPage } from './SettingsPage';

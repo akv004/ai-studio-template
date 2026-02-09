@@ -225,7 +225,7 @@ export function RunsPage() {
                                 {(selectedRun.status === 'pending' || selectedRun.status === 'running') && (
                                     <button
                                         className="btn btn-sm text-red-400"
-                                        onClick={() => cancelRun(selectedRun.id)}
+                                        onClick={() => { cancelRun(selectedRun.id).catch(() => {}); }}
                                     >
                                         <Square className="w-3.5 h-3.5" />
                                         Cancel

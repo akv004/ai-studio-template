@@ -39,7 +39,7 @@ interface ProviderConfig {
  * - Hotkeys customization
  */
 export function SettingsPage() {
-    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer, wipeDatabase } = useAppStore();
+    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer, wipeDatabase, addToast } = useAppStore();
     const [activeTab, setActiveTab] = useState<SettingsTab>('providers');
     const [providerStatus, setProviderStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
     const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
@@ -212,13 +212,16 @@ export function SettingsPage() {
                 }),
             });
 
-            setProviderStatus(prev => ({
-                ...prev,
-                [providerId]: result.success ? 'success' : 'error',
-            }));
+            if (result.success) {
+                setProviderStatus(prev => ({ ...prev, [providerId]: 'success' }));
+                addToast(`${providerId}: connection successful`, 'success');
+            } else {
+                setProviderStatus(prev => ({ ...prev, [providerId]: 'error' }));
+                addToast(`${providerId}: ${result.message || 'connection failed'}`, 'error');
+            }
         } catch (err) {
-            console.error(`Test connection failed for ${providerId}:`, err);
             setProviderStatus(prev => ({ ...prev, [providerId]: 'error' }));
+            addToast(`${providerId}: ${err instanceof Error ? err.message : 'connection failed'}`, 'error');
         }
 
         setTimeout(() => {
@@ -264,7 +267,9 @@ export function SettingsPage() {
     };
 
     const handleToggleMcpServer = async (id: string, enabled: boolean) => {
-        await updateMcpServer(id, { enabled });
+        try {
+            await updateMcpServer(id, { enabled });
+        } catch { /* error handled by store toast */ }
     };
 
     const renderProviderStatus = (providerId: string) => {
@@ -543,7 +548,7 @@ export function SettingsPage() {
                                                     </button>
                                                     <button
                                                         className="btn btn-secondary btn-sm text-red-400 hover:text-red-300"
-                                                        onClick={() => removeMcpServer(server.id)}
+                                                        onClick={() => { removeMcpServer(server.id).catch(() => {}); }}
                                                         title="Remove"
                                                     >
                                                         <Trash2 className="w-4 h-4" />

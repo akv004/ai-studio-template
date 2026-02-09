@@ -2,6 +2,7 @@
 import { AppShell } from './app/layout/AppShell';
 import { CommandPalette } from './app/layout/CommandPalette';
 import { ToolApprovalModal } from './app/layout/ToolApprovalModal';
+import { Toasts } from './app/layout/Toasts';
 import { useKeyboardShortcuts } from './commands';
 import { useAppStore } from './state/store';
 import { useEffect, useMemo, useState } from 'react';
@@ -136,6 +137,9 @@ function App() {
           onDeny={() => decideToolApproval(false)}
         />
       )}
+
+      {/* Toast Notifications */}
+      <Toasts />
     </>
   );
 }

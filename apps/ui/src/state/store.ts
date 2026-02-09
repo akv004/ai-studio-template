@@ -19,6 +19,14 @@ export type ModuleId =
     | 'inspector'
     | 'settings';
 
+export interface Toast {
+    id: string;
+    message: string;
+    type: 'success' | 'error' | 'info';
+}
+
+let toastCounter = 0;
+
 export type { Agent, Session, Run, Message };
 export type { StudioEvent, SessionStats };
 
@@ -104,12 +112,17 @@ interface AppState {
     // Error tracking
     error: string | null;
     clearError: () => void;
+
+    // Toast notifications
+    toasts: Toast[];
+    addToast: (message: string, type: Toast['type']) => void;
+    removeToast: (id: string) => void;
 }
 
 export const useAppStore = create<AppState>((set, get) => ({
-    // Navigation
+    // Navigation (clear error on page change)
     activeModule: 'agents',
-    setActiveModule: (module) => set({ activeModule: module }),
+    setActiveModule: (module) => set({ activeModule: module, error: null }),
 
     // Command Palette
     isCommandPaletteOpen: false,
@@ -130,13 +143,28 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
     },
     createAgent: async (req) => {
-        const agent = await invoke<Agent>('create_agent', { agent: req });
-        set((s) => ({ agents: [agent, ...s.agents] }));
-        return agent;
+        try {
+            const agent = await invoke<Agent>('create_agent', { agent: req });
+            set((s) => ({ agents: [agent, ...s.agents] }));
+            get().addToast('Agent created', 'success');
+            return agent;
+        } catch (e) {
+            const msg = `Failed to create agent: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
     },
     deleteAgent: async (id) => {
-        await invoke<void>('delete_agent', { id });
-        set((s) => ({ agents: s.agents.filter((a) => a.id !== id) }));
+        try {
+            await invoke<void>('delete_agent', { id });
+            set((s) => ({ agents: s.agents.filter((a) => a.id !== id) }));
+            get().addToast('Agent deleted', 'success');
+        } catch (e) {
+            const msg = `Failed to delete agent: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
     },
 
     // Sessions
@@ -166,11 +194,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
     },
     deleteSession: async (id) => {
-        await invoke<void>('delete_session', { id });
-        set((s) => ({
-            sessions: s.sessions.filter((sess) => sess.id !== id),
-            messages: [],
-        }));
+        try {
+            await invoke<void>('delete_session', { id });
+            set((s) => ({
+                sessions: s.sessions.filter((sess) => sess.id !== id),
+                messages: [],
+            }));
+            get().addToast('Session deleted', 'success');
+        } catch (e) {
+            const msg = `Failed to delete session: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
     },
 
     // Messages
@@ -266,19 +301,34 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
     },
     cancelRun: async (id) => {
-        await invoke<void>('cancel_run', { id });
-        set((s) => ({
-            runs: s.runs.map((r) => r.id === id ? { ...r, status: 'cancelled' as const } : r),
-        }));
+        try {
+            await invoke<void>('cancel_run', { id });
+            set((s) => ({
+                runs: s.runs.map((r) => r.id === id ? { ...r, status: 'cancelled' as const } : r),
+            }));
+            get().addToast('Run cancelled', 'info');
+        } catch (e) {
+            const msg = `Failed to cancel run: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
     },
 
     // Database
     wipeDatabase: async () => {
-        await invoke<void>('wipe_database');
-        set({
-            agents: [], sessions: [], runs: [], messages: [], events: [],
-            mcpServers: [], settings: {}, sessionStats: null,
-        });
+        try {
+            await invoke<void>('wipe_database');
+            set({
+                agents: [], sessions: [], runs: [], messages: [], events: [],
+                mcpServers: [], settings: {}, sessionStats: null,
+            });
+            get().addToast('Database wiped', 'success');
+        } catch (e) {
+            const msg = `Failed to wipe database: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
     },
 
     // Settings
@@ -294,8 +344,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
     },
     saveSetting: async (key, value) => {
-        await invoke<void>('set_setting', { key, value });
-        set((s) => ({ settings: { ...s.settings, [key]: value } }));
+        try {
+            await invoke<void>('set_setting', { key, value });
+            set((s) => ({ settings: { ...s.settings, [key]: value } }));
+        } catch (e) {
+            const msg = `Failed to save setting: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
     },
 
     // MCP Servers
@@ -311,18 +368,38 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
     },
     addMcpServer: async (req) => {
-        const server = await invoke<McpServer>('add_mcp_server', { server: req });
-        set((s) => ({ mcpServers: [...s.mcpServers, server] }));
-        return server;
+        try {
+            const server = await invoke<McpServer>('add_mcp_server', { server: req });
+            set((s) => ({ mcpServers: [...s.mcpServers, server] }));
+            get().addToast('MCP server added', 'success');
+            return server;
+        } catch (e) {
+            const msg = `Failed to add MCP server: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
     },
     updateMcpServer: async (id, req) => {
-        await invoke<void>('update_mcp_server', { id, update: req });
-        // Refresh list to get updated data
-        get().fetchMcpServers();
+        try {
+            await invoke<void>('update_mcp_server', { id, update: req });
+            get().fetchMcpServers();
+        } catch (e) {
+            const msg = `Failed to update MCP server: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
     },
     removeMcpServer: async (id) => {
-        await invoke<void>('remove_mcp_server', { id });
-        set((s) => ({ mcpServers: s.mcpServers.filter((srv) => srv.id !== id) }));
+        try {
+            await invoke<void>('remove_mcp_server', { id });
+            set((s) => ({ mcpServers: s.mcpServers.filter((srv) => srv.id !== id) }));
+            get().addToast('MCP server removed', 'success');
+        } catch (e) {
+            const msg = `Failed to remove MCP server: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
     },
 
     // System Info
@@ -337,4 +414,16 @@ export const useAppStore = create<AppState>((set, get) => ({
     // Error
     error: null,
     clearError: () => set({ error: null }),
+
+    // Toast notifications
+    toasts: [],
+    addToast: (message, type) => {
+        const id = `toast-${++toastCounter}`;
+        set((s) => ({ toasts: [...s.toasts, { id, message, type }] }));
+        // Auto-dismiss after 5s
+        setTimeout(() => get().removeToast(id), 5000);
+    },
+    removeToast: (id) => {
+        set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+    },
 }));

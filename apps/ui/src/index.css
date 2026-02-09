@@ -759,6 +759,15 @@ select.input option {
   animation: slideIn var(--transition-slow) ease-out;
 }
 
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 200ms ease-out;
+}
+
 /* ========================================
    WAVEFORM DISPLAY
    ======================================== */

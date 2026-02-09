@@ -99,7 +99,7 @@ cd apps/sidecar && python -m uvicorn server:app --port 8765  # Sidecar standalon
 ## Gotchas
 
 - `isTauri()`: Tauri v2 uses `window.__TAURI_INTERNALS__`, not `window.__TAURI__` (v1)
-- Tauri IPC args: snake_case matching Rust param names (e.g. `{ agent_id: '...' }`)
+- Tauri IPC args: Tauri v2 auto-converts snake_case Rust params to camelCase on JS side (e.g. `agent_id` in Rust → `{ agentId }` in JS)
 - Sidecar auth: every non-health request needs `x-ai-studio-token` header
 - Settings keys: `provider.{id}.{field}` format in SQLite settings table
 - JSON values: stored as JSON strings — strip quotes when reading (`value.trim_matches('"')`)

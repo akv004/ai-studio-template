@@ -133,7 +133,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     createSession: async (agentId, title) => {
         set({ error: null });
         try {
-            const args: Record<string, unknown> = { agent_id: agentId };
+            const args: Record<string, unknown> = { agentId };
             if (title) args.title = title;
             const session = await invoke<Session>('create_session', args);
             set((s) => ({ sessions: [session, ...s.sessions] }));
@@ -159,7 +159,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     fetchMessages: async (sessionId) => {
         set({ messagesLoading: true });
         try {
-            const messages = await invoke<Message[]>('get_session_messages', { session_id: sessionId });
+            const messages = await invoke<Message[]>('get_session_messages', { sessionId });
             set({ messages, messagesLoading: false });
         } catch (e) {
             set({ messagesLoading: false, error: `Failed to load messages: ${e}` });
@@ -191,7 +191,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     fetchEvents: async (sessionId) => {
         set({ eventsLoading: true });
         try {
-            const events = await invoke<StudioEvent[]>('get_session_events', { session_id: sessionId });
+            const events = await invoke<StudioEvent[]>('get_session_events', { sessionId });
             set({ events, eventsLoading: false });
         } catch (e) {
             set({ eventsLoading: false, error: `Failed to load events: ${e}` });
@@ -199,7 +199,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     },
     fetchSessionStats: async (sessionId) => {
         try {
-            const stats = await invoke<SessionStats>('get_session_stats', { session_id: sessionId });
+            const stats = await invoke<SessionStats>('get_session_stats', { sessionId });
             set({ sessionStats: stats });
         } catch (e) {
             set({ error: `Failed to load stats: ${e}` });

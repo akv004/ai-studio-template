@@ -79,6 +79,7 @@
 ## Gotchas
 
 - `isTauri()`: Must check `__TAURI_INTERNALS__` (v2), not `__TAURI__` (v1) — fixed in a681b59
+- **Tauri v2 IPC args are camelCase**: Rust `agent_id` → JS `{ agentId }`. NOT snake_case! This caused "missing required key" errors.
 - Store errors: Every store action that calls `invoke` should set `error` state on failure, not swallow silently
 - Sidecar provider config: Values stored as JSON strings with quotes — strip with `trim_matches('"')` in Rust
 

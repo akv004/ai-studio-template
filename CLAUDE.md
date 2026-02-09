@@ -42,13 +42,21 @@ This is a spec-driven, multi-session project. Every session follows this:
 ### On Completing a Task (or Session End)
 9. **Update STATUS.md** — move items between Sprint/Backlog/Done, update "Last Session Notes"
 10. **Commit STATUS.md** — always. The next session depends on it.
+11. **Update MEMORY.md** — update phase status, add new commits, gotchas, architecture changes. This is at `~/.claude/projects/-home-amit-projects-myws-ws01-ai-studio-template/memory/MEMORY.md` and auto-loads into every session's system prompt.
 
 ### Key Rules
 - Never let a session end with large uncommitted work
 - `STATUS.md` = sprint board (dynamic — updated constantly)
 - `docs/specs/` = blueprint (stable — what to build)
 - `CLAUDE.md` = project rules (stable — how to work)
+- `MEMORY.md` = persistent memory across sessions (update after each milestone)
 - If STATUS.md conflicts with reality, fix STATUS.md
+
+### Commit Discipline
+- **Commit at every conclusive milestone** — don't let big changes pile up
+- Push immediately after commit
+- If you notice it's been a while since the last commit, self-commit proactively
+- Use descriptive commit messages: `feat:`, `fix:`, `docs:` prefixes
 
 ## Specs → Code Mapping
 

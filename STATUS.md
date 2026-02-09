@@ -3,18 +3,38 @@
 > This is the project's single source of truth for progress.
 > New sessions: read this top-to-bottom, then you're caught up.
 
-## Current Phase: 1 (Core Working Product)
+## Spec Roadmap
 
-**Demo goal**: Create agent → chat with it → see tools execute → inspect session with events & cost.
+| # | Spec | Priority | Phase | Status | Notes |
+|---|------|----------|-------|--------|-------|
+| 1 | architecture.md | P0 | 1 | DONE | 3-layer system, IPC boundary |
+| 2 | data-model.md | P0 | 1 | DONE | SQLite schema v2, WAL mode |
+| 3 | event-system.md | P0 | 1 | DONE | Event bus + WS bridge + cost calc |
+| 4 | api-contracts.md | P0 | 1 | DONE | All IPC commands implemented |
+| 5 | agent-inspector.md | P0 | 1 | DONE | Timeline, detail, stats, filters, export |
+| 6 | mcp-integration.md | P1 | 1 | DONE | Registry, tool calling, MCP client |
+| 7 | ui-design.md | P1 | 2 | IN PROGRESS | Polish pass — error handling, UX |
+| 8 | hybrid-intelligence.md | P1 | 3 | PLANNED | Smart model routing, budget controls |
+| 9 | phase-plan.md | — | — | REFERENCE | Implementation roadmap |
+| 10 | use-cases.md | — | — | REFERENCE | Demo script, user scenarios |
+| 11 | product-vision.md | — | — | REFERENCE | North star, positioning |
 
-| Sub-task | Spec | Status |
-|----------|------|--------|
-| 1A: SQLite + CRUD | `data-model.md` | DONE |
-| 1B: Event system | `event-system.md` | DONE — WS bridge, live streaming, cost calc |
-| 1C: Agent CRUD UI | `ui-design.md` | DONE |
-| 1D: Chat sessions | `api-contracts.md` | DONE — full flow verified (Google/Gemini) |
-| 1E: Basic Inspector | `agent-inspector.md` | DONE — timeline, detail, stats, filters, export |
-| 1F: MCP tools | `mcp-integration.md` | DONE — tool calling, MCP client, Settings UI |
+**Status key**: DONE | IN PROGRESS | PLANNED | BLOCKED | REFERENCE (non-implementable)
+
+---
+
+## Current Phase: 2 (Polish + Power Features)
+
+**Goal**: Polish UX, error handling, runs, session branching. Prep for open-source launch.
+**Specs in scope**: `ui-design.md` (polish pass)
+
+| Task | Spec | Status |
+|------|------|--------|
+| Runs execution | `api-contracts.md` | DONE |
+| DB wipe command | — | DONE |
+| Error handling polish | `ui-design.md` | Next |
+| Session branching | `data-model.md` | Backlog |
+| Inspector improvements | `agent-inspector.md` | Backlog |
 
 ---
 

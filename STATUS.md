@@ -73,7 +73,7 @@
 | 2026-02-08 | UI routes all sidecar calls through Tauri IPC | Security boundary — Tauri adds auth token, UI never has direct sidecar access |
 | 2026-02-08 | Chat sessions store messages in SQLite, not sidecar | Sidecar is stateless per-request; Rust owns persistence and history replay |
 | 2026-02-08 | Dogfooding validation: STATUS.md/CLAUDE.md workflow mirrors what AI Studio solves | We hit the exact pain points (lost session context, no visibility, no replay) that the product addresses. Proves the market need. Priority: get to Inspector ASAP — it's the core value prop. |
-| 2026-02-08 | Canvas = Inspector + Pipeline builder (Phase 3) | Visual execution graph replaces linear timeline. Show agent execution as a live DAG: user msg → LLM → tool calls → response, with branching, cost, approvals per node. Also doubles as pipeline builder for multi-agent workflows. Proven by ComfyUI/Flowise/Dify. Build AFTER MCP tools + hybrid routing are done — canvas without capabilities is empty. |
+| 2026-02-08 | **NODE EDITOR = core product direction** (Phase 3 build, but shapes all architecture) | "Unreal Blueprints for AI agents." Visual node graph where: LLM models, MCP tools, routers, approval gates, data transforms are all pluggable nodes. Users build AI pipelines by connecting nodes — no code. Live execution shows data flowing through nodes with cost/tokens per node. Inspiration: Maya Hypershade, UE Blueprints, Houdini, ComfyUI. This is the 10k-star feature. Current timeline Inspector evolves INTO this. Everything we build (MCP tools, hybrid routing, events) must be node-compatible. |
 
 ---
 

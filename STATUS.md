@@ -13,7 +13,7 @@
 | 1B: Event system | `event-system.md` | PARTIAL — recording works, no WebSocket |
 | 1C: Agent CRUD UI | `ui-design.md` | DONE |
 | 1D: Chat sessions | `api-contracts.md` | DONE — full flow verified (Google/Gemini) |
-| 1E: Basic Inspector | `agent-inspector.md` | **IN PROGRESS** |
+| 1E: Basic Inspector | `agent-inspector.md` | DONE — timeline, detail, stats, filters, export |
 | 1F: MCP tools | `mcp-integration.md` | Not started |
 
 ---
@@ -23,10 +23,8 @@
 > What we're actively working on right now.
 
 - [x] ~~Verify chat flow end-to-end~~ — DONE, working with Google/Gemini
-- [ ] **Build Inspector timeline** (`agent-inspector.md`) — event list, detail panel, stats bar
-  - Pick a session → load events → render color-coded timeline
-  - Click event → show full detail (input, output, metadata)
-  - Stats bar: token counts, cost, duration, model
+- [x] ~~Build Inspector timeline~~ — DONE (3285434), color-coded, type-specific details, filters, stats
+- [ ] **MCP tool discovery + execution** (`mcp-integration.md`) — register tools, execute via sidecar
 
 ---
 
@@ -36,8 +34,8 @@
 
 ### P0 — Must have for Phase 1 demo
 1. ~~Chat flow fixes~~ — DONE
-2. **Inspector timeline** (`agent-inspector.md`) — show events for a session, click to see detail ← **NOW**
-3. **Inspector stats bar** (`agent-inspector.md`) — token counts, cost, duration, models used
+2. ~~Inspector timeline~~ — DONE (3285434)
+3. ~~Inspector stats bar~~ — DONE (included in #2)
 
 ### P1 — Important for Phase 1 completeness
 4. **MCP tool discovery + execution** (`mcp-integration.md`) — register tools, execute via sidecar, approval gate
@@ -91,14 +89,15 @@
 
 **Date**: 2026-02-08 (session 3)
 **What happened**:
-- Chat flow verified working end-to-end (Google/Gemini — "I am a large language model, trained by Google")
-- Started building Inspector timeline (flagship feature)
+- Chat flow verified working end-to-end (Google/Gemini)
+- Built full Inspector (3285434): timeline, type-specific detail panels, filter chips, stats bar, keyboard nav, JSON export, "Inspect" button from Sessions
+- All P0 items DONE. Moving to P1.
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
 - Session 2: PM workflow (CLAUDE.md + STATUS.md), dogfooding insight (d7808e7)
 
 **Next session should**:
-1. If Inspector not finished → continue building it
-2. Test Inspector with real session events
-3. Move to MCP tools (P1)
+1. Test Inspector with real session events via `pnpm tauri dev`
+2. Start MCP tool discovery + execution (P1 #4, read `mcp-integration.md`)
+3. If Inspector needs polish → fix it first

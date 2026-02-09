@@ -26,3 +26,12 @@ export interface Run {
     completedAt: string | null;
     agentName: string | null;
 }
+
+/**
+ * Request to create and execute a new run
+ */
+export interface CreateRunRequest {
+    agentId: string;
+    input: string;
+    name?: string;
+}

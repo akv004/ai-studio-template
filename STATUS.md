@@ -26,6 +26,8 @@
 - [x] ~~Build Inspector timeline~~ — DONE (3285434), color-coded, type-specific details, filters, stats
 - [x] ~~MCP tool discovery + execution~~ — DONE: tool registry, multi-turn tool loop, MCP client, Settings UI
 - [x] ~~Event WebSocket bridge + cost calc~~ — DONE: sidecar EventBus/WS, Rust WS client, UI listener, model pricing
+- [x] ~~Runs execution~~ — DONE: create/cancel/get commands, async bg execution, UI form + status events
+- [x] ~~DB wipe~~ — DONE: Rust command + Settings Danger Zone UI
 
 ---
 
@@ -45,9 +47,9 @@
 
 ### P2 — Nice to have before Phase 2
 7. ~~Cost calculation~~ — DONE (in event bridge, pricing table for Claude/GPT/Gemini/local)
-8. Runs execution — create/execute endpoints + UI
+8. ~~Runs execution~~ — DONE: create_run + cancel_run + get_run commands, async execution via sidecar, status events, New Run UI form, cancel/inspect buttons
 9. Error handling polish across IPC commands
-10. **Dev: DB wipe command** — Tauri command + Settings UI button to reset SQLite (drop all data, re-init schema). Useful during dev.
+10. ~~DB wipe command~~ — DONE: wipe_database Tauri command, Settings Danger Zone UI with confirmation
 
 ---
 
@@ -63,7 +65,9 @@
 - DB: mcp_servers table, CRUD commands, shared TypeScript types
 - Event bridge: Sidecar EventBus + WS /events → Tauri WS client → SQLite + UI emit
 - Cost calculation: model pricing table (Claude/GPT/Gemini/local), auto-calc on llm.response.completed
-- UI: Agents page CRUD, Settings page (provider keys + MCP servers), Sessions page (chat UI), sidebar, Zustand→IPC
+- Runs: create_run (async bg execution via sidecar), cancel_run, get_run, status events, New Run UI form
+- DB wipe: wipe_database command, Settings Danger Zone with confirmation dialog
+- UI: Agents page CRUD, Settings page (provider keys + MCP servers + danger zone), Sessions page (chat UI), Runs page (new run form + detail + inspect + cancel), sidebar, Zustand→IPC
 - Inspector: timeline, detail panels, stats, filters, export, keyboard nav, live event push
 - Shared types updated, old types removed
 
@@ -95,26 +99,27 @@
 
 ## Last Session Notes
 
-**Date**: 2026-02-08 (session 4 continued)
+**Date**: 2026-02-08 (session 5)
 **What happened**:
-- Full MCP implementation: tool registry, built-in tools, MCP stdio client, multi-turn tool loop
-- Provider tool calling: Anthropic (tool_use blocks) + Google (functionCall parts)
-- DB schema v2: mcp_servers table with CRUD commands
-- Rust send_message: sends tools_enabled, records tool.requested + tool.completed events
-- Sidecar: /mcp/connect, /mcp/disconnect, /mcp/tools endpoints, chat_with_tools loop
-- UI: MCP Servers tab in Settings (add/remove/enable/disable), Zustand store wired
-- Event WebSocket bridge: Sidecar EventBus + /events WS → Tauri WS client → SQLite + UI emit
-- Cost calculation: model pricing table in Rust, auto-calc on llm.response.completed events
-- Live Inspector: UI subscribes to agent_event, pushes events to store in real-time
+- Runs execution (P2 #8): create_run, cancel_run, get_run Rust commands
+- Async run execution: create_run spawns background task → calls sidecar /chat → updates run status via events
+- Run status events: Tauri emits `run_status_changed` → UI auto-refreshes run list
+- New Run UI: agent selector, name, input textarea, start button with loading state
+- Run detail: cancel button (for pending/running), inspect button (links to Inspector), output/error/stats display
+- DB wipe (P2 #10): wipe_database command deletes all data from all tables
+- Settings Danger Zone: red-bordered section with confirmation dialog for DB wipe
+- CreateRunRequest shared type added to packages/shared
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
 - Session 2: PM workflow (CLAUDE.md + STATUS.md), dogfooding insight (d7808e7)
 - Session 3: Inspector (3285434), node editor decision (755575e)
 - Session 4a: MCP tool system (827e514)
+- Session 4b: Event bridge + cost calc (ed629cf)
+- Session 5: Runs execution + DB wipe
 
 **Next session should**:
-1. Test full flow via `pnpm tauri dev` — MCP + events + cost
-2. Runs execution (P2 #8) — create/execute endpoints + UI
-3. Error handling polish (P2 #9)
-4. DB wipe command (P2 #10)
+1. Test full flow via `pnpm tauri dev` — MCP + events + cost + runs
+2. Error handling polish (P2 #9) — wrap all IPC calls with proper error states
+3. Phase 2 polish: session branching, run → inspector link improvements
+4. Phase 3 planning: node editor architecture

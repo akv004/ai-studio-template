@@ -68,6 +68,11 @@ pub fn run() {
             get_session_stats,
             // Runs
             list_runs,
+            create_run,
+            cancel_run,
+            get_run,
+            // DB
+            wipe_database,
             // Settings
             get_all_settings,
             set_setting,

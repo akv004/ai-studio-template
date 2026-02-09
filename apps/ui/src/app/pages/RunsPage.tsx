@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Play, Square, Clock, Check, Circle, Loader2, Bot } from 'lucide-react';
+import { Play, Square, Clock, Check, Circle, Loader2, Bot, X, Search } from 'lucide-react';
 import { useAppStore } from '../../state/store';
 
 /**
@@ -9,11 +9,33 @@ import { useAppStore } from '../../state/store';
  * Wired to real SQLite data via Tauri IPC.
  */
 export function RunsPage() {
-    const { runs, runsLoading, fetchRuns, error } = useAppStore();
+    const { runs, runsLoading, fetchRuns, agents, fetchAgents, createRun, cancelRun, openInspector, error } = useAppStore();
     const [selectedRunId, setSelectedRunId] = useState<string | undefined>();
+    const [showNewRun, setShowNewRun] = useState(false);
+    const [newRunAgentId, setNewRunAgentId] = useState('');
+    const [newRunInput, setNewRunInput] = useState('');
+    const [newRunName, setNewRunName] = useState('');
+    const [creating, setCreating] = useState(false);
 
     useEffect(() => {
         fetchRuns();
+        fetchAgents();
+    }, [fetchRuns, fetchAgents]);
+
+    // Listen for run status changes and refresh
+    useEffect(() => {
+        let unlisten: (() => void) | undefined;
+        (async () => {
+            try {
+                const { listen } = await import('@tauri-apps/api/event');
+                unlisten = await listen('run_status_changed', () => {
+                    fetchRuns();
+                });
+            } catch {
+                // Not running under Tauri
+            }
+        })();
+        return () => { unlisten?.(); };
     }, [fetchRuns]);
 
     useEffect(() => {
@@ -24,11 +46,33 @@ export function RunsPage() {
 
     const selectedRun = runs.find(r => r.id === selectedRunId);
 
+    const handleCreateRun = async () => {
+        if (!newRunAgentId || !newRunInput.trim()) return;
+        setCreating(true);
+        try {
+            const run = await createRun({
+                agentId: newRunAgentId,
+                input: newRunInput.trim(),
+                name: newRunName.trim() || undefined,
+            });
+            setSelectedRunId(run.id);
+            setShowNewRun(false);
+            setNewRunAgentId('');
+            setNewRunInput('');
+            setNewRunName('');
+        } catch {
+            // error is set in store
+        } finally {
+            setCreating(false);
+        }
+    };
+
     const statusIcons: Record<string, React.ElementType> = {
         pending: Circle,
         running: Loader2,
         completed: Check,
         failed: Square,
+        cancelled: X,
     };
 
     const statusColors: Record<string, string> = {
@@ -36,6 +80,7 @@ export function RunsPage() {
         running: 'status-info',
         completed: 'status-success',
         failed: 'status-error',
+        cancelled: 'status-warning',
     };
 
     return (
@@ -45,7 +90,7 @@ export function RunsPage() {
                     <h1 className="page-title">Runs</h1>
                     <p className="page-description">Headless agent tasks — fire and forget</p>
                 </div>
-                <button className="btn btn-primary">
+                <button className="btn btn-primary" onClick={() => setShowNewRun(true)}>
                     <Play className="w-4 h-4" />
                     New Run
                 </button>
@@ -54,6 +99,60 @@ export function RunsPage() {
             {error && (
                 <div className="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
                     {error}
+                </div>
+            )}
+
+            {/* New Run Dialog */}
+            {showNewRun && (
+                <div className="mt-2 panel p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                        <span className="font-medium text-sm">Create New Run</span>
+                        <button className="text-[var(--text-muted)] hover:text-white" onClick={() => setShowNewRun(false)}>
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Agent</label>
+                        <select
+                            className="input w-full"
+                            value={newRunAgentId}
+                            onChange={(e) => setNewRunAgentId(e.target.value)}
+                        >
+                            <option value="">Select an agent...</option>
+                            {agents.map((a) => (
+                                <option key={a.id} value={a.id}>{a.name} ({a.model})</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Name (optional)</label>
+                        <input
+                            className="input w-full"
+                            placeholder="e.g. Summarize Q4 report"
+                            value={newRunName}
+                            onChange={(e) => setNewRunName(e.target.value)}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Input</label>
+                        <textarea
+                            className="input w-full min-h-[80px] resize-y"
+                            placeholder="The task to execute..."
+                            value={newRunInput}
+                            onChange={(e) => setNewRunInput(e.target.value)}
+                        />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <button className="btn" onClick={() => setShowNewRun(false)}>Cancel</button>
+                        <button
+                            className="btn btn-primary"
+                            onClick={handleCreateRun}
+                            disabled={creating || !newRunAgentId || !newRunInput.trim()}
+                        >
+                            {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+                            {creating ? 'Starting...' : 'Start Run'}
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -98,7 +197,7 @@ export function RunsPage() {
                         })}
                         {!runsLoading && runs.length === 0 && (
                             <div className="text-center text-[var(--text-muted)] p-8 text-sm">
-                                No runs yet.
+                                No runs yet. Click "New Run" to start one.
                             </div>
                         )}
                     </div>
@@ -112,10 +211,31 @@ export function RunsPage() {
                             <span className="panel-title">{selectedRun?.name || 'Select a run'}</span>
                         </div>
                         {selectedRun && (
-                            <span className={`status-pill ${statusColors[selectedRun.status] || ''}`}>
-                                <span className="status-dot" />
-                                {selectedRun.status}
-                            </span>
+                            <div className="flex items-center gap-2">
+                                {selectedRun.sessionId && (
+                                    <button
+                                        className="btn btn-sm"
+                                        onClick={() => openInspector(selectedRun.sessionId!)}
+                                        title="View in Inspector"
+                                    >
+                                        <Search className="w-3.5 h-3.5" />
+                                        Inspect
+                                    </button>
+                                )}
+                                {(selectedRun.status === 'pending' || selectedRun.status === 'running') && (
+                                    <button
+                                        className="btn btn-sm text-red-400"
+                                        onClick={() => cancelRun(selectedRun.id)}
+                                    >
+                                        <Square className="w-3.5 h-3.5" />
+                                        Cancel
+                                    </button>
+                                )}
+                                <span className={`status-pill ${statusColors[selectedRun.status] || ''}`}>
+                                    <span className="status-dot" />
+                                    {selectedRun.status}
+                                </span>
+                            </div>
                         )}
                     </div>
 

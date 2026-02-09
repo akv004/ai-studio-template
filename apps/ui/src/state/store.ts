@@ -4,6 +4,7 @@ import type {
     Event as StudioEvent, SessionStats,
     CreateAgentRequest, SendMessageResponse,
     McpServer, CreateMcpServerRequest, UpdateMcpServerRequest,
+    CreateRunRequest,
 } from '@ai-studio/shared';
 
 // ============================================
@@ -71,6 +72,11 @@ interface AppState {
     runs: Run[];
     runsLoading: boolean;
     fetchRuns: () => Promise<void>;
+    createRun: (req: CreateRunRequest) => Promise<Run>;
+    cancelRun: (id: string) => Promise<void>;
+
+    // Database
+    wipeDatabase: () => Promise<void>;
 
     // System Info (from Tauri)
     systemInfo: { platform: string; version: string } | null;
@@ -245,6 +251,34 @@ export const useAppStore = create<AppState>((set, get) => ({
         } catch (e) {
             set({ runsLoading: false, error: `Failed to load runs: ${e}` });
         }
+    },
+
+    createRun: async (req) => {
+        set({ error: null });
+        try {
+            const run = await invoke<Run>('create_run', { request: req });
+            set((s) => ({ runs: [run, ...s.runs] }));
+            return run;
+        } catch (e) {
+            const msg = `Failed to create run: ${e}`;
+            set({ error: msg });
+            throw e;
+        }
+    },
+    cancelRun: async (id) => {
+        await invoke<void>('cancel_run', { id });
+        set((s) => ({
+            runs: s.runs.map((r) => r.id === id ? { ...r, status: 'cancelled' as const } : r),
+        }));
+    },
+
+    // Database
+    wipeDatabase: async () => {
+        await invoke<void>('wipe_database');
+        set({
+            agents: [], sessions: [], runs: [], messages: [], events: [],
+            mcpServers: [], settings: {}, sessionStats: null,
+        });
     },
 
     // Settings

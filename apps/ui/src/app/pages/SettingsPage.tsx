@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff, Save, Plug, Plus, Trash2, Power, PowerOff } from 'lucide-react';
+import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff, Save, Plug, Plus, Trash2, Power, PowerOff, AlertTriangle } from 'lucide-react';
 import { useAppStore } from '../../state/store';
 import { fetchApi } from '../../services/api';
 
@@ -39,7 +39,7 @@ interface ProviderConfig {
  * - Hotkeys customization
  */
 export function SettingsPage() {
-    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer } = useAppStore();
+    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer, wipeDatabase } = useAppStore();
     const [activeTab, setActiveTab] = useState<SettingsTab>('providers');
     const [providerStatus, setProviderStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
     const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
@@ -48,6 +48,8 @@ export function SettingsPage() {
     // MCP form state
     const [mcpForm, setMcpForm] = useState({ name: '', command: '', args: '' });
     const [mcpAdding, setMcpAdding] = useState(false);
+    const [wipeConfirm, setWipeConfirm] = useState(false);
+    const [wiping, setWiping] = useState(false);
     // Provider form state — keyed by "provider_id.field_key"
     const [formValues, setFormValues] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
@@ -723,6 +725,56 @@ export function SettingsPage() {
                                 </label>
                             </div>
                         )}
+                    </div>
+
+                    {/* Danger Zone */}
+                    <div className="px-5 pb-5 pt-2">
+                        <div className="p-4 rounded-lg border border-red-500/30 bg-red-500/5">
+                            <div className="flex items-center gap-2 mb-2">
+                                <AlertTriangle className="w-4 h-4 text-red-400" />
+                                <span className="font-medium text-sm text-red-400">Danger Zone</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <div className="text-sm">Wipe Database</div>
+                                    <div className="text-xs text-[var(--text-muted)]">Delete all agents, sessions, runs, events, and settings. Cannot be undone.</div>
+                                </div>
+                                {!wipeConfirm ? (
+                                    <button
+                                        className="btn btn-sm text-red-400 border-red-500/30"
+                                        onClick={() => setWipeConfirm(true)}
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                        Wipe All Data
+                                    </button>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-red-400">Are you sure?</span>
+                                        <button
+                                            className="btn btn-sm"
+                                            onClick={() => setWipeConfirm(false)}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            className="btn btn-sm bg-red-600 hover:bg-red-700 text-white"
+                                            disabled={wiping}
+                                            onClick={async () => {
+                                                setWiping(true);
+                                                try {
+                                                    await wipeDatabase();
+                                                    setWipeConfirm(false);
+                                                } catch { /* error in store */ }
+                                                setWiping(false);
+                                            }}
+                                        >
+                                            {wiping ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                                            Confirm Wipe
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

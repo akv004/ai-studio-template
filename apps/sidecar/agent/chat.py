@@ -145,6 +145,7 @@ class ChatService:
         tool_definitions: Optional[list[dict]] = None,
         tool_registry=None,
         mcp_client=None,
+        event_bus=None,
     ) -> ChatResult:
         """
         Chat with tool execution loop.
@@ -167,15 +168,41 @@ class ChatService:
         total_output = 0
 
         for turn in range(MAX_TOOL_TURNS):
+            # Emit llm.request.started
+            if event_bus:
+                await event_bus.emit(
+                    "llm.request.started", conversation_id, "sidecar.chat",
+                    {"model": model or conv.model or "", "provider": provider.name, "turn": turn},
+                )
+
+            llm_start = time.monotonic()
             response = await provider.chat(
                 messages=conv.messages,
                 model=model or conv.model,
                 temperature=temperature,
                 tools=tool_definitions,
             )
+            llm_duration_ms = int((time.monotonic() - llm_start) * 1000)
 
-            total_input += (response.usage or {}).get("prompt_tokens", 0)
-            total_output += (response.usage or {}).get("completion_tokens", 0)
+            input_toks = (response.usage or {}).get("prompt_tokens", 0)
+            output_toks = (response.usage or {}).get("completion_tokens", 0)
+            total_input += input_toks
+            total_output += output_toks
+
+            # Emit llm.response.completed
+            if event_bus:
+                await event_bus.emit(
+                    "llm.response.completed", conversation_id, "sidecar.chat",
+                    {
+                        "model": response.model,
+                        "provider": response.provider,
+                        "input_tokens": input_toks,
+                        "output_tokens": output_toks,
+                        "duration_ms": llm_duration_ms,
+                        "stop_reason": response.stop_reason or ("tool_use" if response.tool_calls else "end_turn"),
+                        "content": response.content[:500] if response.content else "",
+                    },
+                )
 
             # If no tool calls, we're done
             if not response.tool_calls:
@@ -211,23 +238,29 @@ class ChatService:
                 tool_input = tc["input"]
                 tool_id = tc["id"]
 
-                start = time.monotonic()
-                output = ""
-                error = None
-
                 # Parse the qualified name
                 parts = tool_name.split("__", 1)
                 server = parts[0] if len(parts) == 2 else "unknown"
                 local_name = parts[1] if len(parts) == 2 else tool_name
+                display_name = f"{server}:{local_name}"
+
+                # Emit tool.requested
+                if event_bus:
+                    await event_bus.emit(
+                        "tool.requested", conversation_id, "sidecar.tools",
+                        {"tool_call_id": tool_id, "tool_name": display_name, "tool_input": tool_input},
+                    )
+
+                start = time.monotonic()
+                output = ""
+                error = None
 
                 try:
                     if tool_registry:
                         tool_def = tool_registry.resolve(tool_name)
                         if tool_def and tool_def.handler:
-                            # Built-in tool — call handler directly
                             output = await tool_def.handler(**tool_input)
                         elif mcp_client and mcp_client.is_connected(server):
-                            # External MCP tool
                             output = await mcp_client.call_tool(server, local_name, tool_input)
                         else:
                             output = f"Error: Tool '{tool_name}' not found or not connected"
@@ -240,7 +273,19 @@ class ChatService:
                     error = str(e)
 
                 duration_ms = int((time.monotonic() - start) * 1000)
-                display_name = f"{server}:{local_name}"
+
+                # Emit tool.completed or tool.error
+                if event_bus:
+                    if error:
+                        await event_bus.emit(
+                            "tool.error", conversation_id, "sidecar.tools",
+                            {"tool_call_id": tool_id, "tool_name": display_name, "error": error, "duration_ms": duration_ms},
+                        )
+                    else:
+                        await event_bus.emit(
+                            "tool.completed", conversation_id, "sidecar.tools",
+                            {"tool_call_id": tool_id, "tool_name": display_name, "output": output[:1000], "duration_ms": duration_ms},
+                        )
 
                 record = ToolCallRecord(
                     tool_call_id=tool_id,

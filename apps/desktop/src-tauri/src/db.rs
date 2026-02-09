@@ -5,11 +5,12 @@
 
 use rusqlite::Connection;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 /// Thread-safe database handle managed as Tauri state.
+#[derive(Clone)]
 pub struct Database {
-    pub conn: Mutex<Connection>,
+    pub conn: Arc<Mutex<Connection>>,
 }
 
 impl Database {
@@ -31,7 +32,7 @@ impl Database {
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
             .map_err(|e| format!("Failed to set pragmas: {e}"))?;
 
-        let db = Self { conn: Mutex::new(conn) };
+        let db = Self { conn: Arc::new(Mutex::new(conn)) };
         db.migrate()?;
         Ok(db)
     }

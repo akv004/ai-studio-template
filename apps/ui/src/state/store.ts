@@ -65,6 +65,7 @@ interface AppState {
     sessionStats: SessionStats | null;
     fetchEvents: (sessionId: string) => Promise<void>;
     fetchSessionStats: (sessionId: string) => Promise<void>;
+    pushEvent: (event: StudioEvent) => void;
 
     // Runs
     runs: Run[];
@@ -218,6 +219,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         } catch (e) {
             set({ error: `Failed to load stats: ${e}` });
         }
+    },
+    pushEvent: (event) => {
+        set((s) => {
+            // Only append if event belongs to a session we're currently viewing
+            // and isn't a duplicate
+            if (s.events.length > 0 && s.events[0].sessionId !== event.sessionId) {
+                return s;
+            }
+            if (s.events.some((e) => e.eventId === event.eventId)) {
+                return s;
+            }
+            return { events: [...s.events, event] };
+        });
     },
 
     // Runs

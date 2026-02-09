@@ -36,6 +36,14 @@ pub fn run() {
             tauri::async_runtime::spawn(async move {
                 let _ = sidecar.start(&app_handle).await;
             });
+
+            // Start event bridge (WebSocket → SQLite + UI)
+            {
+                let sidecar_ref = app.state::<SidecarManager>().inner().clone();
+                let db_ref = app.state::<Database>().clone();
+                spawn_event_bridge(app.handle(), &sidecar_ref, &db_ref);
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

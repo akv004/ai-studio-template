@@ -1,3 +1,4 @@
+use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -260,6 +261,160 @@ impl SidecarManager {
         serde_json::from_slice(&bytes)
             .map_err(|e| format!("Failed to parse sidecar response: {e}"))
     }
+}
+
+/// Connect to sidecar's WebSocket `/events` endpoint and bridge events to the UI.
+/// Persists each event to SQLite and emits `agent_event` to the frontend.
+pub fn spawn_event_bridge(app: &AppHandle, sidecar: &SidecarManager, db: &crate::db::Database) {
+    let app_handle = app.clone();
+    let sidecar_inner = sidecar.inner.clone();
+    let db_conn = db.conn.clone();
+
+    tauri::async_runtime::spawn(async move {
+        // Wait a bit for sidecar to be fully ready
+        tokio::time::sleep(Duration::from_secs(2)).await;
+
+        loop {
+            let (ws_url, token) = {
+                let inner = sidecar_inner.lock().await;
+                let url = format!("ws://{}:{}/events", inner.host, inner.port);
+                let token = inner.token.clone();
+                (url, token)
+            };
+
+            // If no token, sidecar isn't running yet — wait and retry
+            if token.is_none() {
+                tokio::time::sleep(Duration::from_secs(3)).await;
+                continue;
+            }
+            let token = token.unwrap();
+
+            let connect_result = tokio_tungstenite::connect_async(&ws_url).await;
+            match connect_result {
+                Ok((ws_stream, _)) => {
+                    println!("[event-bridge] Connected to {}", ws_url);
+                    let (mut write, mut read) = ws_stream.split();
+
+                    // Send auth message
+                    use futures_util::SinkExt;
+                    let auth_msg = serde_json::json!({"type": "auth", "token": token});
+                    if write
+                        .send(tokio_tungstenite::tungstenite::Message::Text(auth_msg.to_string().into()))
+                        .await
+                        .is_err()
+                    {
+                        println!("[event-bridge] Auth send failed, reconnecting...");
+                        tokio::time::sleep(Duration::from_secs(2)).await;
+                        continue;
+                    }
+
+                    // Read events
+                    while let Some(msg) = read.next().await {
+                        match msg {
+                            Ok(tokio_tungstenite::tungstenite::Message::Text(text)) => {
+                                if let Ok(event) = serde_json::from_str::<serde_json::Value>(&text) {
+                                    let _ = persist_ws_event(&db_conn, &event);
+                                    let _ = app_handle.emit("agent_event", &event);
+                                }
+                            }
+                            Ok(tokio_tungstenite::tungstenite::Message::Close(_)) => break,
+                            Err(_) => break,
+                            _ => {}
+                        }
+                    }
+
+                    println!("[event-bridge] Disconnected, reconnecting...");
+                }
+                Err(e) => {
+                    println!("[event-bridge] Connection failed: {e}, retrying...");
+                }
+            }
+
+            // Reconnect with backoff
+            tokio::time::sleep(Duration::from_secs(3)).await;
+        }
+    });
+}
+
+/// Calculate cost for an LLM response event based on model pricing.
+fn calculate_cost(model: &str, input_tokens: i64, output_tokens: i64) -> f64 {
+    // Pricing: (input_per_1m, output_per_1m)
+    let (input_rate, output_rate) = if model.contains("opus") {
+        (15.0, 75.0)
+    } else if model.contains("sonnet") {
+        (3.0, 15.0)
+    } else if model.contains("haiku") {
+        (0.80, 4.0)
+    } else if model.contains("gpt-4o-mini") {
+        (0.15, 0.60)
+    } else if model.contains("gpt-4o") {
+        (2.50, 10.0)
+    } else if model.contains("gemini-2.0-flash") {
+        (0.10, 0.40)
+    } else if model.contains("gemini-1.5-pro") {
+        (1.25, 5.0)
+    } else if model.contains("gemini") {
+        (0.10, 0.40)
+    } else if model.contains("ollama") || model.contains("llama") || model.contains("qwen") {
+        (0.0, 0.0)
+    } else {
+        (1.0, 3.0) // conservative default
+    };
+
+    (input_tokens as f64 / 1_000_000.0 * input_rate) + (output_tokens as f64 / 1_000_000.0 * output_rate)
+}
+
+/// Persist a WebSocket event to the events table in SQLite.
+/// For `llm.response.completed` events, calculates and stores cost_usd.
+fn persist_ws_event(
+    conn: &std::sync::Mutex<rusqlite::Connection>,
+    event: &serde_json::Value,
+) -> Result<(), String> {
+    let event_id = event["event_id"].as_str().unwrap_or_default();
+    let event_type = event["type"].as_str().unwrap_or_default();
+    let ts = event["ts"].as_str().unwrap_or_default();
+    let session_id = event["session_id"].as_str().unwrap_or_default();
+    let source = event["source"].as_str().unwrap_or_default();
+    let seq = event["seq"].as_i64().unwrap_or(0);
+    let payload = event.get("payload").map(|p| p.to_string()).unwrap_or_else(|| "{}".to_string());
+
+    // Calculate cost for LLM response events
+    let cost_usd = if event_type == "llm.response.completed" {
+        let p = event.get("payload").unwrap_or(&serde_json::Value::Null);
+        let model = p["model"].as_str().unwrap_or("");
+        let input_tokens = p["input_tokens"].as_i64().unwrap_or(0);
+        let output_tokens = p["output_tokens"].as_i64().unwrap_or(0);
+        let cost = calculate_cost(model, input_tokens, output_tokens);
+        if cost > 0.0 { Some(cost) } else { None }
+    } else {
+        event["cost_usd"].as_f64()
+    };
+
+    let conn = conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT OR IGNORE INTO events (event_id, type, ts, session_id, source, seq, payload, cost_usd)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        rusqlite::params![event_id, event_type, ts, session_id, source, seq, payload, cost_usd],
+    )
+    .map_err(|e| format!("Failed to persist event: {e}"))?;
+
+    // Update session cost totals
+    if let Some(cost) = cost_usd {
+        let p = event.get("payload").unwrap_or(&serde_json::Value::Null);
+        let input_tokens = p["input_tokens"].as_i64().unwrap_or(0);
+        let output_tokens = p["output_tokens"].as_i64().unwrap_or(0);
+        let _ = conn.execute(
+            "UPDATE sessions SET
+                total_input_tokens = total_input_tokens + ?1,
+                total_output_tokens = total_output_tokens + ?2,
+                total_cost_usd = total_cost_usd + ?3,
+                updated_at = ?4
+             WHERE id = ?5",
+            rusqlite::params![input_tokens, output_tokens, cost, ts, session_id],
+        );
+    }
+
+    Ok(())
 }
 
 pub struct ApprovalManager {

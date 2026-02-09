@@ -30,20 +30,47 @@ function App() {
   // Initialize keyboard shortcuts
   useKeyboardShortcuts();
 
-  // Listen for tool approval requests from the desktop backend (Tauri only).
+  const pushEvent = useAppStore((s) => s.pushEvent);
+
+  // Listen for tool approval requests + live agent events from the desktop backend (Tauri only).
   useEffect(() => {
-    let unlisten: undefined | (() => void);
+    let unlistenApproval: undefined | (() => void);
+    let unlistenEvents: undefined | (() => void);
 
     (async () => {
       try {
         const { listen } = await import('@tauri-apps/api/event');
-        unlisten = await listen<{
+        unlistenApproval = await listen<{
           id: string;
           method: string;
           path: string;
           body?: unknown;
         }>('tool_approval_requested', (event) => {
           setToolApprovalQueue((q) => [...q, event.payload]);
+        });
+
+        // Live event stream from sidecar → Tauri → UI
+        unlistenEvents = await listen<{
+          event_id: string;
+          type: string;
+          ts: string;
+          session_id: string;
+          source: string;
+          seq: number;
+          payload: Record<string, unknown>;
+          cost_usd: number | null;
+        }>('agent_event', (tauriEvent) => {
+          const e = tauriEvent.payload;
+          pushEvent({
+            eventId: e.event_id,
+            type: e.type,
+            ts: e.ts,
+            sessionId: e.session_id,
+            source: e.source,
+            seq: e.seq,
+            payload: e.payload,
+            costUsd: e.cost_usd,
+          });
         });
       } catch {
         // Not running under Tauri (or events unavailable).
@@ -52,12 +79,13 @@ function App() {
 
     return () => {
       try {
-        unlisten?.();
+        unlistenApproval?.();
+        unlistenEvents?.();
       } catch {
         // ignore
       }
     };
-  }, []);
+  }, [pushEvent]);
 
   const decideToolApproval = async (approve: boolean) => {
     const request = toolApprovalQueue[0];

@@ -10,7 +10,7 @@
 | Sub-task | Spec | Status |
 |----------|------|--------|
 | 1A: SQLite + CRUD | `data-model.md` | DONE |
-| 1B: Event system | `event-system.md` | PARTIAL — recording works, no WebSocket |
+| 1B: Event system | `event-system.md` | DONE — WS bridge, live streaming, cost calc |
 | 1C: Agent CRUD UI | `ui-design.md` | DONE |
 | 1D: Chat sessions | `api-contracts.md` | DONE — full flow verified (Google/Gemini) |
 | 1E: Basic Inspector | `agent-inspector.md` | DONE — timeline, detail, stats, filters, export |
@@ -25,6 +25,7 @@
 - [x] ~~Verify chat flow end-to-end~~ — DONE, working with Google/Gemini
 - [x] ~~Build Inspector timeline~~ — DONE (3285434), color-coded, type-specific details, filters, stats
 - [x] ~~MCP tool discovery + execution~~ — DONE: tool registry, multi-turn tool loop, MCP client, Settings UI
+- [x] ~~Event WebSocket bridge + cost calc~~ — DONE: sidecar EventBus/WS, Rust WS client, UI listener, model pricing
 
 ---
 
@@ -40,10 +41,10 @@
 ### P1 — Important for Phase 1 completeness
 4. ~~MCP tool discovery + execution~~ — DONE
 5. ~~MCP settings UI~~ — DONE (Settings → MCP Servers tab)
-6. **Event WebSocket bridge** (`event-system.md`) — live event streaming to Inspector
+6. ~~Event WebSocket bridge~~ — DONE (sidecar WS, Rust bridge, UI listener, cost calc)
 
 ### P2 — Nice to have before Phase 2
-7. Cost calculation in events — populate `cost_usd` field based on model pricing
+7. ~~Cost calculation~~ — DONE (in event bridge, pricing table for Claude/GPT/Gemini/local)
 8. Runs execution — create/execute endpoints + UI
 9. Error handling polish across IPC commands
 10. **Dev: DB wipe command** — Tauri command + Settings UI button to reset SQLite (drop all data, re-init schema). Useful during dev.
@@ -60,8 +61,10 @@
 - MCP: Tool registry, built-in tools (shell/fs), MCP stdio client, multi-turn tool calling loop
 - Provider tool calling: Anthropic + Google with full tool_use support, others interface-ready
 - DB: mcp_servers table, CRUD commands, shared TypeScript types
+- Event bridge: Sidecar EventBus + WS /events → Tauri WS client → SQLite + UI emit
+- Cost calculation: model pricing table (Claude/GPT/Gemini/local), auto-calc on llm.response.completed
 - UI: Agents page CRUD, Settings page (provider keys + MCP servers), Sessions page (chat UI), sidebar, Zustand→IPC
-- Inspector: timeline, detail panels, stats, filters, export, keyboard nav
+- Inspector: timeline, detail panels, stats, filters, export, keyboard nav, live event push
 - Shared types updated, old types removed
 
 ---
@@ -92,7 +95,7 @@
 
 ## Last Session Notes
 
-**Date**: 2026-02-08 (session 4)
+**Date**: 2026-02-08 (session 4 continued)
 **What happened**:
 - Full MCP implementation: tool registry, built-in tools, MCP stdio client, multi-turn tool loop
 - Provider tool calling: Anthropic (tool_use blocks) + Google (functionCall parts)
@@ -100,13 +103,18 @@
 - Rust send_message: sends tools_enabled, records tool.requested + tool.completed events
 - Sidecar: /mcp/connect, /mcp/disconnect, /mcp/tools endpoints, chat_with_tools loop
 - UI: MCP Servers tab in Settings (add/remove/enable/disable), Zustand store wired
+- Event WebSocket bridge: Sidecar EventBus + /events WS → Tauri WS client → SQLite + UI emit
+- Cost calculation: model pricing table in Rust, auto-calc on llm.response.completed events
+- Live Inspector: UI subscribes to agent_event, pushes events to store in real-time
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
 - Session 2: PM workflow (CLAUDE.md + STATUS.md), dogfooding insight (d7808e7)
 - Session 3: Inspector (3285434), node editor decision (755575e)
+- Session 4a: MCP tool system (827e514)
 
 **Next session should**:
-1. Event WebSocket bridge (P1 #6) — live event streaming to Inspector
-2. Test full MCP flow via `pnpm tauri dev`
-3. Cost calculation in events (P2 #7)
+1. Test full flow via `pnpm tauri dev` — MCP + events + cost
+2. Runs execution (P2 #8) — create/execute endpoints + UI
+3. Error handling polish (P2 #9)
+4. DB wipe command (P2 #10)

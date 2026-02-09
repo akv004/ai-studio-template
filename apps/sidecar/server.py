@@ -13,10 +13,11 @@ Run modes:
 
 import os
 import uuid
+import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -33,6 +34,7 @@ from agent.providers import (
     Message,
 )
 from agent.mcp import ToolRegistry, McpClientManager, register_builtin_tools
+from agent.events import EventBus
 from agent.tools import ShellTool, FilesystemTool
 
 
@@ -96,15 +98,17 @@ class McpDisconnectRequest(BaseModel):
 chat_service: ChatService = None
 tool_registry: ToolRegistry = None
 mcp_client: McpClientManager = None
+event_bus: EventBus = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize services on startup"""
-    global chat_service, tool_registry, mcp_client
+    global chat_service, tool_registry, mcp_client, event_bus
     chat_service = ChatService()
     tool_registry = ToolRegistry()
     mcp_client = McpClientManager(tool_registry)
+    event_bus = EventBus()
 
     # Register built-in tools
     shell_tool = ShellTool(mode=os.getenv("TOOLS_MODE", "restricted"))
@@ -331,6 +335,7 @@ async def chat(request: ChatRequest):
                 tool_definitions=tool_definitions,
                 tool_registry=tool_registry,
                 mcp_client=mcp_client,
+                event_bus=event_bus,
             )
 
             # Serialize tool calls for the response
@@ -366,6 +371,20 @@ async def chat(request: ChatRequest):
                 model=request.model,
                 temperature=request.temperature,
             )
+
+            # Emit llm.response.completed event
+            if event_bus:
+                await event_bus.emit(
+                    "llm.response.completed", conversation_id, "sidecar.chat",
+                    {
+                        "content": response.content[:500],
+                        "model": response.model,
+                        "provider": response.provider,
+                        "input_tokens": (response.usage or {}).get("prompt_tokens", 0),
+                        "output_tokens": (response.usage or {}).get("completion_tokens", 0),
+                        "stop_reason": response.stop_reason or "end_turn",
+                    },
+                )
 
             return ChatResponse(
                 conversation_id=conversation_id,
@@ -452,6 +471,46 @@ async def mcp_disconnect(request: McpDisconnectRequest):
 async def mcp_tools():
     """List all available tools (built-in + MCP)."""
     return {"tools": tool_registry.to_summary()}
+
+
+# ============================================================================
+# WebSocket — Live Event Stream
+# ============================================================================
+
+@app.websocket("/events")
+async def events_ws(websocket: WebSocket):
+    """
+    Live event stream for the Inspector.
+
+    Auth: first message must be {"type": "auth", "token": "<AI_STUDIO_TOKEN>"}.
+    After auth, events are streamed as JSON (one per WS message).
+    """
+    await websocket.accept()
+
+    # Auth handshake
+    if AI_STUDIO_TOKEN:
+        try:
+            msg = await asyncio.wait_for(websocket.receive_json(), timeout=5.0)
+            if msg.get("type") != "auth" or msg.get("token") != AI_STUDIO_TOKEN:
+                await websocket.close(code=4001, reason="Unauthorized")
+                return
+        except Exception:
+            await websocket.close(code=4001, reason="Auth timeout")
+            return
+
+    queue = event_bus.subscribe()
+    print("[ws] Event subscriber connected")
+    try:
+        while True:
+            msg = await queue.get()
+            await websocket.send_text(msg)
+    except WebSocketDisconnect:
+        pass
+    except Exception:
+        pass
+    finally:
+        event_bus.unsubscribe(queue)
+        print("[ws] Event subscriber disconnected")
 
 
 # ============================================================================

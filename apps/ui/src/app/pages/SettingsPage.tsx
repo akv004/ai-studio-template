@@ -210,7 +210,8 @@ export function SettingsPage() {
                 ...prev,
                 [providerId]: result.success ? 'success' : 'error',
             }));
-        } catch {
+        } catch (err) {
+            console.error(`Test connection failed for ${providerId}:`, err);
             setProviderStatus(prev => ({ ...prev, [providerId]: 'error' }));
         }
 

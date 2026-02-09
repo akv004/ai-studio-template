@@ -131,11 +131,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
     },
     createSession: async (agentId, title) => {
-        const args: Record<string, unknown> = { agent_id: agentId };
-        if (title) args.title = title;
-        const session = await invoke<Session>('create_session', args);
-        set((s) => ({ sessions: [session, ...s.sessions] }));
-        return session;
+        set({ error: null });
+        try {
+            const args: Record<string, unknown> = { agent_id: agentId };
+            if (title) args.title = title;
+            const session = await invoke<Session>('create_session', args);
+            set((s) => ({ sessions: [session, ...s.sessions] }));
+            return session;
+        } catch (e) {
+            const msg = `Failed to create session: ${e}`;
+            set({ error: msg });
+            throw e;
+        }
     },
     deleteSession: async (id) => {
         await invoke<void>('delete_session', { id });

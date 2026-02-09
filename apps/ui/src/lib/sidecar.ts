@@ -7,7 +7,10 @@ type SidecarProxyResponse = {
 const SIDECAR_BASE_URL = import.meta.env.VITE_SIDECAR_URL || 'http://localhost:8765';
 
 function isTauri(): boolean {
-  return typeof window !== 'undefined' && typeof (window as any).__TAURI__ !== 'undefined';
+  return typeof window !== 'undefined' && (
+    typeof (window as any).__TAURI_INTERNALS__ !== 'undefined' ||
+    typeof (window as any).__TAURI__ !== 'undefined'
+  );
 }
 
 export async function sidecarRequest<T = unknown>(

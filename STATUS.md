@@ -38,58 +38,22 @@
 
 ---
 
-## In Progress (Current Sprint)
+## Backlog (work top-down)
 
-> What we're actively working on right now.
-
-- [x] ~~Verify chat flow end-to-end~~ — DONE, working with Google/Gemini
-- [x] ~~Build Inspector timeline~~ — DONE (3285434), color-coded, type-specific details, filters, stats
-- [x] ~~MCP tool discovery + execution~~ — DONE: tool registry, multi-turn tool loop, MCP client, Settings UI
-- [x] ~~Event WebSocket bridge + cost calc~~ — DONE: sidecar EventBus/WS, Rust WS client, UI listener, model pricing
-- [x] ~~Runs execution~~ — DONE: create/cancel/get commands, async bg execution, UI form + status events
-- [x] ~~DB wipe~~ — DONE: Rust command + Settings Danger Zone UI
-
----
-
-## Backlog (Prioritized — Next Up)
-
-> Ordered by priority. Work top-down. Each item notes which spec to read.
-
-### P0 — Must have for Phase 1 demo
-1. ~~Chat flow fixes~~ — DONE
-2. ~~Inspector timeline~~ — DONE (3285434)
-3. ~~Inspector stats bar~~ — DONE (included in #2)
-
-### P1 — Important for Phase 1 completeness
-4. ~~MCP tool discovery + execution~~ — DONE
-5. ~~MCP settings UI~~ — DONE (Settings → MCP Servers tab)
-6. ~~Event WebSocket bridge~~ — DONE (sidecar WS, Rust bridge, UI listener, cost calc)
-
-### P2 — Nice to have before Phase 2
-7. ~~Cost calculation~~ — DONE (in event bridge, pricing table for Claude/GPT/Gemini/local)
-8. ~~Runs execution~~ — DONE: create_run + cancel_run + get_run commands, async execution via sidecar, status events, New Run UI form, cancel/inspect buttons
-9. Error handling polish across IPC commands
-10. ~~DB wipe command~~ — DONE: wipe_database Tauri command, Settings Danger Zone UI with confirmation
+1. Error handling polish across IPC commands — `ui-design.md`
+2. Session branching — `data-model.md`
+3. Inspector improvements (replay, better detail panels) — `agent-inspector.md`
+4. Phase 3: Node editor architecture — `product-vision.md`
 
 ---
 
 ## Done (Compressed)
 
-**Phase 0**: Restructured to 5 pillars, removed old modules, wrote 11 specs.
+**Phase 0** (5 sessions): Restructured to 5 pillars, removed old modules, wrote 11 specs.
 
-**Phase 1 (so far)**:
-- SQLite DB (WAL mode, full schema v2), all CRUD commands, send_message chat loop, event recording
-- Sidecar: 5 providers (Anthropic, Google, Azure, Local, Ollama), chat/test endpoints, tool stubs
-- MCP: Tool registry, built-in tools (shell/fs), MCP stdio client, multi-turn tool calling loop
-- Provider tool calling: Anthropic + Google with full tool_use support, others interface-ready
-- DB: mcp_servers table, CRUD commands, shared TypeScript types
-- Event bridge: Sidecar EventBus + WS /events → Tauri WS client → SQLite + UI emit
-- Cost calculation: model pricing table (Claude/GPT/Gemini/local), auto-calc on llm.response.completed
-- Runs: create_run (async bg execution via sidecar), cancel_run, get_run, status events, New Run UI form
-- DB wipe: wipe_database command, Settings Danger Zone with confirmation dialog
-- UI: Agents page CRUD, Settings page (provider keys + MCP servers + danger zone), Sessions page (chat UI), Runs page (new run form + detail + inspect + cancel), sidebar, Zustand→IPC
-- Inspector: timeline, detail panels, stats, filters, export, keyboard nav, live event push
-- Shared types updated, old types removed
+**Phase 1** (COMPLETE): SQLite + CRUD (d3684bf) → chat sessions verified w/ Gemini → Inspector flagship (3285434) → MCP tool system (827e514) → event bridge + cost calc (ed629cf) → runs + DB wipe (ac9803d).
+
+Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store.
 
 ---
 

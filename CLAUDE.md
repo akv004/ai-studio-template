@@ -14,27 +14,71 @@
 
 ## Session Workflow (IMPORTANT)
 
-This project spans many sessions. Follow this workflow every time:
+This is a spec-driven, multi-session project. Follow this workflow every time:
 
 ### On Session Start
-1. **Read `STATUS.md`** first — it has what's done, what's not, bugs fixed, and what to do next
-2. Don't re-explore the codebase if STATUS.md already covers it
-3. Ask the user what they want to work on, or pick up from the "Next" items in STATUS.md
+1. **Read `STATUS.md`** — what's done, what's not, current phase, bugs, and what to do next
+2. **Check the current phase** in STATUS.md — read the relevant specs before coding
+3. Don't re-explore the codebase if STATUS.md already covers it
+4. Ask the user what to work on, or pick up from "Next" items in STATUS.md
+
+### Before Implementing a Feature
+5. **Read the relevant spec(s)** from `docs/specs/` — they define the contracts, schemas, and behavior
+6. Follow the spec. If something in the spec is wrong or outdated, flag it to the user before diverging.
 
 ### While Working
-4. **Commit after each meaningful chunk** — don't let uncommitted changes pile up. Small, frequent commits.
-5. When you hit a bug or learn something non-obvious, note it in STATUS.md under "Bugs Fixed" or "Gotchas"
+7. **Commit after each meaningful chunk** — don't let uncommitted changes pile up
+8. When you hit a bug or learn something non-obvious, note it in STATUS.md "Gotchas" or CLAUDE.md "Gotchas"
 
 ### On Session End (or after completing a task)
-6. **Update `STATUS.md`** — move completed items to "Done", add new items to "Not Done", update "Last Session Notes"
-7. **Commit STATUS.md** — so the next session sees it immediately
-8. Keep STATUS.md concise — it's a handoff note, not documentation
+9. **Update `STATUS.md`** — check off completed items, add new items, update "Last Session Notes" with what to do next
+10. **Commit STATUS.md** — so the next session sees it immediately
 
 ### Key Rules
-- Never let a session end with a large amount of uncommitted work
-- STATUS.md is the source of truth for "where are we" — keep it accurate
-- Specs in `docs/specs/` are the source of truth for "what should we build"
-- If something in STATUS.md conflicts with code reality, update STATUS.md to match reality
+- Never let a session end with large uncommitted work
+- `STATUS.md` = "where are we" (dynamic, updated every session)
+- `docs/specs/` = "what should we build" (stable, the blueprint)
+- `CLAUDE.md` = "how to work on this project" (workflow + gotchas)
+- If STATUS.md conflicts with code reality, update STATUS.md to match reality
+
+## Spec-Driven Development
+
+### Specs → Code Mapping
+
+When implementing a feature, read the spec first. Here's which spec covers what:
+
+| Working on... | Read this spec |
+|---------------|---------------|
+| DB schema, migrations, branching | `data-model.md` |
+| Tauri IPC commands, sidecar endpoints | `api-contracts.md` |
+| Event types, envelope format, cost calc | `event-system.md` |
+| Inspector timeline, detail panel, replay | `agent-inspector.md` |
+| MCP tools, discovery, approval flow | `mcp-integration.md` |
+| Smart model routing, budgets | `hybrid-intelligence.md` |
+| UI layout, colors, components | `ui-design.md` |
+| Overall architecture, layer responsibilities | `architecture.md` |
+| User scenarios, demo script | `use-cases.md` |
+| Phase plan, task ordering | `phase-plan.md` |
+| Product direction, positioning | `product-vision.md` |
+
+### Phase Plan (from `docs/specs/phase-plan.md`)
+
+| Phase | Goal | Key Deliverables |
+|-------|------|-----------------|
+| **0** | Foundation | Restructure to 5 pillars, remove old modules, update types |
+| **1** | Core working product | SQLite + events + agent CRUD + chat sessions + basic inspector + MCP |
+| **2** | Power features | Replay, branching, headless runs, cost breakdown, export |
+| **3** | Open-source launch | Plugin system, templates, installers, community |
+
+**Phase 1 success criteria**: Create agent → chat with it → see tools execute → inspect session with events & cost.
+
+**Phase 1 sub-tasks** (build order):
+- 1A: SQLite schema + CRUD commands ✅
+- 1B: Event system (types, recording) ✅ (basic — needs WebSocket bridge)
+- 1C: Agent CRUD UI ✅
+- 1D: Real chat sessions with persistence (backend ✅, UI in progress)
+- 1E: Basic Inspector (timeline, detail, stats, filters)
+- 1F: MCP tool discovery + execution + settings UI
 
 ## Architecture (3 Layers)
 
@@ -46,13 +90,6 @@ UI (React 19) → Tauri IPC → Rust Backend (SQLite) → Python Sidecar (LLM pr
 - Tauri owns the security boundary (tool approval, token auth, CORS)
 - Sidecar is spawned by Tauri with an auth token; all requests must include it
 - Event-sourced: every action emits typed events stored in SQLite
-
-## Key Specs
-
-All specs in `docs/specs/`:
-- product-vision.md, architecture.md, event-system.md, data-model.md
-- agent-inspector.md, mcp-integration.md, hybrid-intelligence.md
-- api-contracts.md, ui-design.md, use-cases.md, phase-plan.md
 
 ## Build / Run
 

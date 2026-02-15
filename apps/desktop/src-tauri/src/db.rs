@@ -72,6 +72,9 @@ impl Database {
         if version < 2 {
             self.migrate_v2(&conn)?;
         }
+        if version < 3 {
+            self.migrate_v3(&conn)?;
+        }
 
         Ok(())
     }
@@ -218,6 +221,44 @@ impl Database {
         ).map_err(|e| format!("Migration v2 failed: {e}"))?;
 
         println!("[db] Migrated to schema v2 (mcp_servers)");
+        Ok(())
+    }
+
+    /// V3: Agents schema alignment — tools_mode, mcp_servers, approval_rules columns + global approval_rules table
+    fn migrate_v3(&self, conn: &Connection) -> Result<(), String> {
+        // ALTER TABLE one-at-a-time; catch "duplicate column" for idempotency
+        let alter_stmts = [
+            "ALTER TABLE agents ADD COLUMN tools_mode TEXT NOT NULL DEFAULT 'restricted'",
+            "ALTER TABLE agents ADD COLUMN mcp_servers TEXT NOT NULL DEFAULT '[]'",
+            "ALTER TABLE agents ADD COLUMN approval_rules TEXT NOT NULL DEFAULT '[]'",
+        ];
+        for stmt in &alter_stmts {
+            match conn.execute(stmt, []) {
+                Ok(_) => {}
+                Err(e) if e.to_string().contains("duplicate column") => {}
+                Err(e) => return Err(format!("Migration v3 ALTER failed: {e}")),
+            }
+        }
+
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS approval_rules (
+                id           TEXT PRIMARY KEY,
+                name         TEXT NOT NULL,
+                tool_pattern TEXT NOT NULL,
+                action       TEXT NOT NULL,
+                priority     INTEGER DEFAULT 0,
+                enabled      INTEGER DEFAULT 1,
+                created_at   TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_approval_rules_enabled
+                ON approval_rules(enabled, priority DESC);
+
+            INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '3');
+            "
+        ).map_err(|e| format!("Migration v3 failed: {e}"))?;
+
+        println!("[db] Migrated to schema v3 (agents schema alignment + approval_rules)");
         Ok(())
     }
 }

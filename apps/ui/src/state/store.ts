@@ -2,9 +2,10 @@ import { create } from 'zustand';
 import type {
     Agent, Session, Run, Message,
     Event as StudioEvent, SessionStats,
-    CreateAgentRequest, SendMessageResponse,
+    CreateAgentRequest, UpdateAgentRequest, SendMessageResponse,
     McpServer, CreateMcpServerRequest, UpdateMcpServerRequest,
     CreateRunRequest,
+    ApprovalRule, CreateApprovalRuleRequest, UpdateApprovalRuleRequest,
 } from '@ai-studio/shared';
 
 // ============================================
@@ -52,6 +53,7 @@ interface AppState {
     agentsLoading: boolean;
     fetchAgents: () => Promise<void>;
     createAgent: (req: CreateAgentRequest) => Promise<Agent>;
+    updateAgent: (id: string, updates: UpdateAgentRequest) => Promise<Agent>;
     deleteAgent: (id: string) => Promise<void>;
 
     // Sessions
@@ -104,6 +106,14 @@ interface AppState {
     updateMcpServer: (id: string, req: UpdateMcpServerRequest) => Promise<void>;
     removeMcpServer: (id: string) => Promise<void>;
 
+    // Approval Rules
+    approvalRules: ApprovalRule[];
+    approvalRulesLoading: boolean;
+    fetchApprovalRules: () => Promise<void>;
+    createApprovalRule: (req: CreateApprovalRuleRequest) => Promise<ApprovalRule>;
+    updateApprovalRule: (id: string, updates: UpdateApprovalRuleRequest) => Promise<void>;
+    deleteApprovalRule: (id: string) => Promise<void>;
+
     // Inspector navigation (set by Sessions "Inspect" button)
     inspectorSessionId: string | null;
     openInspector: (sessionId: string) => void;
@@ -150,6 +160,19 @@ export const useAppStore = create<AppState>((set, get) => ({
             return agent;
         } catch (e) {
             const msg = `Failed to create agent: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
+    },
+    updateAgent: async (id, updates) => {
+        try {
+            const agent = await invoke<Agent>('update_agent', { id, updates });
+            set((s) => ({ agents: s.agents.map((a) => a.id === id ? agent : a) }));
+            get().addToast('Agent updated', 'success');
+            return agent;
+        } catch (e) {
+            const msg = `Failed to update agent: ${e}`;
             set({ error: msg });
             get().addToast(msg, 'error');
             throw e;
@@ -397,6 +420,53 @@ export const useAppStore = create<AppState>((set, get) => ({
             get().addToast('MCP server removed', 'success');
         } catch (e) {
             const msg = `Failed to remove MCP server: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
+    },
+
+    // Approval Rules
+    approvalRules: [],
+    approvalRulesLoading: false,
+    fetchApprovalRules: async () => {
+        set({ approvalRulesLoading: true });
+        try {
+            const rules = await invoke<ApprovalRule[]>('list_approval_rules');
+            set({ approvalRules: rules, approvalRulesLoading: false });
+        } catch (e) {
+            set({ approvalRulesLoading: false, error: `Failed to load approval rules: ${e}` });
+        }
+    },
+    createApprovalRule: async (req) => {
+        try {
+            const rule = await invoke<ApprovalRule>('create_approval_rule', { rule: req });
+            set((s) => ({ approvalRules: [...s.approvalRules, rule] }));
+            get().addToast('Approval rule created', 'success');
+            return rule;
+        } catch (e) {
+            const msg = `Failed to create approval rule: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
+    },
+    updateApprovalRule: async (id, updates) => {
+        try {
+            await invoke<void>('update_approval_rule', { id, updates });
+            get().fetchApprovalRules();
+        } catch (e) {
+            const msg = `Failed to update approval rule: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
+    },
+    deleteApprovalRule: async (id) => {
+        try {
+            await invoke<void>('delete_approval_rule', { id });
+            set((s) => ({ approvalRules: s.approvalRules.filter((r) => r.id !== id) }));
+            get().addToast('Approval rule deleted', 'success');
+        } catch (e) {
+            const msg = `Failed to delete approval rule: ${e}`;
             set({ error: msg });
             get().addToast(msg, 'error');
         }

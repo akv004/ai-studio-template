@@ -25,6 +25,9 @@ pub struct Agent {
     pub temperature: f64,
     pub max_tokens: i64,
     pub tools: Vec<String>,
+    pub tools_mode: String,
+    pub mcp_servers: Vec<String>,
+    pub approval_rules: Vec<serde_json::Value>,
     pub created_at: String,
     pub updated_at: String,
     pub is_archived: bool,
@@ -46,10 +49,15 @@ pub struct CreateAgentRequest {
     pub max_tokens: i64,
     #[serde(default)]
     pub tools: Vec<String>,
+    #[serde(default = "default_tools_mode")]
+    pub tools_mode: String,
+    #[serde(default)]
+    pub mcp_servers: Vec<String>,
 }
 
 fn default_temperature() -> f64 { 0.7 }
 fn default_max_tokens() -> i64 { 4096 }
+fn default_tools_mode() -> String { "restricted".to_string() }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -62,6 +70,9 @@ pub struct UpdateAgentRequest {
     pub temperature: Option<f64>,
     pub max_tokens: Option<i64>,
     pub tools: Option<Vec<String>>,
+    pub tools_mode: Option<String>,
+    pub mcp_servers: Option<Vec<String>>,
+    pub approval_rules: Option<Vec<serde_json::Value>>,
 }
 
 // ============================================
@@ -74,7 +85,8 @@ pub fn list_agents(db: tauri::State<'_, Database>) -> Result<Vec<Agent>, String>
     let mut stmt = conn
         .prepare(
             "SELECT id, name, description, provider, model, system_prompt,
-                    temperature, max_tokens, tools, created_at, updated_at, is_archived
+                    temperature, max_tokens, tools, tools_mode, mcp_servers,
+                    approval_rules, created_at, updated_at, is_archived
              FROM agents WHERE is_archived = 0
              ORDER BY updated_at DESC",
         )
@@ -85,6 +97,12 @@ pub fn list_agents(db: tauri::State<'_, Database>) -> Result<Vec<Agent>, String>
             let tools_json: String = row.get(8)?;
             let tools: Vec<String> =
                 serde_json::from_str(&tools_json).unwrap_or_default();
+            let mcp_json: String = row.get(10)?;
+            let mcp_servers: Vec<String> =
+                serde_json::from_str(&mcp_json).unwrap_or_default();
+            let ar_json: String = row.get(11)?;
+            let approval_rules: Vec<serde_json::Value> =
+                serde_json::from_str(&ar_json).unwrap_or_default();
             Ok(Agent {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -95,9 +113,12 @@ pub fn list_agents(db: tauri::State<'_, Database>) -> Result<Vec<Agent>, String>
                 temperature: row.get(6)?,
                 max_tokens: row.get(7)?,
                 tools,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
-                is_archived: row.get::<_, i32>(11)? != 0,
+                tools_mode: row.get(9)?,
+                mcp_servers,
+                approval_rules,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
+                is_archived: row.get::<_, i32>(14)? != 0,
             })
         })
         .map_err(|e| e.to_string())?
@@ -112,13 +133,20 @@ pub fn get_agent(db: tauri::State<'_, Database>, id: String) -> Result<Agent, St
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     conn.query_row(
         "SELECT id, name, description, provider, model, system_prompt,
-                temperature, max_tokens, tools, created_at, updated_at, is_archived
+                temperature, max_tokens, tools, tools_mode, mcp_servers,
+                approval_rules, created_at, updated_at, is_archived
          FROM agents WHERE id = ?1",
         params![id],
         |row| {
             let tools_json: String = row.get(8)?;
             let tools: Vec<String> =
                 serde_json::from_str(&tools_json).unwrap_or_default();
+            let mcp_json: String = row.get(10)?;
+            let mcp_servers: Vec<String> =
+                serde_json::from_str(&mcp_json).unwrap_or_default();
+            let ar_json: String = row.get(11)?;
+            let approval_rules: Vec<serde_json::Value> =
+                serde_json::from_str(&ar_json).unwrap_or_default();
             Ok(Agent {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -129,9 +157,12 @@ pub fn get_agent(db: tauri::State<'_, Database>, id: String) -> Result<Agent, St
                 temperature: row.get(6)?,
                 max_tokens: row.get(7)?,
                 tools,
-                created_at: row.get(9)?,
-                updated_at: row.get(10)?,
-                is_archived: row.get::<_, i32>(11)? != 0,
+                tools_mode: row.get(9)?,
+                mcp_servers,
+                approval_rules,
+                created_at: row.get(12)?,
+                updated_at: row.get(13)?,
+                is_archived: row.get::<_, i32>(14)? != 0,
             })
         },
     )
@@ -146,12 +177,14 @@ pub fn create_agent(
     let id = Uuid::new_v4().to_string();
     let now = now_iso();
     let tools_json = serde_json::to_string(&agent.tools).unwrap_or_else(|_| "[]".to_string());
+    let mcp_json = serde_json::to_string(&agent.mcp_servers).unwrap_or_else(|_| "[]".to_string());
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
         "INSERT INTO agents (id, name, description, provider, model, system_prompt,
-                             temperature, max_tokens, tools, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                             temperature, max_tokens, tools, tools_mode, mcp_servers,
+                             created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         params![
             id,
             agent.name,
@@ -162,6 +195,8 @@ pub fn create_agent(
             agent.temperature,
             agent.max_tokens,
             tools_json,
+            agent.tools_mode,
+            mcp_json,
             now,
             now,
         ],
@@ -178,6 +213,9 @@ pub fn create_agent(
         temperature: agent.temperature,
         max_tokens: agent.max_tokens,
         tools: agent.tools,
+        tools_mode: agent.tools_mode,
+        mcp_servers: agent.mcp_servers,
+        approval_rules: vec![],
         created_at: now.clone(),
         updated_at: now,
         is_archived: false,
@@ -236,6 +274,23 @@ pub fn update_agent(
         let tools_json = serde_json::to_string(tools).unwrap_or_else(|_| "[]".to_string());
         sets.push(format!("tools = ?{param_index}"));
         values.push(Box::new(tools_json));
+        param_index += 1;
+    }
+    if let Some(ref tools_mode) = updates.tools_mode {
+        sets.push(format!("tools_mode = ?{param_index}"));
+        values.push(Box::new(tools_mode.clone()));
+        param_index += 1;
+    }
+    if let Some(ref mcp_servers) = updates.mcp_servers {
+        let mcp_json = serde_json::to_string(mcp_servers).unwrap_or_else(|_| "[]".to_string());
+        sets.push(format!("mcp_servers = ?{param_index}"));
+        values.push(Box::new(mcp_json));
+        param_index += 1;
+    }
+    if let Some(ref approval_rules) = updates.approval_rules {
+        let ar_json = serde_json::to_string(approval_rules).unwrap_or_else(|_| "[]".to_string());
+        sets.push(format!("approval_rules = ?{param_index}"));
+        values.push(Box::new(ar_json));
         param_index += 1;
     }
 
@@ -941,6 +996,7 @@ pub fn wipe_database(db: tauri::State<'_, Database>) -> Result<(), String> {
          DELETE FROM sessions;
          DELETE FROM agents;
          DELETE FROM mcp_servers;
+         DELETE FROM approval_rules;
          DELETE FROM settings;
          DELETE FROM provider_keys;"
     )
@@ -1088,7 +1144,7 @@ pub async fn send_message(
     let now = now_iso();
 
     // 1. Load session + agent info + provider config from settings
-    let (provider, model, system_prompt, provider_config) = {
+    let (provider, model, system_prompt, tools_mode, provider_config) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let agent_id: String = conn
             .query_row(
@@ -1098,10 +1154,10 @@ pub async fn send_message(
             )
             .map_err(|_| "Session not found".to_string())?;
 
-        let (provider, model, system_prompt) = conn.query_row(
-            "SELECT provider, model, system_prompt FROM agents WHERE id = ?1",
+        let (provider, model, system_prompt, tools_mode) = conn.query_row(
+            "SELECT provider, model, system_prompt, tools_mode FROM agents WHERE id = ?1",
             params![agent_id],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)),
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?)),
         )
         .map_err(|_| "Agent not found".to_string())?;
 
@@ -1127,7 +1183,7 @@ pub async fn send_message(
             config.insert(field.to_string(), serde_json::Value::String(clean_value));
         }
 
-        (provider, model, system_prompt, config)
+        (provider, model, system_prompt, tools_mode, config)
     };
 
     // 2. Get next sequence number
@@ -1191,13 +1247,14 @@ pub async fn send_message(
         }
     }
 
+    let tools_enabled = tools_mode != "sandboxed";
     let mut chat_body = serde_json::json!({
         "message": request.content,
         "conversation_id": request.session_id,
         "provider": provider,
         "model": model,
         "system_prompt": system_prompt,
-        "tools_enabled": true,
+        "tools_enabled": tools_enabled,
     });
     // Only include credentials if we have an API key or base_url
     if !api_key.is_empty() {
@@ -1591,6 +1648,187 @@ pub fn remove_mcp_server(db: tauri::State<'_, Database>, id: String) -> Result<(
         .map_err(|e| format!("Failed to remove MCP server: {e}"))?;
     if rows == 0 {
         return Err("MCP server not found".to_string());
+    }
+    Ok(())
+}
+
+// ============================================
+// GLOBAL APPROVAL RULES CRUD
+// ============================================
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ApprovalRule {
+    pub id: String,
+    pub name: String,
+    pub tool_pattern: String,
+    pub action: String,
+    pub priority: i64,
+    pub enabled: bool,
+    pub created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateApprovalRuleRequest {
+    pub name: String,
+    pub tool_pattern: String,
+    pub action: String,
+    #[serde(default)]
+    pub priority: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateApprovalRuleRequest {
+    pub name: Option<String>,
+    pub tool_pattern: Option<String>,
+    pub action: Option<String>,
+    pub priority: Option<i64>,
+    pub enabled: Option<bool>,
+}
+
+#[tauri::command]
+pub fn list_approval_rules(db: tauri::State<'_, Database>) -> Result<Vec<ApprovalRule>, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, name, tool_pattern, action, priority, enabled, created_at
+             FROM approval_rules ORDER BY priority DESC, name ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rules = stmt
+        .query_map([], |row| {
+            Ok(ApprovalRule {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                tool_pattern: row.get(2)?,
+                action: row.get(3)?,
+                priority: row.get(4)?,
+                enabled: row.get::<_, i32>(5)? != 0,
+                created_at: row.get(6)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    Ok(rules)
+}
+
+#[tauri::command]
+pub fn create_approval_rule(
+    db: tauri::State<'_, Database>,
+    rule: CreateApprovalRuleRequest,
+) -> Result<ApprovalRule, String> {
+    let id = Uuid::new_v4().to_string();
+    let now = now_iso();
+
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    conn.execute(
+        "INSERT INTO approval_rules (id, name, tool_pattern, action, priority, enabled, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6)",
+        params![id, rule.name, rule.tool_pattern, rule.action, rule.priority, now],
+    )
+    .map_err(|e| format!("Failed to create approval rule: {e}"))?;
+
+    Ok(ApprovalRule {
+        id,
+        name: rule.name,
+        tool_pattern: rule.tool_pattern,
+        action: rule.action,
+        priority: rule.priority,
+        enabled: true,
+        created_at: now,
+    })
+}
+
+#[tauri::command]
+pub fn update_approval_rule(
+    db: tauri::State<'_, Database>,
+    id: String,
+    updates: UpdateApprovalRuleRequest,
+) -> Result<ApprovalRule, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    let mut sets = Vec::new();
+    let mut param_index = 1u32;
+    let mut values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+
+    if let Some(ref name) = updates.name {
+        sets.push(format!("name = ?{param_index}"));
+        values.push(Box::new(name.clone()));
+        param_index += 1;
+    }
+    if let Some(ref tool_pattern) = updates.tool_pattern {
+        sets.push(format!("tool_pattern = ?{param_index}"));
+        values.push(Box::new(tool_pattern.clone()));
+        param_index += 1;
+    }
+    if let Some(ref action) = updates.action {
+        sets.push(format!("action = ?{param_index}"));
+        values.push(Box::new(action.clone()));
+        param_index += 1;
+    }
+    if let Some(priority) = updates.priority {
+        sets.push(format!("priority = ?{param_index}"));
+        values.push(Box::new(priority));
+        param_index += 1;
+    }
+    if let Some(enabled) = updates.enabled {
+        sets.push(format!("enabled = ?{param_index}"));
+        values.push(Box::new(if enabled { 1i32 } else { 0 }));
+        param_index += 1;
+    }
+
+    if sets.is_empty() {
+        return Err("No fields to update".to_string());
+    }
+
+    let sql = format!(
+        "UPDATE approval_rules SET {} WHERE id = ?{param_index}",
+        sets.join(", ")
+    );
+    values.push(Box::new(id.clone()));
+
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = values.iter().map(|v| v.as_ref()).collect();
+    let rows = conn
+        .execute(&sql, param_refs.as_slice())
+        .map_err(|e| format!("Failed to update approval rule: {e}"))?;
+
+    if rows == 0 {
+        return Err("Approval rule not found".to_string());
+    }
+
+    // Re-read the updated record
+    conn.query_row(
+        "SELECT id, name, tool_pattern, action, priority, enabled, created_at
+         FROM approval_rules WHERE id = ?1",
+        params![id],
+        |row| {
+            Ok(ApprovalRule {
+                id: row.get(0)?,
+                name: row.get(1)?,
+                tool_pattern: row.get(2)?,
+                action: row.get(3)?,
+                priority: row.get(4)?,
+                enabled: row.get::<_, i32>(5)? != 0,
+                created_at: row.get(6)?,
+            })
+        },
+    )
+    .map_err(|e| format!("Approval rule not found: {e}"))
+}
+
+#[tauri::command]
+pub fn delete_approval_rule(db: tauri::State<'_, Database>, id: String) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let rows = conn
+        .execute("DELETE FROM approval_rules WHERE id = ?1", params![id])
+        .map_err(|e| format!("Failed to delete approval rule: {e}"))?;
+    if rows == 0 {
+        return Err("Approval rule not found".to_string());
     }
     Ok(())
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Bot, Trash2, Loader2 } from 'lucide-react';
+import { Plus, RefreshCw, Bot, Trash2, Loader2, Shield, Server } from 'lucide-react';
 import { useAppStore } from '../../state/store';
+import type { ToolsMode } from '@ai-studio/shared';
 
 const MODELS_BY_PROVIDER: Record<string, string[]> = {
     anthropic: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-haiku-4-5-20251001'],
@@ -18,6 +19,7 @@ const MODELS_BY_PROVIDER: Record<string, string[]> = {
 export function AgentsPage() {
     const {
         agents, agentsLoading, fetchAgents, createAgent, deleteAgent, error,
+        mcpServers, fetchMcpServers,
     } = useAppStore();
     const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>();
     const [showCreate, setShowCreate] = useState(false);
@@ -29,6 +31,8 @@ export function AgentsPage() {
     const [model, setModel] = useState('claude-sonnet-4-20250514');
     const [customModel, setCustomModel] = useState(false);
     const [systemPrompt, setSystemPrompt] = useState('');
+    const [toolsMode, setToolsMode] = useState<ToolsMode>('restricted');
+    const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([]);
 
     const availableModels = MODELS_BY_PROVIDER[provider] || [];
 
@@ -41,7 +45,8 @@ export function AgentsPage() {
 
     useEffect(() => {
         fetchAgents();
-    }, [fetchAgents]);
+        fetchMcpServers();
+    }, [fetchAgents, fetchMcpServers]);
 
     useEffect(() => {
         if (agents.length > 0 && !selectedAgentId) {
@@ -55,11 +60,16 @@ export function AgentsPage() {
         if (!name.trim()) return;
         setCreating(true);
         try {
-            const agent = await createAgent({ name, provider, model, systemPrompt });
+            const agent = await createAgent({
+                name, provider, model, systemPrompt, toolsMode,
+                mcpServers: selectedMcpServers,
+            });
             setSelectedAgentId(agent.id);
             setShowCreate(false);
             setName('');
             setSystemPrompt('');
+            setToolsMode('restricted');
+            setSelectedMcpServers([]);
         } catch { /* error handled by store */ }
         setCreating(false);
     };
@@ -215,6 +225,39 @@ export function AgentsPage() {
                                     <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">System Prompt</label>
                                     <textarea className="input w-full h-32 resize-none" value={systemPrompt} onChange={e => setSystemPrompt(e.target.value)} placeholder="You are a helpful AI assistant..." />
                                 </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Tools Mode</label>
+                                    <select className="input w-full" value={toolsMode} onChange={e => setToolsMode(e.target.value as ToolsMode)}>
+                                        <option value="sandboxed">Sandboxed — no tool access</option>
+                                        <option value="restricted">Restricted — approved tools only (default)</option>
+                                        <option value="full">Full — all available tools</option>
+                                    </select>
+                                </div>
+                                {mcpServers.length > 0 && (
+                                    <div>
+                                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">MCP Servers</label>
+                                        <div className="space-y-2">
+                                            {mcpServers.filter(s => s.enabled).map(server => (
+                                                <label key={server.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedMcpServers.includes(server.id)}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setSelectedMcpServers(prev => [...prev, server.id]);
+                                                            } else {
+                                                                setSelectedMcpServers(prev => prev.filter(id => id !== server.id));
+                                                            }
+                                                        }}
+                                                        className="rounded border-[var(--border-primary)]"
+                                                    />
+                                                    <Server className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+                                                    {server.name}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 <button className="btn btn-primary w-full" onClick={handleCreate} disabled={creating || !name.trim()}>
                                     {creating ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : 'Create Agent'}
                                 </button>
@@ -245,9 +288,36 @@ export function AgentsPage() {
                                         {selectedAgent.systemPrompt || '(none)'}
                                     </div>
                                 </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Tools Mode</label>
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium ${
+                                        selectedAgent.toolsMode === 'full' ? 'bg-green-500/15 text-green-400' :
+                                        selectedAgent.toolsMode === 'restricted' ? 'bg-yellow-500/15 text-yellow-400' :
+                                        'bg-red-500/15 text-red-400'
+                                    }`}>
+                                        <Shield className="w-3 h-3" />
+                                        {selectedAgent.toolsMode}
+                                    </span>
+                                </div>
+                                {selectedAgent.mcpServers.length > 0 && (
+                                    <div>
+                                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">MCP Servers</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedAgent.mcpServers.map((serverId: string) => {
+                                                const server = mcpServers.find(s => s.id === serverId);
+                                                return (
+                                                    <span key={serverId} className="inline-flex items-center gap-1.5 px-2 py-1 text-xs rounded bg-[var(--bg-tertiary)] font-mono">
+                                                        <Server className="w-3 h-3" />
+                                                        {server?.name || serverId}
+                                                    </span>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                                 {selectedAgent.tools.length > 0 && (
                                     <div>
-                                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Tools</label>
+                                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Tools (legacy)</label>
                                         <div className="flex flex-wrap gap-2">
                                             {selectedAgent.tools.map((tool: string) => (
                                                 <span key={tool} className="px-2 py-1 text-xs rounded bg-[var(--bg-tertiary)] font-mono">

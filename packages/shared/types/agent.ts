@@ -3,6 +3,8 @@
 // Matches Rust backend structs (camelCase serialization)
 // ============================================
 
+export type ToolsMode = 'sandboxed' | 'restricted' | 'full';
+
 /**
  * AI Agent definition
  */
@@ -16,6 +18,9 @@ export interface Agent {
     temperature: number;
     maxTokens: number;
     tools: string[];
+    toolsMode: ToolsMode;
+    mcpServers: string[];
+    approvalRules: Record<string, unknown>[];
     createdAt: string;
     updatedAt: string;
     isArchived: boolean;
@@ -30,6 +35,8 @@ export interface CreateAgentRequest {
     temperature?: number;
     maxTokens?: number;
     tools?: string[];
+    toolsMode?: ToolsMode;
+    mcpServers?: string[];
 }
 
 export interface UpdateAgentRequest {
@@ -41,6 +48,9 @@ export interface UpdateAgentRequest {
     temperature?: number;
     maxTokens?: number;
     tools?: string[];
+    toolsMode?: ToolsMode;
+    mcpServers?: string[];
+    approvalRules?: Record<string, unknown>[];
 }
 
 /**
@@ -158,5 +168,36 @@ export interface UpdateMcpServerRequest {
     args?: string[];
     url?: string;
     env?: Record<string, string>;
+    enabled?: boolean;
+}
+
+// ============================================
+// APPROVAL RULE TYPES
+// ============================================
+
+export type ApprovalAction = 'allow' | 'deny' | 'ask';
+
+export interface ApprovalRule {
+    id: string;
+    name: string;
+    toolPattern: string;
+    action: ApprovalAction;
+    priority: number;
+    enabled: boolean;
+    createdAt: string;
+}
+
+export interface CreateApprovalRuleRequest {
+    name: string;
+    toolPattern: string;
+    action: ApprovalAction;
+    priority?: number;
+}
+
+export interface UpdateApprovalRuleRequest {
+    name?: string;
+    toolPattern?: string;
+    action?: ApprovalAction;
+    priority?: number;
     enabled?: boolean;
 }

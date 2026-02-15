@@ -85,6 +85,11 @@ pub fn run() {
             add_mcp_server,
             update_mcp_server,
             remove_mcp_server,
+            // Approval Rules
+            list_approval_rules,
+            create_approval_rule,
+            update_approval_rule,
+            delete_approval_rule,
             // Sidecar
             sidecar_start,
             sidecar_stop,

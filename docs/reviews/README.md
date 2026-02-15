@@ -52,13 +52,36 @@ Tell Claude Code where the review response is. It will:
 - [ ] Deferred to P3 → Valid but not for this phase
 ```
 
-## Which Reviewers to Use
+## Which Reviewer for What
 
-| Reviewer | Best for | How to invoke |
-|----------|----------|---------------|
-| Gemini 3 Pro (Antigravity) | Architecture, data model, API design | Open Antigravity in same workspace |
-| ChatGPT 5.2 | Security review, edge cases, UX critique | Paste prompt or open in workspace |
-| Claude Code (self-review) | Quick sanity checks, code consistency | Ask Claude Code to review its own changes |
+**Rule of thumb:** Antigravity/Gemini = "zoom out" (architecture, strategy). Codex/GPT = "zoom in" (code bugs, edge cases).
+
+| Review Type | Reviewer | Tool | Why |
+|---|---|---|---|
+| **Architecture / Data Model** | Gemini 3 Pro | Antigravity | System design, schema analysis, cross-layer consistency |
+| **Code Quality / Bugs** | GPT-4.1 / Codex | VS Code Codex | Code-level bugs, edge cases, type errors, off-by-one |
+| **Security** | Gemini 3 Pro | Antigravity | OWASP-style analysis, auth flows, injection risks |
+| **Performance** | GPT-4.1 / Codex | VS Code Codex | Profiling suggestions, runtime analysis, N+1 queries |
+| **UX / API Design** | Either | Either | Both good — use whichever is open |
+| **Open-source readiness** | Gemini 3 Pro | Antigravity | Big-picture "would this impress people" evaluation |
+| **Quick sanity check** | Claude Code | Claude Code | Self-review for code consistency, missed patterns |
+
+**When in doubt:** The review prompt (Step 1) will specify which reviewer Claude Code recommends.
+
+## Cross-Project Review Standard
+
+This workflow follows the global multi-model review pattern defined in `claude-config/rules/design-reviews.md`. The same process applies across all projects (AI Studio, GhostStag, SnowOwl, WorkMind):
+
+1. **Collect** — Reviews go in `docs/reviews/` with naming `design-review-YYYY-MM-DD.md`. Include reviewer name/tool, date, and status (Draft/Triaged/Closed). Each item is a checkbox `- [ ]`.
+2. **Triage critically** — Not all feedback is correct. For each item: **Accept** (add to backlog), **Reject** (explain why with evidence), or **Already Planned** (reference existing spec/task).
+3. **Build & Close** — When implemented, change `- [ ]` to `- [x]` with closing note: `(Closed YYYY-MM-DD, commit abc1234)`. Commit review doc update alongside implementation.
+4. **Close the Review** — When all items resolved, update status from `Draft` to `Closed`. Final commit: `Docs: Close design review YYYY-MM-DD — all items resolved`.
+
+**Rules:**
+- Never blindly accept all review items — validate against specs and existing code
+- If a reviewer claims something is missing but it exists, reject with evidence
+- Cross-reference review items with STATUS.md backlog to avoid duplicates
+- Reviews from any AI model or human follow the same process
 
 ## Past Reviews
 

@@ -3,6 +3,7 @@ import {
     MessageSquare,
     Play,
     Search,
+    GitFork,
     Settings
 } from 'lucide-react';
 import { useAppStore, type ModuleId } from '../../state/store';
@@ -19,6 +20,7 @@ const mainNavItems: NavItem[] = [
     { id: 'sessions', label: 'Sessions', icon: MessageSquare, shortcut: '⌘2' },
     { id: 'runs', label: 'Runs', icon: Play, shortcut: '⌘3' },
     { id: 'inspector', label: 'Inspector', icon: Search, shortcut: '⌘4' },
+    { id: 'workflows', label: 'Node Editor', icon: GitFork, shortcut: '⌘5' },
 ];
 
 /**

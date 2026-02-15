@@ -866,3 +866,131 @@ select.input option {
 .grid { display: grid; }
 .grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
 .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+/* ========================================
+   NODE EDITOR — Custom Nodes + Canvas
+   ======================================== */
+
+.custom-node {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-default);
+  border-radius: 8px;
+  min-width: 180px;
+  font-size: 13px;
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s;
+}
+
+.custom-node:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.custom-node.selected {
+  box-shadow: 0 0 0 2px var(--accent-primary), var(--shadow-md);
+}
+
+.custom-node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #fff;
+  border-radius: 6px 6px 0 0;
+}
+
+.custom-node-body {
+  padding: 8px 10px;
+}
+
+.custom-handle {
+  width: 10px !important;
+  height: 10px !important;
+  background: var(--bg-elevated) !important;
+  border: 2px solid var(--border-accent) !important;
+  border-radius: 50% !important;
+}
+
+.custom-handle:hover {
+  background: var(--accent-primary) !important;
+}
+
+.config-input {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  margin-top: 4px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.config-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+}
+
+textarea.config-input {
+  resize: vertical;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.empty-state h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 16px;
+}
+
+.empty-state p {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+  max-width: 320px;
+}
+
+/* React Flow overrides for dark theme */
+.react-flow__attribution {
+  display: none !important;
+}
+
+.react-flow__edge-path {
+  stroke: var(--border-accent) !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow__connection-line {
+  stroke: var(--accent-primary) !important;
+  stroke-width: 2 !important;
+}
+
+.react-flow-controls button {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-subtle) !important;
+  color: var(--text-primary) !important;
+  fill: var(--text-primary) !important;
+}
+
+.react-flow-controls button:hover {
+  background: var(--bg-hover) !important;
+}
+
+.react-flow-minimap {
+  background: var(--bg-secondary) !important;
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: 6px !important;
+}

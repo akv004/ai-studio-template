@@ -53,6 +53,13 @@ export function useCommands(): Command[] {
             action: () => navigateTo('inspector'),
         },
         {
+            id: 'nav-workflows',
+            label: 'Go to Node Editor',
+            shortcut: '⌘5',
+            category: 'navigation',
+            action: () => navigateTo('workflows'),
+        },
+        {
             id: 'nav-settings',
             label: 'Go to Settings',
             shortcut: '⌘,',
@@ -129,6 +136,7 @@ export function useKeyboardShortcuts() {
                     '2': 'sessions',
                     '3': 'runs',
                     '4': 'inspector',
+                    '5': 'workflows',
                     ',': 'settings',
                 };
 

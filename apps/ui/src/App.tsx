@@ -7,11 +7,12 @@ import { useKeyboardShortcuts } from './commands';
 import { useAppStore } from './state/store';
 import { useEffect, useMemo, useState } from 'react';
 
-// Page imports — 5 pillars + onboarding
+// Page imports — 6 pillars + onboarding
 import { AgentsPage } from './app/pages/AgentsPage';
 import { SessionsPage } from './app/pages/SessionsPage';
 import { RunsPage } from './app/pages/RunsPage';
 import { InspectorPage } from './app/pages/InspectorPage';
+import { NodeEditorPage } from './app/pages/NodeEditorPage';
 import { SettingsPage } from './app/pages/SettingsPage';
 import { WelcomePage } from './app/pages/WelcomePage';
 
@@ -137,6 +138,8 @@ function App() {
         return <RunsPage />;
       case 'inspector':
         return <InspectorPage />;
+      case 'workflows':
+        return <NodeEditorPage />;
       case 'settings':
         return <SettingsPage />;
       default:

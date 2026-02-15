@@ -1,8 +1,9 @@
 import {
     Search, Download, Loader2, MessageSquare, Brain, Wrench,
     AlertCircle, Clock, Zap, DollarSign, Hash, Cpu, Copy, Check,
+    GitBranch, Play, FileText, ChevronRight, ChevronDown,
 } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore, type StudioEvent } from '../../state/store';
 
 // ============================================
@@ -128,6 +129,85 @@ function eventSummary(event: StudioEvent): string {
 }
 
 // ============================================
+// EVENT GROUPING
+// ============================================
+
+interface EventGroup {
+    id: string;
+    kind: 'single' | 'tool-group' | 'llm-group';
+    events: StudioEvent[];
+    label: string;
+}
+
+function groupEvents(events: StudioEvent[]): EventGroup[] {
+    const groups: EventGroup[] = [];
+    let i = 0;
+
+    while (i < events.length) {
+        const ev = events[i];
+
+        // Tool group: consecutive tool.* events with the same tool name
+        if (ev.type.startsWith('tool.')) {
+            const toolName = String(ev.payload.tool || ev.payload.command || 'tool');
+            const batch = [ev];
+            let j = i + 1;
+            while (j < events.length && events[j].type.startsWith('tool.')) {
+                const next = events[j];
+                const nextTool = String(next.payload.tool || next.payload.command || 'tool');
+                if (nextTool === toolName) {
+                    batch.push(next);
+                    j++;
+                } else {
+                    break;
+                }
+            }
+            if (batch.length > 1) {
+                const seqRange = `seq ${batch[0].seq}-${batch[batch.length - 1].seq}`;
+                groups.push({
+                    id: `tg-${batch[0].eventId}`,
+                    kind: 'tool-group',
+                    events: batch,
+                    label: `Tool: ${toolName} (${seqRange})`,
+                });
+                i = j;
+                continue;
+            }
+        }
+
+        // LLM group: llm.request.started followed by llm.response.*
+        if (ev.type === 'llm.request.started') {
+            const batch = [ev];
+            let j = i + 1;
+            while (j < events.length && events[j].type.startsWith('llm.')) {
+                batch.push(events[j]);
+                if (events[j].type === 'llm.response.completed' || events[j].type === 'llm.response.error') {
+                    j++;
+                    break;
+                }
+                j++;
+            }
+            if (batch.length > 1) {
+                const model = String(ev.payload.model || 'LLM');
+                const seqRange = `seq ${batch[0].seq}-${batch[batch.length - 1].seq}`;
+                groups.push({
+                    id: `lg-${batch[0].eventId}`,
+                    kind: 'llm-group',
+                    events: batch,
+                    label: `LLM: ${model} (${seqRange})`,
+                });
+                i = j;
+                continue;
+            }
+        }
+
+        // Single event
+        groups.push({ id: ev.eventId, kind: 'single', events: [ev], label: '' });
+        i++;
+    }
+    return groups;
+}
+
+// ============================================
 // COPY BUTTON
 // ============================================
 
@@ -156,7 +236,11 @@ function CopyButton({ text }: { text: string }) {
 // DETAIL PANEL — type-specific views
 // ============================================
 
-function EventDetail({ event }: { event: StudioEvent }) {
+function EventDetail({ event, sessionId, onBranch }: {
+    event: StudioEvent;
+    sessionId?: string;
+    onBranch?: (seq: number) => void;
+}) {
     const p = event.payload;
 
     return (
@@ -226,8 +310,28 @@ function EventDetail({ event }: { event: StudioEvent }) {
             )}
 
             {/* Actions */}
-            <div className="flex gap-2 pt-2 border-t border-[var(--border-subtle)]">
+            <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--border-subtle)]">
                 <CopyButton text={JSON.stringify(p, null, 2)} />
+                {sessionId && onBranch && (
+                    <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => onBranch(event.seq)}
+                        title="Branch conversation from this point"
+                    >
+                        <GitBranch className="w-3 h-3" />
+                        Branch from here
+                    </button>
+                )}
+                {sessionId && onBranch && event.type === 'llm.response.error' && (
+                    <button
+                        className="btn btn-ghost btn-sm"
+                        onClick={() => onBranch(Math.max(1, event.seq - 1))}
+                        title="Retry from the previous point"
+                    >
+                        <Play className="w-3 h-3" />
+                        Retry from here
+                    </button>
+                )}
             </div>
         </div>
     );
@@ -390,6 +494,57 @@ function CollapsibleSection({ title, children }: { title: string; children: Reac
 }
 
 // ============================================
+// TIMELINE EVENT (reusable for flat + grouped rendering)
+// ============================================
+
+function TimelineEvent({ event, isSelected, onSelect }: {
+    event: StudioEvent;
+    isSelected: boolean;
+    onSelect: (id: string) => void;
+}) {
+    const category = getEventCategory(event.type);
+    const color = getEventColor(event.type);
+    const Icon = categoryIcons[category];
+
+    return (
+        <div
+            className={`relative flex gap-3 py-2 px-2 rounded-lg cursor-pointer transition-all ${
+                isSelected
+                    ? 'bg-[var(--accent-glow)]'
+                    : 'hover:bg-[var(--bg-hover)]'
+            }`}
+            onClick={() => onSelect(event.eventId)}
+        >
+            {/* Dot with icon */}
+            <div
+                className="relative z-10 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                style={{
+                    background: isSelected ? color : `${color}33`,
+                    border: `2px solid ${color}`,
+                }}
+            >
+                <Icon className="w-2.5 h-2.5" style={{ color: isSelected ? '#fff' : color }} />
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono font-medium" style={{ color }}>
+                        {event.type}
+                    </span>
+                    <span className="text-[10px] text-[var(--text-muted)] ml-auto flex-shrink-0">
+                        {formatTimestamp(event.ts)}
+                    </span>
+                </div>
+                <div className="text-xs text-[var(--text-muted)] truncate mt-0.5">
+                    {eventSummary(event)}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// ============================================
 // MAIN INSPECTOR PAGE
 // ============================================
 
@@ -400,12 +555,17 @@ export function InspectorPage() {
         sessionStats, fetchSessionStats,
         error,
         inspectorSessionId, clearInspectorSession,
+        branchSession,
     } = useAppStore();
 
     const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
     const [selectedEventId, setSelectedEventId] = useState<string | undefined>();
     const [activeFilter, setActiveFilter] = useState<FilterId>('all');
     const [searchQuery, setSearchQuery] = useState('');
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+    const [showFilters, setShowFilters] = useState(true);
+    const searchRef = useRef<HTMLInputElement>(null);
+    const lastKeyRef = useRef<string>('');
 
     useEffect(() => {
         fetchSessions();
@@ -427,6 +587,7 @@ export function InspectorPage() {
             setSelectedEventId(undefined);
             setActiveFilter('all');
             setSearchQuery('');
+            setCollapsedGroups(new Set());
         }
     }, [selectedSessionId, fetchEvents, fetchSessionStats]);
 
@@ -447,6 +608,16 @@ export function InspectorPage() {
         return true;
     });
 
+    // Group filtered events
+    const eventGroups = groupEvents(filteredEvents);
+
+    // Flatten visible events (respecting collapsed groups) for keyboard nav
+    const visibleEvents = eventGroups.flatMap(g =>
+        g.kind === 'single' || !collapsedGroups.has(g.id)
+            ? g.events
+            : [g.events[0]] // show first event as group header when collapsed
+    );
+
     // Count events per filter for badge numbers
     const filterCounts: Record<FilterId, number> = {
         all: events.length,
@@ -456,7 +627,28 @@ export function InspectorPage() {
         errors: events.filter(e => e.type.includes('error') || e.type.includes('denied')).length,
     };
 
-    const handleExport = () => {
+    const toggleGroup = (groupId: string) => {
+        setCollapsedGroups(prev => {
+            const next = new Set(prev);
+            if (next.has(groupId)) next.delete(groupId);
+            else next.add(groupId);
+            return next;
+        });
+    };
+
+    const downloadFile = (content: string, filename: string, mime: string) => {
+        const blob = new Blob([content], { type: mime });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
+    const fileSlug = selectedSession?.title?.replace(/\s+/g, '-') || selectedSessionId || 'export';
+
+    const handleExportJSON = () => {
         const exportData = {
             export_version: 1,
             exported_at: new Date().toISOString(),
@@ -464,34 +656,151 @@ export function InspectorPage() {
             events,
             stats: sessionStats,
         };
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `inspector-${selectedSession?.title?.replace(/\s+/g, '-') || selectedSessionId || 'export'}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
+        downloadFile(JSON.stringify(exportData, null, 2), `inspector-${fileSlug}.json`, 'application/json');
     };
 
-    // Keyboard navigation
+    const handleExportMarkdown = () => {
+        const lines: string[] = [];
+        lines.push(`# Session: ${selectedSession?.title || 'Untitled'}`);
+        lines.push(`Agent: ${selectedSession?.agentName || '?'} (${selectedSession?.agentModel || '?'})`);
+        lines.push(`Date: ${selectedSession ? new Date(selectedSession.createdAt).toLocaleString() : '?'}`);
+        if (sessionStats) {
+            lines.push(`Tokens: ${sessionStats.totalInputTokens} in / ${sessionStats.totalOutputTokens} out | Cost: $${sessionStats.totalCostUsd.toFixed(4)} | Events: ${sessionStats.totalEvents}`);
+        }
+        lines.push('', '---', '');
+
+        for (const ev of events) {
+            const p = ev.payload;
+            switch (ev.type) {
+                case 'message.user':
+                    lines.push(`**User**: ${p.content || ''}`, '');
+                    break;
+                case 'message.assistant':
+                    lines.push(`**Assistant**: ${p.content || ''}`, '');
+                    break;
+                case 'tool.requested':
+                    lines.push(`> Tool requested: \`${p.tool || p.command || '?'}\``);
+                    if (p.input) lines.push(`> Input: \`${typeof p.input === 'string' ? p.input : JSON.stringify(p.input)}\``);
+                    lines.push('');
+                    break;
+                case 'tool.completed':
+                    lines.push(`> Tool completed: \`${p.tool || p.command || '?'}\``);
+                    if (p.output) {
+                        const out = typeof p.output === 'string' ? p.output : JSON.stringify(p.output);
+                        lines.push(`> Output: ${out.length > 200 ? out.slice(0, 200) + '...' : out}`);
+                    }
+                    if (p.duration_ms) lines.push(`> Duration: ${formatDuration(p.duration_ms as number)}`);
+                    lines.push('');
+                    break;
+                case 'llm.response.completed':
+                    lines.push(`> LLM: ${p.model || '?'} — ${formatTokens((p.input_tokens as number) || 0)} in / ${formatTokens((p.output_tokens as number) || 0)} out — ${formatDuration((p.duration_ms as number) || 0)}`, '');
+                    break;
+                case 'llm.response.error':
+                    lines.push(`> **LLM Error**: ${p.error || 'Unknown'}`, '');
+                    break;
+            }
+        }
+        downloadFile(lines.join('\n'), `inspector-${fileSlug}.md`, 'text/markdown');
+    };
+
+    // Branch from inspector
+    const handleBranch = useCallback(async (seq: number) => {
+        if (!selectedSessionId) return;
+        try {
+            const newSession = await branchSession(selectedSessionId, seq);
+            // Navigate to the new branch in inspector
+            setSelectedSessionId(newSession.id);
+        } catch {
+            // Error handled by store (toast)
+        }
+    }, [selectedSessionId, branchSession]);
+
+    // Keyboard navigation — extended shortcuts
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            // Don't handle if typing in an input
+            const tag = (e.target as HTMLElement)?.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+                // Only handle Escape to blur search
+                if (e.key === 'Escape') {
+                    (e.target as HTMLElement).blur();
+                    e.preventDefault();
+                }
+                return;
+            }
+
+            // Cmd+F: focus search
+            if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+                e.preventDefault();
+                searchRef.current?.focus();
+                return;
+            }
+
+            // Cmd+E: export JSON
+            if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+                e.preventDefault();
+                if (events.length > 0) handleExportJSON();
+                return;
+            }
+
+            // F: toggle filters
+            if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
+                e.preventDefault();
+                setShowFilters(v => !v);
+                return;
+            }
+
+            // G+G: jump to first event
+            if (e.key === 'g' && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
+                if (lastKeyRef.current === 'g') {
+                    e.preventDefault();
+                    if (filteredEvents.length) setSelectedEventId(filteredEvents[0].eventId);
+                    lastKeyRef.current = '';
+                    return;
+                }
+                lastKeyRef.current = 'g';
+                setTimeout(() => { lastKeyRef.current = ''; }, 500);
+                return;
+            }
+
+            // Shift+G: jump to last event
+            if (e.key === 'G' || (e.key === 'g' && e.shiftKey)) {
+                e.preventDefault();
+                if (filteredEvents.length) setSelectedEventId(filteredEvents[filteredEvents.length - 1].eventId);
+                return;
+            }
+
+            // [ and ]: collapse/expand all groups
+            if (e.key === '[') {
+                e.preventDefault();
+                setCollapsedGroups(new Set(eventGroups.filter(g => g.kind !== 'single').map(g => g.id)));
+                return;
+            }
+            if (e.key === ']') {
+                e.preventDefault();
+                setCollapsedGroups(new Set());
+                return;
+            }
+
             if (!filteredEvents.length) return;
-            const currentIndex = filteredEvents.findIndex(ev => ev.eventId === selectedEventId);
+            const currentIndex = visibleEvents.findIndex(ev => ev.eventId === selectedEventId);
 
             if (e.key === 'ArrowDown' || e.key === 'j') {
                 e.preventDefault();
-                const next = Math.min(currentIndex + 1, filteredEvents.length - 1);
-                setSelectedEventId(filteredEvents[next]?.eventId);
+                const next = Math.min(currentIndex + 1, visibleEvents.length - 1);
+                setSelectedEventId(visibleEvents[next]?.eventId);
             } else if (e.key === 'ArrowUp' || e.key === 'k') {
                 e.preventDefault();
                 const prev = Math.max(currentIndex - 1, 0);
-                setSelectedEventId(filteredEvents[prev]?.eventId);
+                setSelectedEventId(visibleEvents[prev]?.eventId);
+            } else if (e.key === 'Enter') {
+                // Enter: select current event (already selected, but ensure detail panel shows)
+                e.preventDefault();
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [filteredEvents, selectedEventId]);
+    }, [filteredEvents, visibleEvents, selectedEventId, events.length, eventGroups]);
 
     return (
         <div className="animate-fade-in h-full flex flex-col">
@@ -517,12 +826,21 @@ export function InspectorPage() {
                     </select>
                     <button
                         className="btn btn-secondary"
-                        onClick={handleExport}
+                        onClick={handleExportJSON}
                         disabled={events.length === 0}
-                        title="Export session as JSON"
+                        title="Export session as JSON (Cmd+E)"
                     >
                         <Download className="w-4 h-4" />
-                        Export
+                        JSON
+                    </button>
+                    <button
+                        className="btn btn-secondary"
+                        onClick={handleExportMarkdown}
+                        disabled={events.length === 0}
+                        title="Export session as Markdown"
+                    >
+                        <FileText className="w-4 h-4" />
+                        Markdown
                     </button>
                 </div>
             </div>
@@ -554,8 +872,8 @@ export function InspectorPage() {
                         </span>
                     </div>
 
-                    {/* Filter chips */}
-                    {events.length > 0 && (
+                    {/* Filter chips (toggle with F key) */}
+                    {events.length > 0 && showFilters && (
                         <div className="flex gap-1 p-2 border-b border-[var(--border-subtle)]">
                             {FILTERS.map(f => (
                                 <button
@@ -581,9 +899,10 @@ export function InspectorPage() {
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-muted)]" />
                             <input
+                                ref={searchRef}
                                 type="text"
                                 className="input w-full pl-8 text-xs"
-                                placeholder="Search events..."
+                                placeholder="Search events... (Cmd+F)"
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
                             />
@@ -612,7 +931,7 @@ export function InspectorPage() {
                             </div>
                         )}
 
-                        {/* Timeline entries with connecting line */}
+                        {/* Timeline entries with connecting line + grouping */}
                         <div className="relative px-3 py-2">
                             {/* Vertical connecting line */}
                             {filteredEvents.length > 1 && (
@@ -621,50 +940,58 @@ export function InspectorPage() {
                                 />
                             )}
 
-                            {filteredEvents.map((event) => {
-                                const category = getEventCategory(event.type);
-                                const color = getEventColor(event.type);
-                                const Icon = categoryIcons[category];
-                                const isSelected = selectedEventId === event.eventId;
+                            {eventGroups.map((group) => {
+                                if (group.kind === 'single') {
+                                    return <TimelineEvent
+                                        key={group.id}
+                                        event={group.events[0]}
+                                        isSelected={selectedEventId === group.events[0].eventId}
+                                        onSelect={setSelectedEventId}
+                                    />;
+                                }
+
+                                // Group rendering
+                                const isCollapsed = collapsedGroups.has(group.id);
+                                const groupColor = group.kind === 'tool-group' ? '#EAB308' : '#A855F7';
+                                const GroupIcon = group.kind === 'tool-group' ? Wrench : Brain;
 
                                 return (
-                                    <div
-                                        key={event.eventId}
-                                        className={`relative flex gap-3 py-2 px-2 rounded-lg cursor-pointer transition-all ${
-                                            isSelected
-                                                ? 'bg-[var(--accent-glow)]'
-                                                : 'hover:bg-[var(--bg-hover)]'
-                                        }`}
-                                        onClick={() => setSelectedEventId(event.eventId)}
-                                    >
-                                        {/* Dot with icon */}
+                                    <div key={group.id} className="relative">
+                                        {/* Group header */}
                                         <div
-                                            className="relative z-10 w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                                            style={{
-                                                background: isSelected ? color : `${color}33`,
-                                                border: `2px solid ${color}`,
-                                            }}
+                                            className="flex items-center gap-2 py-1.5 px-2 rounded-lg cursor-pointer hover:bg-[var(--bg-hover)] transition-all"
+                                            onClick={() => toggleGroup(group.id)}
                                         >
-                                            <Icon className="w-2.5 h-2.5" style={{ color: isSelected ? '#fff' : color }} />
-                                        </div>
-
-                                        {/* Content */}
-                                        <div className="flex-1 min-w-0">
-                                            <div className="flex items-center gap-2">
-                                                <span
-                                                    className="text-xs font-mono font-medium"
-                                                    style={{ color }}
-                                                >
-                                                    {event.type}
-                                                </span>
-                                                <span className="text-[10px] text-[var(--text-muted)] ml-auto flex-shrink-0">
-                                                    {formatTimestamp(event.ts)}
-                                                </span>
+                                            {isCollapsed
+                                                ? <ChevronRight className="w-3 h-3 text-[var(--text-muted)]" />
+                                                : <ChevronDown className="w-3 h-3 text-[var(--text-muted)]" />
+                                            }
+                                            <div
+                                                className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0"
+                                                style={{ background: `${groupColor}22`, border: `1px solid ${groupColor}55` }}
+                                            >
+                                                <GroupIcon className="w-2.5 h-2.5" style={{ color: groupColor }} />
                                             </div>
-                                            <div className="text-xs text-[var(--text-muted)] truncate mt-0.5">
-                                                {eventSummary(event)}
-                                            </div>
+                                            <span className="text-xs font-medium" style={{ color: groupColor }}>
+                                                {group.label}
+                                            </span>
+                                            <span className="text-[10px] text-[var(--text-muted)] ml-auto">
+                                                {group.events.length} events
+                                            </span>
                                         </div>
+                                        {/* Group children */}
+                                        {!isCollapsed && (
+                                            <div className="ml-3 pl-2 border-l-2" style={{ borderColor: `${groupColor}44` }}>
+                                                {group.events.map(event => (
+                                                    <TimelineEvent
+                                                        key={event.eventId}
+                                                        event={event}
+                                                        isSelected={selectedEventId === event.eventId}
+                                                        onSelect={setSelectedEventId}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}
@@ -683,7 +1010,7 @@ export function InspectorPage() {
                         )}
                     </div>
                     {selectedEvent ? (
-                        <EventDetail event={selectedEvent} />
+                        <EventDetail event={selectedEvent} sessionId={selectedSessionId} onBranch={handleBranch} />
                     ) : (
                         <div className="flex-1 flex items-center justify-center text-[var(--text-muted)]">
                             <div className="text-center">
@@ -692,9 +1019,10 @@ export function InspectorPage() {
                                 <p className="text-xs mt-1 max-w-[200px]">
                                     Click any event in the timeline to see its full details
                                 </p>
-                                <p className="text-xs mt-3 text-[var(--text-muted)]">
-                                    Tip: Use <kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[10px]">j</kbd> <kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[10px]">k</kbd> to navigate
-                                </p>
+                                <div className="text-xs mt-3 text-[var(--text-muted)] space-y-1">
+                                    <p><kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[10px]">j</kbd> <kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[10px]">k</kbd> navigate &nbsp; <kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[10px]">gg</kbd> first &nbsp; <kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[10px]">G</kbd> last</p>
+                                    <p><kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[10px]">Cmd+F</kbd> search &nbsp; <kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[10px]">f</kbd> filters &nbsp; <kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[10px]">[</kbd> <kbd className="px-1 py-0.5 rounded bg-[var(--bg-tertiary)] text-[10px]">]</kbd> groups</p>
+                                </div>
                             </div>
                         </div>
                     )}

@@ -37,7 +37,7 @@
 | Sidecar error events | `event-system.md` | DONE |
 | Onboarding / first-run UX | `ui-design.md` | DONE |
 | Session branching | `data-model.md` | DONE |
-| Inspector improvements | `agent-inspector.md` | Backlog |
+| Inspector improvements | `agent-inspector.md` | DONE |
 
 ---
 
@@ -47,7 +47,7 @@
 2. ~~Sidecar error events~~ — DONE (30cd467) — `event-system.md` — emit `agent.error` / `system.error` for LLM-level crashes (only `tool.error` exists today)
 3. ~~Onboarding / first-run UX~~ — DONE (b786c8b) — `ui-design.md` — 3-step wizard: connect provider → pick agent template → success
 4. ~~Session branching~~ — DONE — `data-model.md`
-5. Inspector improvements (replay, better detail panels) — `agent-inspector.md`
+5. ~~Inspector improvements~~ — DONE (pending commit) — `agent-inspector.md` — event grouping, action buttons, markdown export, keyboard shortcuts
 6. Phase 3: Node editor architecture — `product-vision.md`
 
 ---
@@ -58,7 +58,7 @@
 
 **Phase 1** (COMPLETE): SQLite + CRUD (d3684bf) → chat sessions verified w/ Gemini → Inspector flagship (3285434) → MCP tool system (827e514) → event bridge + cost calc (ed629cf) → runs + DB wipe (ac9803d).
 
-**Phase 2** (IN PROGRESS): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (pending commit).
+**Phase 2** (COMPLETE): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (5778124). Inspector improvements (pending commit).
 
 Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling across all IPC calls.
 
@@ -94,14 +94,14 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 **Date**: 2026-02-15 (session 9, continued)
 **What happened**:
 - Session branching (P2): Full 3-layer implementation (d3f22d9)
-- Gemini 3 Pro design review via Antigravity — 6 findings, all fixed:
-  1. Sidecar context loss: Rust now sends full history to sidecar on every /chat call
-  2. Transaction safety: branch_session uses conn.transaction() + tx.commit()
-  3. Token/cost counting: accumulated during message copy loop
-  4. Parent deletion orphans: V4 migration adds SET NULL trigger
-  5. Missing idx_sessions_parent: added in V4 migration
-  6. Branch title nesting: strip_prefix prevents "Branch of Branch of..."
-- Schema now at V4, cargo check + tsc --noEmit pass clean
+- Gemini 3 Pro design review via Antigravity — 6 findings, all fixed (5778124)
+- Inspector improvements (P2):
+  - Event grouping: tool calls + LLM request/response grouped with collapsible UI
+  - Action buttons: "Branch from here" + "Retry from here" (error events) in detail panel
+  - Markdown export: human-readable conversation transcript alongside JSON export
+  - Extended keyboard shortcuts: Cmd+F (search), Cmd+E (export), gg/G (jump), f (filters), [/] (groups)
+  - Extracted reusable TimelineEvent component for flat + grouped rendering
+- Phase 2 is now COMPLETE. All tasks done.
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -116,5 +116,5 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 - Session 9: Session branching (d3f22d9) + review fixes (pending commit)
 
 **Next session should**:
-1. Inspector improvements — `agent-inspector.md`
-2. Phase 3: Node editor architecture
+1. Phase 3: Node editor architecture — `product-vision.md`
+2. CONTRIBUTING.md for open-source launch

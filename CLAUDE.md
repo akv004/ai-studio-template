@@ -73,6 +73,7 @@ This is a spec-driven, multi-session project. Every session follows this:
 | User scenarios, demo script | `use-cases.md` |
 | Phase plan, task ordering | `phase-plan.md` |
 | Product direction, positioning | `product-vision.md` |
+| Node editor, visual pipelines, workflows | `node-editor.md` |
 
 ## Phase Plan (from `docs/specs/phase-plan.md`)
 
@@ -81,7 +82,7 @@ This is a spec-driven, multi-session project. Every session follows this:
 | **0** | Foundation | Restructure to 5 pillars, remove old modules, update types |
 | **1** | Core working product | SQLite + events + agent CRUD + chat sessions + basic inspector + MCP |
 | **2** | Power features | Replay, branching, headless runs, cost breakdown, export |
-| **3** | Open-source launch | Plugin system, templates, installers, community |
+| **3** | Open-source launch | Node editor, plugin system, templates, installers, community |
 
 **Phase 1 success = demo**: Create agent → chat with it → see tools execute → inspect session with events & cost.
 

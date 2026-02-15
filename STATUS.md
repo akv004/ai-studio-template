@@ -13,42 +13,46 @@
 | 4 | api-contracts.md | P0 | 1 | DONE | All IPC commands implemented |
 | 5 | agent-inspector.md | P0 | 1 | DONE | Timeline, detail, stats, filters, export |
 | 6 | mcp-integration.md | P1 | 1 | DONE | Registry, tool calling, MCP client |
-| 7 | ui-design.md | P1 | 2 | IN PROGRESS | Polish pass — error handling, UX |
+| 7 | ui-design.md | P1 | 2 | DONE | Polish pass — error handling, UX |
 | 8 | hybrid-intelligence.md | P1 | 3 | PLANNED | Smart model routing, budget controls |
 | 9 | phase-plan.md | — | — | REFERENCE | Implementation roadmap |
 | 10 | use-cases.md | — | — | REFERENCE | Demo script, user scenarios |
 | 11 | product-vision.md | — | — | REFERENCE | North star, positioning |
+| 12 | node-editor.md | P0 | 3 | IN PROGRESS | Visual pipeline builder — the 10k-star feature |
 
 **Status key**: DONE | IN PROGRESS | PLANNED | BLOCKED | REFERENCE (non-implementable)
 
 ---
 
-## Current Phase: 2 (Polish + Power Features)
+## Current Phase: 3 (Ecosystem + Node Editor)
 
-**Goal**: Polish UX, error handling, runs, session branching. Prep for open-source launch.
-**Specs in scope**: `ui-design.md` (polish pass)
+**Goal**: Node editor (flagship Phase 3 feature), plugin system, templates, open-source launch prep.
+**Specs in scope**: `node-editor.md` (primary), `hybrid-intelligence.md`, `phase-plan.md` (3A-3C)
 
 | Task | Spec | Status |
 |------|------|--------|
-| Runs execution | `api-contracts.md` | DONE |
-| DB wipe command | — | DONE |
-| Error handling polish | `ui-design.md` | DONE |
-| Agents schema alignment | `data-model.md` | DONE |
-| Sidecar error events | `event-system.md` | DONE |
-| Onboarding / first-run UX | `ui-design.md` | DONE |
-| Session branching | `data-model.md` | DONE |
-| Inspector improvements | `agent-inspector.md` | DONE |
+| Node editor architecture spec | `node-editor.md` | DONE |
+| CONTRIBUTING.md | — | DONE |
+| Node editor foundation (3A) | `node-editor.md` | TODO |
+| Node editor execution (3B) | `node-editor.md` | TODO |
+| Node editor polish (3C) | `node-editor.md` | TODO |
+| Hybrid intelligence routing | `hybrid-intelligence.md` | TODO |
+| Plugin system | `phase-plan.md` | TODO |
+| Community templates | `phase-plan.md` | TODO |
+| One-click installers | `phase-plan.md` | TODO |
 
 ---
 
 ## Backlog (work top-down)
 
-1. ~~Agents schema alignment~~ — DONE (8d370f0)
-2. ~~Sidecar error events~~ — DONE (30cd467) — `event-system.md` — emit `agent.error` / `system.error` for LLM-level crashes (only `tool.error` exists today)
-3. ~~Onboarding / first-run UX~~ — DONE (b786c8b) — `ui-design.md` — 3-step wizard: connect provider → pick agent template → success
-4. ~~Session branching~~ — DONE — `data-model.md`
-5. ~~Inspector improvements~~ — DONE (pending commit) — `agent-inspector.md` — event grouping, action buttons, markdown export, keyboard shortcuts
-6. Phase 3: Node editor architecture — `product-vision.md`
+1. **Node editor foundation (3A)** — `node-editor.md` — Install React Flow, schema v4, workflow CRUD, canvas, node palette, custom node components, save/load
+2. **Node editor execution (3B)** — `node-editor.md` — DAG walker in Rust, LLM/tool/router node execution, live node states, data preview
+3. **Node editor polish (3C)** — `node-editor.md` — Templates, Inspector integration, agent↔workflow linking, subworkflows, batch runs
+4. Hybrid intelligence routing — `hybrid-intelligence.md` — Smart model router, budget controls, savings tracking
+5. Plugin system — `phase-plan.md` — Plugin manifest, loader, permissions, UI panels
+6. Community templates — `phase-plan.md` — Bundled templates, import/export, gallery
+7. One-click installers — `phase-plan.md` — DMG, MSI, AppImage via Tauri bundler
+8. README update — Update roadmap status, add node editor screenshots
 
 ---
 
@@ -58,9 +62,11 @@
 
 **Phase 1** (COMPLETE): SQLite + CRUD (d3684bf) → chat sessions verified w/ Gemini → Inspector flagship (3285434) → MCP tool system (827e514) → event bridge + cost calc (ed629cf) → runs + DB wipe (ac9803d).
 
-**Phase 2** (COMPLETE): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (5778124). Inspector improvements (pending commit).
+**Phase 2** (COMPLETE): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (5778124). Inspector improvements (0a5895c).
 
-Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling across all IPC calls.
+**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec (this session).
+
+Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav/grouping/actions), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling, onboarding wizard, session branching, peer review workflow.
 
 ---
 
@@ -77,6 +83,7 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 | 2026-02-08 | Dogfooding validation: STATUS.md/CLAUDE.md workflow mirrors what AI Studio solves | We hit the exact pain points (lost session context, no visibility, no replay) that the product addresses. Proves the market need. Priority: get to Inspector ASAP — it's the core value prop. |
 | 2026-02-08 | **NODE EDITOR = core product direction** (Phase 3 build, but shapes all architecture) | "Unreal Blueprints for AI agents." Visual node graph where: LLM models, MCP tools, routers, approval gates, data transforms are all pluggable nodes. Users build AI pipelines by connecting nodes — no code. Live execution shows data flowing through nodes with cost/tokens per node. Inspiration: Maya Hypershade, UE Blueprints, Houdini, ComfyUI. This is the 10k-star feature. Current timeline Inspector evolves INTO this. Everything we build (MCP tools, hybrid routing, events) must be node-compatible. |
 | 2026-02-09 | Gemini 3 Pro design review — triaged | 3 items added to P2 backlog (schema alignment, sidecar error events, onboarding). 2 claims rejected: Command Palette already exists; INSERT OR IGNORE is correct. Hybrid intelligence & approval_rules already planned for P3. |
+| 2026-02-15 | **React Flow (@xyflow/react) for node editor** | 35K stars, 3M weekly downloads, MIT, native React 19 + TS + Tailwind, built-in JSON serialization, proven in AI workflows (Langflow, Firecrawl). Evaluated: Rete.js (smaller, styled-components conflict), Litegraph (archived), Butterfly (abandoned). React Flow is the only production-ready option. |
 
 ---
 
@@ -91,17 +98,21 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-15 (session 9, continued)
+**Date**: 2026-02-15 (session 10)
 **What happened**:
-- Session branching (P2): Full 3-layer implementation (d3f22d9)
-- Gemini 3 Pro design review via Antigravity — 6 findings, all fixed (5778124)
-- Inspector improvements (P2):
-  - Event grouping: tool calls + LLM request/response grouped with collapsible UI
-  - Action buttons: "Branch from here" + "Retry from here" (error events) in detail panel
-  - Markdown export: human-readable conversation transcript alongside JSON export
-  - Extended keyboard shortcuts: Cmd+F (search), Cmd+E (export), gg/G (jump), f (filters), [/] (groups)
-  - Extracted reusable TimelineEvent component for flat + grouped rendering
-- Phase 2 is now COMPLETE. All tasks done.
+- Created CONTRIBUTING.md for open-source launch prep
+- Wrote node editor architecture spec (`docs/specs/node-editor.md`):
+  - 8 node types: Input, Output, LLM, Tool, Router, Approval, Transform, Subworkflow
+  - React Flow (@xyflow/react) as the rendering library
+  - SQLite schema v4 with workflows table
+  - DAG execution engine in Rust
+  - New workflow.* event types
+  - 3-sub-phase implementation plan (3A foundation, 3B execution, 3C polish)
+  - 5 bundled templates (Code Review, Research, Data Pipeline, Multi-Model Compare, Safe Executor)
+  - Integration with Inspector, Agents, Runs, and Hybrid Intelligence
+- Updated product-vision.md spec index (12 specs now)
+- Updated CLAUDE.md spec mapping table
+- Moved project to Phase 3
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -113,8 +124,9 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 - Session 6: Error handling polish + toasts (e4a8567), design review triage
 - Session 7: Agents schema alignment (8d370f0) + sidecar error events (30cd467)
 - Session 8: Onboarding wizard (b786c8b)
-- Session 9: Session branching (d3f22d9) + review fixes (pending commit)
+- Session 9: Session branching (d3f22d9) + review fixes (5778124) + inspector improvements (0a5895c)
+- Session 10: CONTRIBUTING.md + node editor spec (Phase 3 start)
 
 **Next session should**:
-1. Phase 3: Node editor architecture — `product-vision.md`
-2. CONTRIBUTING.md for open-source launch
+1. Phase 3A: Start building node editor foundation — install React Flow, schema v4 migration, workflow CRUD, basic canvas
+2. Consider sending node-editor.md for peer review (Antigravity/Gemini) before implementation

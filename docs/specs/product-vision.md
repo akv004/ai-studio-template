@@ -145,7 +145,7 @@ These features are **not** part of the core product. They may return as plugins 
 | Vision / Video detection | Separate product domain. Plugin candidate. |
 | Audio processing | Separate product domain. Plugin candidate. |
 | Training / Fine-tuning | Different user workflow entirely. |
-| Visual workflow graph builder | High effort, not needed for core agent UX. Revisit in Phase 3+. |
+| ~~Visual workflow graph builder~~ | **Promoted to Phase 3** — see `node-editor.md`. React Flow + DAG execution engine. |
 | Channel integrations (Telegram, Discord, Slack) | Keep the sidecar code, but not in the desktop UI. Separate deployment. |
 | Teams / Collaboration | Requires account system, cloud sync. Future product expansion. |
 | Plugin marketplace | Design for it, don't build it yet. |
@@ -254,3 +254,4 @@ Detailed phase plan will be in a separate spec (`phase-plan.md`). High-level:
 | 9 | `ui-design.md` | Visual design, wireframes, first-run experience |
 | 10 | `use-cases.md` | Real-world scenarios, README hooks, demo script |
 | 11 | `phase-plan.md` | Phase 0-3 task breakdown and build order |
+| 12 | `node-editor.md` | Visual pipeline builder — the 10k-star feature (Phase 3) |

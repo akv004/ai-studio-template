@@ -35,7 +35,7 @@
 | Error handling polish | `ui-design.md` | DONE |
 | Agents schema alignment | `data-model.md` | DONE |
 | Sidecar error events | `event-system.md` | DONE |
-| Onboarding / first-run UX | `ui-design.md` | Backlog |
+| Onboarding / first-run UX | `ui-design.md` | DONE |
 | Session branching | `data-model.md` | Backlog |
 | Inspector improvements | `agent-inspector.md` | Backlog |
 
@@ -45,7 +45,7 @@
 
 1. ~~Agents schema alignment~~ — DONE (8d370f0)
 2. ~~Sidecar error events~~ — DONE (30cd467) — `event-system.md` — emit `agent.error` / `system.error` for LLM-level crashes (only `tool.error` exists today)
-3. Onboarding / first-run UX — `ui-design.md` — welcome modal or guided empty state when no agents exist (spec has 3-step wizard)
+3. ~~Onboarding / first-run UX~~ — DONE (b786c8b) — `ui-design.md` — 3-step wizard: connect provider → pick agent template → success
 4. Session branching — `data-model.md`
 5. Inspector improvements (replay, better detail panels) — `agent-inspector.md`
 6. Phase 3: Node editor architecture — `product-vision.md`
@@ -58,7 +58,7 @@
 
 **Phase 1** (COMPLETE): SQLite + CRUD (d3684bf) → chat sessions verified w/ Gemini → Inspector flagship (3285434) → MCP tool system (827e514) → event bridge + cost calc (ed629cf) → runs + DB wipe (ac9803d).
 
-**Phase 2** (IN PROGRESS): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467).
+**Phase 2** (IN PROGRESS): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b).
 
 Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling across all IPC calls.
 
@@ -91,17 +91,14 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-15 (session 7)
+**Date**: 2026-02-15 (session 8)
 **What happened**:
-- Agents schema alignment (P2 #1): DB migration v3 — tools_mode/mcp_servers/approval_rules columns on agents, global approval_rules table
-- All CRUD updated across Rust, TypeScript types, Zustand store
-- AgentsPage UI: tools mode dropdown (sandboxed/restricted/full), MCP servers checkboxes, detail view badges
-- send_message now respects tools_mode (sandboxed = tools_enabled: false)
-- Approval rules CRUD backend ready (4 commands registered, no UI yet — P3)
-- Sidecar error events: llm.response.error emitted when provider.chat() throws, agent.error for endpoint-level failures
-- Simple chat path now emits llm.request.started + duration_ms in llm.response.completed
-- Rust transport failures emit agent.error (distinct from sidecar's llm.response.error)
-- Build verified: cargo check + tsc + Python syntax all clean
+- Onboarding wizard (P2): WelcomePage.tsx — 3-step first-run flow
+  - Step 1: Provider picker (Google/Anthropic/Azure/Local) + API key test
+  - Step 2: Agent template picker (4 templates) + auto-create agent
+  - Step 3: Success screen → "Start Your First Session"
+- First-run detection in App.tsx: agents.length === 0 && !onboarding.completed
+- Build verified: tsc --noEmit clean
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -112,8 +109,8 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 - Session 5: Runs execution + DB wipe (ac9803d)
 - Session 6: Error handling polish + toasts (e4a8567), design review triage
 - Session 7: Agents schema alignment (8d370f0) + sidecar error events (30cd467)
+- Session 8: Onboarding wizard (b786c8b)
 
 **Next session should**:
-1. Onboarding / first-run UX — welcome state or guided flow
-3. Session branching — `data-model.md`
-4. Inspector improvements — `agent-inspector.md`
+1. Session branching — `data-model.md`
+2. Inspector improvements — `agent-inspector.md`

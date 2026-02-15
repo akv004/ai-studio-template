@@ -1,4 +1,4 @@
-import { Plus, MessageSquare, Send, Loader2, Trash2, Search } from 'lucide-react';
+import { Plus, MessageSquare, Send, Loader2, Trash2, Search, GitBranch } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../state/store';
 
@@ -9,7 +9,7 @@ import { useAppStore } from '../../state/store';
  */
 export function SessionsPage() {
     const {
-        sessions, sessionsLoading, fetchSessions, createSession, deleteSession,
+        sessions, sessionsLoading, fetchSessions, createSession, deleteSession, branchSession,
         agents, fetchAgents,
         messages, messagesLoading, fetchMessages, sendMessage, sending,
         error, openInspector,
@@ -75,6 +75,14 @@ export function SessionsPage() {
             if (selectedSessionId === id) {
                 setSelectedSessionId(sessions.find(s => s.id !== id)?.id);
             }
+        } catch { /* error handled by store */ }
+    };
+
+    const handleBranch = async (msgSeq: number) => {
+        if (!selectedSessionId) return;
+        try {
+            const branch = await branchSession(selectedSessionId, msgSeq);
+            setSelectedSessionId(branch.id);
         } catch { /* error handled by store */ }
     };
 
@@ -146,7 +154,14 @@ export function SessionsPage() {
                                 onClick={() => setSelectedSessionId(session.id)}
                             >
                                 <div className="flex items-center justify-between">
-                                    <div className="font-medium text-sm truncate flex-1">{session.title}</div>
+                                    <div className="font-medium text-sm truncate flex-1 flex items-center gap-1">
+                                        {session.parentSessionId && (
+                                            <span title="Branched session">
+                                                <GitBranch className="w-3 h-3 text-[var(--text-muted)] flex-shrink-0" />
+                                            </span>
+                                        )}
+                                        {session.title}
+                                    </div>
                                     <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
                                         <button
                                             className="p-1 hover:text-[var(--accent-primary)] transition-colors"
@@ -203,8 +218,8 @@ export function SessionsPage() {
                             </div>
                         )}
                         {messages.map((msg) => (
-                            <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                <div className={`max-w-[80%] p-3 rounded-lg ${
+                            <div key={msg.id} className={`group/msg flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[80%] p-3 rounded-lg relative ${
                                     msg.role === 'user'
                                         ? 'bg-[var(--accent-primary)] text-white'
                                         : 'bg-[var(--bg-tertiary)]'
@@ -216,6 +231,13 @@ export function SessionsPage() {
                                         <span>{new Date(msg.createdAt).toLocaleTimeString()}</span>
                                         {msg.model && <span>&middot; {msg.model}</span>}
                                         {msg.durationMs != null && <span>&middot; {(msg.durationMs / 1000).toFixed(1)}s</span>}
+                                        <button
+                                            className="opacity-0 group-hover/msg:opacity-100 ml-auto p-0.5 rounded hover:bg-white/10 transition-all"
+                                            onClick={() => handleBranch(msg.seq)}
+                                            title="Branch from here"
+                                        >
+                                            <GitBranch className="w-3 h-3" />
+                                        </button>
                                     </div>
                                 </div>
                             </div>

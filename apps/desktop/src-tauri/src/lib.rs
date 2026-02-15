@@ -59,6 +59,7 @@ pub fn run() {
             // Session CRUD
             list_sessions,
             create_session,
+            branch_session,
             get_session_messages,
             delete_session,
             // Chat

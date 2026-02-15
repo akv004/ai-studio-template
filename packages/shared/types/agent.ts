@@ -71,6 +71,8 @@ export interface Session {
     endedAt: string | null;
     agentName: string | null;
     agentModel: string | null;
+    parentSessionId: string | null;
+    branchFromSeq: number | null;
 }
 
 /**

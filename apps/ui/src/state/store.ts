@@ -61,6 +61,7 @@ interface AppState {
     sessionsLoading: boolean;
     fetchSessions: () => Promise<void>;
     createSession: (agentId: string, title?: string) => Promise<Session>;
+    branchSession: (sessionId: string, seq: number) => Promise<Session>;
     deleteSession: (id: string) => Promise<void>;
 
     // Messages (for active session)
@@ -213,6 +214,19 @@ export const useAppStore = create<AppState>((set, get) => ({
         } catch (e) {
             const msg = `Failed to create session: ${e}`;
             set({ error: msg });
+            throw e;
+        }
+    },
+    branchSession: async (sessionId, seq) => {
+        try {
+            const session = await invoke<Session>('branch_session', { sessionId, seq });
+            set((s) => ({ sessions: [session, ...s.sessions] }));
+            get().addToast('Branch created', 'success');
+            return session;
+        } catch (e) {
+            const msg = `Failed to branch session: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
             throw e;
         }
     },

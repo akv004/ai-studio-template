@@ -351,6 +351,8 @@ pub struct Session {
     pub ended_at: Option<String>,
     pub agent_name: Option<String>,
     pub agent_model: Option<String>,
+    pub parent_session_id: Option<String>,
+    pub branch_from_seq: Option<i64>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -382,7 +384,8 @@ pub fn list_sessions(db: tauri::State<'_, Database>) -> Result<Vec<Session>, Str
             "SELECT s.id, s.agent_id, s.title, s.status, s.message_count,
                     s.event_count, s.total_input_tokens, s.total_output_tokens,
                     s.total_cost_usd, s.created_at, s.updated_at, s.ended_at,
-                    a.name, a.model
+                    a.name, a.model,
+                    s.parent_session_id, s.branch_from_seq
              FROM sessions s
              LEFT JOIN agents a ON a.id = s.agent_id
              WHERE s.status != 'archived'
@@ -407,6 +410,8 @@ pub fn list_sessions(db: tauri::State<'_, Database>) -> Result<Vec<Session>, Str
                 ended_at: row.get(11)?,
                 agent_name: row.get(12)?,
                 agent_model: row.get(13)?,
+                parent_session_id: row.get(14)?,
+                branch_from_seq: row.get(15)?,
             })
         })
         .map_err(|e| e.to_string())?
@@ -458,6 +463,8 @@ pub fn create_session(
         ended_at: None,
         agent_name: Some(agent_name),
         agent_model: Some(agent_model),
+        parent_session_id: None,
+        branch_from_seq: None,
     })
 }
 
@@ -498,6 +505,106 @@ pub fn get_session_messages(
         .map_err(|e| e.to_string())?;
 
     Ok(messages)
+}
+
+#[tauri::command]
+pub fn branch_session(
+    db: tauri::State<'_, Database>,
+    session_id: String,
+    seq: i64,
+) -> Result<Session, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    // 1. Look up parent session
+    let (agent_id, parent_title): (String, String) = conn
+        .query_row(
+            "SELECT agent_id, title FROM sessions WHERE id = ?1",
+            params![session_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Parent session not found".to_string())?;
+
+    // 2. Look up agent
+    let (agent_name, agent_model): (String, String) = conn
+        .query_row(
+            "SELECT name, model FROM agents WHERE id = ?1",
+            params![agent_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .map_err(|_| "Agent not found".to_string())?;
+
+    // 3. Create new session
+    let new_id = Uuid::new_v4().to_string();
+    let now = now_iso();
+    let branch_title = format!("Branch of {parent_title}");
+
+    conn.execute(
+        "INSERT INTO sessions (id, agent_id, title, status, parent_session_id, branch_from_seq, created_at, updated_at)
+         VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?6, ?7)",
+        params![new_id, agent_id, branch_title, session_id, seq, now, now],
+    )
+    .map_err(|e| format!("Failed to create branch session: {e}"))?;
+
+    // 4. Copy messages where seq <= branch point
+    let mut stmt = conn
+        .prepare(
+            "SELECT seq, role, content, model, provider, input_tokens, output_tokens,
+                    cost_usd, duration_ms, created_at
+             FROM messages WHERE session_id = ?1 AND seq <= ?2
+             ORDER BY seq ASC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let rows: Vec<(i64, String, String, Option<String>, Option<String>,
+                    Option<i64>, Option<i64>, Option<f64>, Option<i64>, String)> = stmt
+        .query_map(params![session_id, seq], |row| {
+            Ok((
+                row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?,
+                row.get(5)?, row.get(6)?, row.get(7)?, row.get(8)?, row.get(9)?,
+            ))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    let msg_count = rows.len() as i64;
+    for (m_seq, role, content, model, provider, in_tok, out_tok, cost, dur, created) in &rows {
+        let msg_id = Uuid::new_v4().to_string();
+        conn.execute(
+            "INSERT INTO messages (id, session_id, seq, role, content, model, provider,
+                                   input_tokens, output_tokens, cost_usd, duration_ms, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![msg_id, new_id, m_seq, role, content, model, provider,
+                    in_tok, out_tok, cost, dur, created],
+        )
+        .map_err(|e| format!("Failed to copy message: {e}"))?;
+    }
+
+    // 5. Update message_count on new session
+    conn.execute(
+        "UPDATE sessions SET message_count = ?1 WHERE id = ?2",
+        params![msg_count, new_id],
+    )
+    .map_err(|e| format!("Failed to update message count: {e}"))?;
+
+    Ok(Session {
+        id: new_id,
+        agent_id,
+        title: branch_title,
+        status: "active".to_string(),
+        message_count: msg_count,
+        event_count: 0,
+        total_input_tokens: 0,
+        total_output_tokens: 0,
+        total_cost_usd: 0.0,
+        created_at: now.clone(),
+        updated_at: now,
+        ended_at: None,
+        agent_name: Some(agent_name),
+        agent_model: Some(agent_model),
+        parent_session_id: Some(session_id),
+        branch_from_seq: Some(seq),
+    })
 }
 
 #[tauri::command]

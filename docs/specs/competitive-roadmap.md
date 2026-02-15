@@ -1,5 +1,7 @@
 # AI Studio: Competitive Roadmap
 
+> **Status**: LEGACY — Written during early planning. See `phase-plan.md` and `STATUS.md` for the current roadmap.
+
 > **Goal**: Beat OpenClaw by building what they CAN'T — a beautiful, visual AI workspace for professionals.
 
 ---

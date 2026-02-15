@@ -1,8 +1,8 @@
 # AI Studio — API Contracts
 
-> **Version**: 2.0
+> **Version**: 3.0
 > **Status**: Draft
-> **Depends on**: architecture.md, event-system.md, data-model.md, mcp-integration.md
+> **Depends on**: architecture.md, event-system.md, data-model.md, mcp-integration.md, node-editor.md
 
 ---
 
@@ -603,6 +603,96 @@ interface ApprovalRule {
   enabled?: boolean;
 }
 ```
+
+### Workflows (Phase 3A)
+
+#### `list_workflows`
+```typescript
+invoke<WorkflowSummary[]>('list_workflows')
+```
+Returns all non-archived workflows, ordered by `updated_at DESC`.
+
+**Response** (`WorkflowSummary`):
+```typescript
+{
+  id: string;
+  name: string;
+  description: string;
+  agentId: string | null;
+  nodeCount: number;         // Computed from graph_json
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+#### `get_workflow`
+```typescript
+invoke<Workflow>('get_workflow', { id: string })
+```
+Returns a single workflow with full graph data.
+
+**Response** (`Workflow`):
+```typescript
+{
+  id: string;
+  name: string;
+  description: string;
+  graphJson: string;          // React Flow serialized graph
+  variablesJson: string;      // Workflow-level variables
+  agentId: string | null;
+  isArchived: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+```
+
+#### `create_workflow`
+```typescript
+invoke<Workflow>('create_workflow', { request: CreateWorkflowRequest })
+```
+
+**Params** (`CreateWorkflowRequest`):
+```typescript
+{
+  name: string;
+  description?: string;
+  graphJson?: string;
+  variablesJson?: string;
+  agentId?: string;
+}
+```
+
+#### `update_workflow`
+```typescript
+invoke<Workflow>('update_workflow', { id: string, request: UpdateWorkflowRequest })
+```
+Partial update — only provided fields are modified. `updated_at` is always refreshed.
+
+**Params** (`UpdateWorkflowRequest`):
+```typescript
+{
+  name?: string;
+  description?: string;
+  graphJson?: string;
+  variablesJson?: string;
+  agentId?: string;
+}
+```
+
+#### `delete_workflow`
+```typescript
+invoke('delete_workflow', { id: string })
+```
+Soft delete — sets `is_archived = 1`. Archived workflows are excluded from `list_workflows`.
+
+#### `duplicate_workflow`
+```typescript
+invoke<Workflow>('duplicate_workflow', { id: string })
+```
+Creates a copy with name `"Copy of {original}"`. New UUID, new timestamps, copies `graph_json` and `variables_json`.
+
+---
 
 ### Error Format
 

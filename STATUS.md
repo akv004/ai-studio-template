@@ -10,7 +10,7 @@
 | 1 | architecture.md | P0 | 1 | DONE | 3-layer system, IPC boundary |
 | 2 | data-model.md | P0 | 1 | DONE | SQLite schema v2, WAL mode |
 | 3 | event-system.md | P0 | 1 | DONE | Event bus + WS bridge + cost calc |
-| 4 | api-contracts.md | P0 | 1 | DONE | All IPC commands implemented |
+| 4 | api-contracts.md | P0 | 1 | DONE | All IPC commands implemented (v3.0 — workflows added) |
 | 5 | agent-inspector.md | P0 | 1 | DONE | Timeline, detail, stats, filters, export |
 | 6 | mcp-integration.md | P1 | 1 | DONE | Registry, tool calling, MCP client |
 | 7 | ui-design.md | P1 | 2 | DONE | Polish pass — error handling, UX |
@@ -34,7 +34,7 @@
 | Node editor architecture spec | `node-editor.md` | DONE |
 | Node editor architecture review | `node-editor.md` | DONE |
 | CONTRIBUTING.md | — | DONE |
-| Node editor foundation (3A) | `node-editor.md` | TODO |
+| Node editor foundation (3A) | `node-editor.md` | DONE |
 | Node editor execution (3B) | `node-editor.md` | TODO |
 | Node editor polish (3C) | `node-editor.md` | TODO |
 | Hybrid intelligence routing | `hybrid-intelligence.md` | TODO |
@@ -65,7 +65,7 @@
 
 **Phase 2** (COMPLETE): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (5778124). Inspector improvements (0a5895c).
 
-**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B).
+**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d).
 
 Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav/grouping/actions), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling, onboarding wizard, session branching, peer review workflow.
 
@@ -87,6 +87,7 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 | 2026-02-15 | **React Flow (@xyflow/react) for node editor** | 35K stars, 3M weekly downloads, MIT, native React 19 + TS + Tailwind, built-in JSON serialization, proven in AI workflows (Langflow, Firecrawl). Evaluated: Rete.js (smaller, styled-components conflict), Litegraph (archived), Butterfly (abandoned). React Flow is the only production-ready option. |
 | 2026-02-15 | **Workflow execution uses `/chat/direct` (stateless)** | Gemini 3 Pro review caught that `/chat` (stateful) would cause split-brain bugs in DAG execution. Rust owns all context — builds message history per node. Sidecar is pure compute. Same class of bug as session branching context loss. |
 | 2026-02-15 | **Parallel branch execution via `tokio::join_all`** | Independent DAG branches run concurrently (default limit: 4). Sidecar needs matching `uvicorn --workers` count. |
+| 2026-02-15 | **ChatGPT Codex scan triaged** | 6 findings: 4 false positives (spec is consistent), 2 valid low-priority (competitive-roadmap.md marked legacy, workflow commands added to api-contracts.md v3.0). |
 
 ---
 
@@ -101,14 +102,18 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-15 (session 11)
+**Date**: 2026-02-15 (session 12)
 **What happened**:
-- Triaged Gemini 3 Pro node editor architecture review
-  - 4/5 items fixed in spec (stateless sidecar, parallelism, version clarification, subworkflow cycles)
-  - 1 item deferred to 3B (mock tests — comes with execution engine)
-  - Key fix: workflow execution mandates `/chat/direct` (stateless), Rust builds context per node
-  - Added parallel execution model: `tokio::join_all`, default concurrency 4
-  - Added subworkflow cycle detection to validation
+- **Phase 3A COMPLETE** — Node editor foundation built end-to-end:
+  - Schema v5 migration (workflows table) — `3e6c277`
+  - 6 Rust CRUD commands (list/get/create/update/delete/duplicate) — `3e6c277`
+  - TypeScript types + Zustand store (full workflow slice) — `3e6c277`
+  - React Flow installed (@xyflow/react) — `3e6c277`
+  - NodeEditorPage: 8 custom nodes, React Flow canvas, drag-and-drop palette, config panel, dark theme — `d2eb98d`
+  - Sidebar + keyboard shortcut (⌘5) + command palette integration
+- Triaged ChatGPT Codex scan (6 findings): 4 false positives, 2 valid low-priority fixes applied
+  - Marked `competitive-roadmap.md` as LEGACY
+  - Added workflow commands to `api-contracts.md` (bumped to v3.0)
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -123,7 +128,8 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 9: Session branching (d3f22d9) + review fixes (5778124) + inspector improvements (0a5895c)
 - Session 10: CONTRIBUTING.md + node editor spec (Phase 3 start)
 - Session 11: Node editor review triage (Gemini 3 Pro)
+- Session 12: Phase 3A foundation (3e6c277, d2eb98d) + Codex triage
 
 **Next session should**:
-1. Phase 3A: Start building node editor foundation — install React Flow, schema v4 migration, workflow CRUD, basic canvas
-2. Spec is now reviewed and fixed — ready to build
+1. Phase 3B: Node editor execution engine — DAG walker in Rust, LLM/tool node execution, live node states
+2. Or: Start hybrid intelligence routing if preferring breadth over depth

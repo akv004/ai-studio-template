@@ -581,7 +581,7 @@ CREATE TABLE workflows (
 );
 ```
 
-Migration: v4 (next after current v3).
+Migration: v5 (next after current v4 which added session branching fixes).
 
 ### Serialization Format
 

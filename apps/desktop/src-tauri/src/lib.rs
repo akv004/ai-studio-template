@@ -91,6 +91,13 @@ pub fn run() {
             create_approval_rule,
             update_approval_rule,
             delete_approval_rule,
+            // Workflows (Node Editor)
+            list_workflows,
+            get_workflow,
+            create_workflow,
+            update_workflow,
+            delete_workflow,
+            duplicate_workflow,
             // Sidecar
             sidecar_start,
             sidecar_stop,

@@ -78,6 +78,9 @@ impl Database {
         if version < 4 {
             self.migrate_v4(&conn)?;
         }
+        if version < 5 {
+            self.migrate_v5(&conn)?;
+        }
 
         Ok(())
     }
@@ -286,6 +289,33 @@ impl Database {
         ).map_err(|e| format!("Migration v4 failed: {e}"))?;
 
         println!("[db] Migrated to schema v4 (session branching fixes)");
+        Ok(())
+    }
+
+    /// V5: Workflows table for Node Editor
+    fn migrate_v5(&self, conn: &Connection) -> Result<(), String> {
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS workflows (
+                id             TEXT PRIMARY KEY,
+                name           TEXT NOT NULL,
+                description    TEXT NOT NULL DEFAULT '',
+                graph_json     TEXT NOT NULL,
+                variables_json TEXT NOT NULL DEFAULT '[]',
+                agent_id       TEXT REFERENCES agents(id) ON DELETE SET NULL,
+                is_archived    INTEGER NOT NULL DEFAULT 0,
+                created_at     TEXT NOT NULL,
+                updated_at     TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_workflows_agent ON workflows(agent_id);
+            CREATE INDEX IF NOT EXISTS idx_workflows_archived ON workflows(is_archived);
+            CREATE INDEX IF NOT EXISTS idx_workflows_updated ON workflows(updated_at DESC);
+
+            INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '5');
+            "
+        ).map_err(|e| format!("Migration v5 failed: {e}"))?;
+
+        println!("[db] Migrated to schema v5 (workflows table for Node Editor)");
         Ok(())
     }
 }

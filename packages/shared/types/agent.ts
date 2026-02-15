@@ -203,3 +203,46 @@ export interface UpdateApprovalRuleRequest {
     priority?: number;
     enabled?: boolean;
 }
+
+// ============================================
+// WORKFLOW TYPES (Node Editor)
+// ============================================
+
+export interface Workflow {
+    id: string;
+    name: string;
+    description: string;
+    graphJson: string;
+    variablesJson: string;
+    agentId: string | null;
+    isArchived: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface WorkflowSummary {
+    id: string;
+    name: string;
+    description: string;
+    agentId: string | null;
+    nodeCount: number;
+    isArchived: boolean;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface CreateWorkflowRequest {
+    name: string;
+    description?: string;
+    graphJson?: string;
+    variablesJson?: string;
+    agentId?: string;
+}
+
+export interface UpdateWorkflowRequest {
+    name?: string;
+    description?: string;
+    graphJson?: string;
+    variablesJson?: string;
+    agentId?: string | null;
+}

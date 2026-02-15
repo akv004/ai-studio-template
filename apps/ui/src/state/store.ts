@@ -6,6 +6,7 @@ import type {
     McpServer, CreateMcpServerRequest, UpdateMcpServerRequest,
     CreateRunRequest,
     ApprovalRule, CreateApprovalRuleRequest, UpdateApprovalRuleRequest,
+    Workflow, WorkflowSummary, CreateWorkflowRequest, UpdateWorkflowRequest,
 } from '@ai-studio/shared';
 
 // ============================================
@@ -18,6 +19,7 @@ export type ModuleId =
     | 'sessions'
     | 'runs'
     | 'inspector'
+    | 'workflows'
     | 'settings';
 
 export interface Toast {
@@ -28,7 +30,7 @@ export interface Toast {
 
 let toastCounter = 0;
 
-export type { Agent, Session, Run, Message };
+export type { Agent, Session, Run, Message, Workflow, WorkflowSummary };
 export type { StudioEvent, SessionStats };
 
 // Lazy-load Tauri invoke to work in both desktop and browser dev
@@ -114,6 +116,18 @@ interface AppState {
     createApprovalRule: (req: CreateApprovalRuleRequest) => Promise<ApprovalRule>;
     updateApprovalRule: (id: string, updates: UpdateApprovalRuleRequest) => Promise<void>;
     deleteApprovalRule: (id: string) => Promise<void>;
+
+    // Workflows (Node Editor)
+    workflows: WorkflowSummary[];
+    workflowsLoading: boolean;
+    selectedWorkflow: Workflow | null;
+    fetchWorkflows: () => Promise<void>;
+    fetchWorkflow: (id: string) => Promise<Workflow>;
+    createWorkflow: (req: CreateWorkflowRequest) => Promise<Workflow>;
+    updateWorkflow: (id: string, updates: UpdateWorkflowRequest) => Promise<Workflow>;
+    deleteWorkflow: (id: string) => Promise<void>;
+    duplicateWorkflow: (id: string) => Promise<Workflow>;
+    setSelectedWorkflow: (workflow: Workflow | null) => void;
 
     // Inspector navigation (set by Sessions "Inspect" button)
     inspectorSessionId: string | null;
@@ -357,7 +371,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             await invoke<void>('wipe_database');
             set({
                 agents: [], sessions: [], runs: [], messages: [], events: [],
-                mcpServers: [], settings: {}, sessionStats: null,
+                mcpServers: [], workflows: [], settings: {}, sessionStats: null,
+                selectedWorkflow: null,
             });
             get().addToast('Database wiped', 'success');
         } catch (e) {
@@ -485,6 +500,105 @@ export const useAppStore = create<AppState>((set, get) => ({
             get().addToast(msg, 'error');
         }
     },
+
+    // Workflows (Node Editor)
+    workflows: [],
+    workflowsLoading: false,
+    selectedWorkflow: null,
+    fetchWorkflows: async () => {
+        set({ workflowsLoading: true, error: null });
+        try {
+            const workflows = await invoke<WorkflowSummary[]>('list_workflows');
+            set({ workflows, workflowsLoading: false });
+        } catch (e) {
+            set({ workflowsLoading: false, error: `Failed to load workflows: ${e}` });
+        }
+    },
+    fetchWorkflow: async (id) => {
+        try {
+            const workflow = await invoke<Workflow>('get_workflow', { id });
+            set({ selectedWorkflow: workflow });
+            return workflow;
+        } catch (e) {
+            const msg = `Failed to load workflow: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
+    },
+    createWorkflow: async (req) => {
+        try {
+            const workflow = await invoke<Workflow>('create_workflow', { workflow: req });
+            set((s) => ({
+                workflows: [{
+                    id: workflow.id,
+                    name: workflow.name,
+                    description: workflow.description,
+                    agentId: workflow.agentId,
+                    nodeCount: 0,
+                    isArchived: false,
+                    createdAt: workflow.createdAt,
+                    updatedAt: workflow.updatedAt,
+                }, ...s.workflows],
+            }));
+            get().addToast('Workflow created', 'success');
+            return workflow;
+        } catch (e) {
+            const msg = `Failed to create workflow: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
+    },
+    updateWorkflow: async (id, updates) => {
+        try {
+            const workflow = await invoke<Workflow>('update_workflow', { id, updates });
+            set((s) => ({
+                selectedWorkflow: workflow,
+                workflows: s.workflows.map((w) => w.id === id ? {
+                    ...w,
+                    name: workflow.name,
+                    description: workflow.description,
+                    agentId: workflow.agentId,
+                    updatedAt: workflow.updatedAt,
+                } : w),
+            }));
+            return workflow;
+        } catch (e) {
+            const msg = `Failed to update workflow: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
+    },
+    deleteWorkflow: async (id) => {
+        try {
+            await invoke<void>('delete_workflow', { id });
+            set((s) => ({
+                workflows: s.workflows.filter((w) => w.id !== id),
+                selectedWorkflow: s.selectedWorkflow?.id === id ? null : s.selectedWorkflow,
+            }));
+            get().addToast('Workflow deleted', 'success');
+        } catch (e) {
+            const msg = `Failed to delete workflow: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
+    },
+    duplicateWorkflow: async (id) => {
+        try {
+            const workflow = await invoke<Workflow>('duplicate_workflow', { id });
+            get().fetchWorkflows();
+            get().addToast('Workflow duplicated', 'success');
+            return workflow;
+        } catch (e) {
+            const msg = `Failed to duplicate workflow: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
+    },
+    setSelectedWorkflow: (workflow) => set({ selectedWorkflow: workflow }),
 
     // System Info
     systemInfo: null,

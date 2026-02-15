@@ -513,10 +513,11 @@ pub fn branch_session(
     session_id: String,
     seq: i64,
 ) -> Result<Session, String> {
-    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let mut conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let tx = conn.transaction().map_err(|e| format!("Failed to start transaction: {e}"))?;
 
     // 1. Look up parent session
-    let (agent_id, parent_title): (String, String) = conn
+    let (agent_id, parent_title): (String, String) = tx
         .query_row(
             "SELECT agent_id, title FROM sessions WHERE id = ?1",
             params![session_id],
@@ -525,7 +526,7 @@ pub fn branch_session(
         .map_err(|_| "Parent session not found".to_string())?;
 
     // 2. Look up agent
-    let (agent_name, agent_model): (String, String) = conn
+    let (agent_name, agent_model): (String, String) = tx
         .query_row(
             "SELECT name, model FROM agents WHERE id = ?1",
             params![agent_id],
@@ -533,12 +534,13 @@ pub fn branch_session(
         )
         .map_err(|_| "Agent not found".to_string())?;
 
-    // 3. Create new session
+    // 3. Create new session (strip nested "Branch of " prefix)
     let new_id = Uuid::new_v4().to_string();
     let now = now_iso();
-    let branch_title = format!("Branch of {parent_title}");
+    let base_title = parent_title.strip_prefix("Branch of ").unwrap_or(&parent_title);
+    let branch_title = format!("Branch of {base_title}");
 
-    conn.execute(
+    tx.execute(
         "INSERT INTO sessions (id, agent_id, title, status, parent_session_id, branch_from_seq, created_at, updated_at)
          VALUES (?1, ?2, ?3, 'active', ?4, ?5, ?6, ?7)",
         params![new_id, agent_id, branch_title, session_id, seq, now, now],
@@ -546,7 +548,7 @@ pub fn branch_session(
     .map_err(|e| format!("Failed to create branch session: {e}"))?;
 
     // 4. Copy messages where seq <= branch point
-    let mut stmt = conn
+    let mut stmt = tx
         .prepare(
             "SELECT seq, role, content, model, provider, input_tokens, output_tokens,
                     cost_usd, duration_ms, created_at
@@ -566,11 +568,15 @@ pub fn branch_session(
         .map_err(|e| e.to_string())?
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
+    drop(stmt);
 
     let msg_count = rows.len() as i64;
+    let mut total_in: i64 = 0;
+    let mut total_out: i64 = 0;
+    let mut total_cost: f64 = 0.0;
     for (m_seq, role, content, model, provider, in_tok, out_tok, cost, dur, created) in &rows {
         let msg_id = Uuid::new_v4().to_string();
-        conn.execute(
+        tx.execute(
             "INSERT INTO messages (id, session_id, seq, role, content, model, provider,
                                    input_tokens, output_tokens, cost_usd, duration_ms, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
@@ -578,14 +584,20 @@ pub fn branch_session(
                     in_tok, out_tok, cost, dur, created],
         )
         .map_err(|e| format!("Failed to copy message: {e}"))?;
+        total_in += in_tok.unwrap_or(0);
+        total_out += out_tok.unwrap_or(0);
+        total_cost += cost.unwrap_or(0.0);
     }
 
-    // 5. Update message_count on new session
-    conn.execute(
-        "UPDATE sessions SET message_count = ?1 WHERE id = ?2",
-        params![msg_count, new_id],
+    // 5. Update counters on new session
+    tx.execute(
+        "UPDATE sessions SET message_count = ?1, total_input_tokens = ?2,
+                total_output_tokens = ?3, total_cost_usd = ?4 WHERE id = ?5",
+        params![msg_count, total_in, total_out, total_cost, new_id],
     )
-    .map_err(|e| format!("Failed to update message count: {e}"))?;
+    .map_err(|e| format!("Failed to update session counters: {e}"))?;
+
+    tx.commit().map_err(|e| format!("Failed to commit branch: {e}"))?;
 
     Ok(Session {
         id: new_id,
@@ -594,9 +606,9 @@ pub fn branch_session(
         status: "active".to_string(),
         message_count: msg_count,
         event_count: 0,
-        total_input_tokens: 0,
-        total_output_tokens: 0,
-        total_cost_usd: 0.0,
+        total_input_tokens: total_in,
+        total_output_tokens: total_out,
+        total_cost_usd: total_cost,
         created_at: now.clone(),
         updated_at: now,
         ended_at: None,
@@ -1333,13 +1345,33 @@ pub async fn send_message(
         created_at: now.clone(),
     };
 
-    // 4. Record events
+    // 4. Load full message history from SQLite (source of truth for sidecar)
+    let history: Vec<serde_json::Value> = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT role, content FROM messages WHERE session_id = ?1 ORDER BY seq ASC",
+            )
+            .map_err(|e| e.to_string())?;
+        let result = stmt.query_map(params![request.session_id], |row| {
+            Ok(serde_json::json!({
+                "role": row.get::<_, String>(0)?,
+                "content": row.get::<_, String>(1)?,
+            }))
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+        result
+    };
+
+    // 5. Record events
     record_event(&db, &request.session_id, "message.user", "ui.user",
         serde_json::json!({ "content": request.content }))?;
     record_event(&db, &request.session_id, "llm.request.started", "desktop.chat",
         serde_json::json!({ "model": model, "provider": provider }))?;
 
-    // 5. Call sidecar for real LLM response
+    // 6. Call sidecar for real LLM response
     let llm_start = std::time::Instant::now();
     let api_key = provider_config.get("api_key").and_then(|v| v.as_str()).unwrap_or("").to_string();
     let base_url = provider_config.get("base_url")
@@ -1362,6 +1394,7 @@ pub async fn send_message(
         "model": model,
         "system_prompt": system_prompt,
         "tools_enabled": tools_enabled,
+        "history": history,
     });
     // Only include credentials if we have an API key or base_url
     if !api_key.is_empty() {
@@ -1388,7 +1421,7 @@ pub async fn send_message(
     let output_tokens = usage.and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
     let response_model = resp.get("model").and_then(|v| v.as_str()).unwrap_or(&model).to_string();
 
-    // 5b. Record tool call events (if any tools were used)
+    // 6b. Record tool call events (if any tools were used)
     if let Some(tool_calls) = resp.get("tool_calls").and_then(|v| v.as_array()) {
         for tc in tool_calls {
             let tool_name = tc.get("tool_name").and_then(|v| v.as_str()).unwrap_or("unknown");
@@ -1425,7 +1458,7 @@ pub async fn send_message(
         }
     }
 
-    // 6. Persist assistant message
+    // 7. Persist assistant message
     let assistant_seq = user_seq + 1;
     let assistant_msg_id = Uuid::new_v4().to_string();
     let resp_now = now_iso();
@@ -1470,7 +1503,7 @@ pub async fn send_message(
         created_at: resp_now,
     };
 
-    // 7. Record completion events
+    // 8. Record completion events
     record_event(&db, &request.session_id, "llm.response.completed", "desktop.chat",
         serde_json::json!({
             "model": response_model, "provider": provider,

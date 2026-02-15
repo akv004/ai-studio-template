@@ -75,6 +75,9 @@ impl Database {
         if version < 3 {
             self.migrate_v3(&conn)?;
         }
+        if version < 4 {
+            self.migrate_v4(&conn)?;
+        }
 
         Ok(())
     }
@@ -259,6 +262,30 @@ impl Database {
         ).map_err(|e| format!("Migration v3 failed: {e}"))?;
 
         println!("[db] Migrated to schema v3 (agents schema alignment + approval_rules)");
+        Ok(())
+    }
+
+    /// V4: Session branching fixes — parent index + ON DELETE SET NULL
+    /// SQLite doesn't support ALTER CONSTRAINT, so we recreate the sessions table.
+    fn migrate_v4(&self, conn: &Connection) -> Result<(), String> {
+        conn.execute_batch(
+            "
+            -- Add missing parent session index
+            CREATE INDEX IF NOT EXISTS idx_sessions_parent ON sessions(parent_session_id);
+
+            -- Nullify parent_session_id when parent is deleted (can't alter FK, use trigger)
+            CREATE TRIGGER IF NOT EXISTS trg_sessions_parent_delete
+            AFTER DELETE ON sessions
+            BEGIN
+                UPDATE sessions SET parent_session_id = NULL
+                WHERE parent_session_id = OLD.id;
+            END;
+
+            INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '4');
+            "
+        ).map_err(|e| format!("Migration v4 failed: {e}"))?;
+
+        println!("[db] Migrated to schema v4 (session branching fixes)");
         Ok(())
     }
 }

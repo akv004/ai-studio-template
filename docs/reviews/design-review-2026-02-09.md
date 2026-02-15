@@ -1,7 +1,7 @@
 # AI Studio Productization Review
 
 **Date**: 2026-02-09
-**Status**: Draft
+**Status**: Closed (2026-02-15)
 **Reviewer**: Antigravity
 
 ---
@@ -30,13 +30,13 @@ However, there are discrepancies between the `data-model.md` specification and t
 ## 3. Productization Recommendations
 
 ### High Priority (Stability & Data Integrity)
-1.  **Align DB Schema**: Update `db.rs` to match `data-model.md`. specifically splitting the `agents.tools` column into `mcp_servers` and `approval_rules`.
-2.  **Global Approval Rules**: Implement the `approval_rules` table to allow system-wide security policies (e.g., "Always deny `rm -rf`").
-3.  **Structured Error Events**: Ensure the Sidecar emits a dedicated `agent.error` or `system.error` event for top-level crashes, not just tool errors.
+1.  **Align DB Schema**: Update `db.rs` to match `data-model.md`. specifically splitting the `agents.tools` column into `mcp_servers` and `approval_rules`. (Closed 2026-02-13, commit 8d370f0)
+2.  **Global Approval Rules**: Implement the `approval_rules` table to allow system-wide security policies (e.g., "Always deny `rm -rf`"). (Closed 2026-02-13, commit 8d370f0)
+3.  **Structured Error Events**: Ensure the Sidecar emits a dedicated `agent.error` or `system.error` event for top-level crashes, not just tool errors. (Closed 2026-02-14, commit 30cd467)
 
 ### Medium Priority (DX & Observability)
-4.  **Log Rotation**: The sidecar logs to stdout. For a product, these should be piped to a file in `~/.ai-studio/logs/` with rotation.
-5.  **Config Validation**: Add Pydantic validation for values stored in the `settings` table to prevent invalid JSON from breaking the UI.
+4.  **Log Rotation**: The sidecar logs to stdout. For a product, these should be piped to a file in `~/.ai-studio/logs/` with rotation. (Deferred to P3)
+5.  **Config Validation**: Add Pydantic validation for values stored in the `settings` table to prevent invalid JSON from breaking the UI. (Deferred to P3)
 
 ## 4. Product Vision & UX Review
 
@@ -47,10 +47,13 @@ However, there are discrepancies between the `data-model.md` specification and t
 ### Critical Gaps (Vision vs Reality)
 1.  **Missing Onboarding**: The vision targets "< 3 minutes to first run". Currently, a new user lands on an empty `AgentsPage` with no guidance.
     - *Recommendation*: Build a "Welcome to AI Studio" modal or empty state that guides them to "Create your first Agent" or offers a "Try Demo Agent" button.
+    - (Closed 2026-02-15, commit b786c8b — 3-step onboarding wizard)
 2.  **Hybrid Intelligence Visibility**: The vision highlights "auto-routing" as a key feature. However, `AgentsPage.tsx` only allows picking a single static model.
     - *Recommendation*: Add a "Auto (Hybrid)" option in the model selector that uses the cost/complexity routing logic defined in `hybrid-intelligence.md`.
+    - (Deferred to P3 — hybrid intelligence spec)
 3.  **Keyboard-First UX**: The vision claims "Every action reachable by keyboard". The current UI relies heavily on mouse clicks (standard React buttons).
     - *Recommendation*: Implement a global Command Palette (`Cmd+K`) to jump between Agents, Sessions, and Inspector.
+    - (Rejected — Command Palette already exists, reviewer missed it)
 
 ---
 

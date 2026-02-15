@@ -57,6 +57,9 @@ class ChatRequest(BaseModel):
     extra_config: Optional[dict] = None
     # Tool support
     tools_enabled: bool = False
+    # Message history from Rust (SQLite source of truth).
+    # When provided, replaces sidecar's in-memory history for this conversation.
+    history: Optional[list[dict]] = None
 
 
 class ChatMessageRequest(BaseModel):
@@ -315,6 +318,17 @@ async def chat(request: ChatRequest):
                 provider_name=request.provider,
                 system_prompt=request.system_prompt,
             )
+
+        # Hydrate from Rust-provided history (SQLite is source of truth)
+        if request.history is not None:
+            conv = chat_service.get_or_create_conversation(
+                conversation_id, provider_name=request.provider,
+                system_prompt=request.system_prompt,
+            )
+            # Build messages: keep system prompt if present, replace the rest
+            system_msgs = [m for m in conv.messages if m.role == "system"]
+            history_msgs = [Message(role=m["role"], content=m["content"]) for m in request.history]
+            conv.messages = system_msgs + history_msgs
 
         # Get tool definitions for the provider
         tool_definitions = None

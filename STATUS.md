@@ -58,7 +58,7 @@
 
 **Phase 1** (COMPLETE): SQLite + CRUD (d3684bf) → chat sessions verified w/ Gemini → Inspector flagship (3285434) → MCP tool system (827e514) → event bridge + cost calc (ed629cf) → runs + DB wipe (ac9803d).
 
-**Phase 2** (IN PROGRESS): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (pending commit).
+**Phase 2** (IN PROGRESS): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (pending commit).
 
 Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling across all IPC calls.
 
@@ -91,14 +91,17 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-15 (session 9)
+**Date**: 2026-02-15 (session 9, continued)
 **What happened**:
-- Session branching (P2): Full 3-layer implementation
-  - Rust: Session struct +2 fields, branch_session command (copy messages up to seq N)
-  - TypeScript: Session interface +parentSessionId/branchFromSeq
-  - Zustand: branchSession action with toast
-  - UI: GitBranch hover button on message bubbles, lineage badge on session list
-- Both cargo check and tsc --noEmit pass clean
+- Session branching (P2): Full 3-layer implementation (d3f22d9)
+- Gemini 3 Pro design review via Antigravity — 6 findings, all fixed:
+  1. Sidecar context loss: Rust now sends full history to sidecar on every /chat call
+  2. Transaction safety: branch_session uses conn.transaction() + tx.commit()
+  3. Token/cost counting: accumulated during message copy loop
+  4. Parent deletion orphans: V4 migration adds SET NULL trigger
+  5. Missing idx_sessions_parent: added in V4 migration
+  6. Branch title nesting: strip_prefix prevents "Branch of Branch of..."
+- Schema now at V4, cargo check + tsc --noEmit pass clean
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -110,7 +113,7 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 - Session 6: Error handling polish + toasts (e4a8567), design review triage
 - Session 7: Agents schema alignment (8d370f0) + sidecar error events (30cd467)
 - Session 8: Onboarding wizard (b786c8b)
-- Session 9: Session branching (pending commit)
+- Session 9: Session branching (d3f22d9) + review fixes (pending commit)
 
 **Next session should**:
 1. Inspector improvements — `agent-inspector.md`

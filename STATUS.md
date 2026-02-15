@@ -33,7 +33,7 @@
 | Runs execution | `api-contracts.md` | DONE |
 | DB wipe command | — | DONE |
 | Error handling polish | `ui-design.md` | DONE |
-| Agents schema alignment | `data-model.md` | Backlog |
+| Agents schema alignment | `data-model.md` | DONE |
 | Sidecar error events | `event-system.md` | Backlog |
 | Onboarding / first-run UX | `ui-design.md` | Backlog |
 | Session branching | `data-model.md` | Backlog |
@@ -43,7 +43,7 @@
 
 ## Backlog (work top-down)
 
-1. Agents schema alignment — `data-model.md` — split `tools` JSON into `tools_mode`, `mcp_servers`, `approval_rules` per spec (do before branching touches DB)
+1. ~~Agents schema alignment~~ — DONE (8d370f0)
 2. Sidecar error events — `event-system.md` — emit `agent.error` / `system.error` for LLM-level crashes (only `tool.error` exists today)
 3. Onboarding / first-run UX — `ui-design.md` — welcome modal or guided empty state when no agents exist (spec has 3-step wizard)
 4. Session branching — `data-model.md`
@@ -58,7 +58,7 @@
 
 **Phase 1** (COMPLETE): SQLite + CRUD (d3684bf) → chat sessions verified w/ Gemini → Inspector flagship (3285434) → MCP tool system (827e514) → event bridge + cost calc (ed629cf) → runs + DB wipe (ac9803d).
 
-**Phase 2** (IN PROGRESS): Error handling polish + toasts (e4a8567).
+**Phase 2** (IN PROGRESS): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0).
 
 Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling across all IPC calls.
 
@@ -91,16 +91,14 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-09 (session 6)
+**Date**: 2026-02-15 (session 7)
 **What happened**:
-- Error handling polish (P2 #9): wrapped 9 unhandled store functions with try/catch + error state
-- Toast notification system: Toasts.tsx component, slide-in-right animation (200ms per spec), auto-dismiss 5s
-- Error auto-clear on page navigation (setActiveModule clears error state)
-- SettingsPage: testConnection errors now surface via toast (was console.error only)
-- RunsPage: cancelRun handler wrapped to catch rejected promises
-- All MCP operations (add/update/remove) now show success/error toasts
-- Build verified: TypeScript + Vite both pass clean
-- Triaged Gemini 3 Pro design review → 3 items added to backlog, 2 rejected
+- Agents schema alignment (P2 #1): DB migration v3 — tools_mode/mcp_servers/approval_rules columns on agents, global approval_rules table
+- All CRUD updated across Rust, TypeScript types, Zustand store
+- AgentsPage UI: tools mode dropdown (sandboxed/restricted/full), MCP servers checkboxes, detail view badges
+- send_message now respects tools_mode (sandboxed = tools_enabled: false)
+- Approval rules CRUD backend ready (4 commands registered, no UI yet — P3)
+- Build verified: cargo check + tsc both clean
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -110,10 +108,10 @@ Built: SQLite WAL schema v2, 5 LLM providers, MCP registry + stdio client, multi
 - Session 4b: Event bridge + cost calc (ed629cf)
 - Session 5: Runs execution + DB wipe (ac9803d)
 - Session 6: Error handling polish + toasts (e4a8567), design review triage
+- Session 7: Agents schema alignment (8d370f0)
 
 **Next session should**:
-1. Agents schema alignment — split `tools` → `tools_mode`/`mcp_servers`/`approval_rules` in db.rs + migration
-2. Sidecar error events — emit `agent.error`/`system.error` for LLM crashes
-3. Onboarding / first-run UX — welcome state or guided flow
-4. Session branching — `data-model.md`
-5. Inspector improvements — `agent-inspector.md`
+1. Sidecar error events — emit `agent.error`/`system.error` for LLM crashes
+2. Onboarding / first-run UX — welcome state or guided flow
+3. Session branching — `data-model.md`
+4. Inspector improvements — `agent-inspector.md`

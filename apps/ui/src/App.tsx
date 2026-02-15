@@ -7,12 +7,13 @@ import { useKeyboardShortcuts } from './commands';
 import { useAppStore } from './state/store';
 import { useEffect, useMemo, useState } from 'react';
 
-// Page imports — 5 pillars
+// Page imports — 5 pillars + onboarding
 import { AgentsPage } from './app/pages/AgentsPage';
 import { SessionsPage } from './app/pages/SessionsPage';
 import { RunsPage } from './app/pages/RunsPage';
 import { InspectorPage } from './app/pages/InspectorPage';
 import { SettingsPage } from './app/pages/SettingsPage';
+import { WelcomePage } from './app/pages/WelcomePage';
 
 /**
  * Main Application Component
@@ -21,10 +22,12 @@ import { SettingsPage } from './app/pages/SettingsPage';
  * Implements global keyboard shortcuts and command palette.
  */
 function App() {
-  const { activeModule, isCommandPaletteOpen } = useAppStore();
+  const { activeModule, isCommandPaletteOpen, agents, agentsLoading, fetchAgents, settings, fetchSettings } = useAppStore();
   const [toolApprovalQueue, setToolApprovalQueue] = useState<
     Array<{ id: string; method: string; path: string; body?: unknown }>
   >([]);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
 
   const activeToolApproval = useMemo(() => toolApprovalQueue[0] ?? null, [toolApprovalQueue]);
 
@@ -32,6 +35,20 @@ function App() {
   useKeyboardShortcuts();
 
   const pushEvent = useAppStore((s) => s.pushEvent);
+
+  // Load agents + settings on mount to detect first-run
+  useEffect(() => {
+    Promise.all([fetchAgents(), fetchSettings()]).then(() => {
+      setInitialLoadDone(true);
+    });
+  }, [fetchAgents, fetchSettings]);
+
+  // Detect first-run: no agents AND onboarding not yet completed
+  useEffect(() => {
+    if (!initialLoadDone || agentsLoading) return;
+    const onboardingDone = settings['onboarding.completed'] === 'true' || settings['onboarding.completed'] === '"true"';
+    setShowOnboarding(agents.length === 0 && !onboardingDone);
+  }, [initialLoadDone, agents, agentsLoading, settings]);
 
   // Listen for tool approval requests + live agent events from the desktop backend (Tauri only).
   useEffect(() => {
@@ -104,6 +121,13 @@ function App() {
 
   // Dynamic page rendering based on active module
   const renderPage = () => {
+    if (showOnboarding) {
+      return <WelcomePage onComplete={() => {
+        setShowOnboarding(false);
+        fetchAgents();
+      }} />;
+    }
+
     switch (activeModule) {
       case 'agents':
         return <AgentsPage />;

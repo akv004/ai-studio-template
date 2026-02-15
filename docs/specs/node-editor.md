@@ -425,6 +425,7 @@ Real-time validation as users build:
 | Required input not connected | Red handle + tooltip |
 | Type mismatch on edge | Dashed red edge + tooltip |
 | Cycle detected | Red edges in cycle + toast |
+| Subworkflow cycle (A embeds B embeds A) | Red subworkflow node + toast |
 | No Input node | Warning banner at top |
 | No Output node | Warning banner at top |
 | Disconnected nodes | Yellow outline on orphaned nodes |
@@ -441,6 +442,8 @@ When a node is selected, the right panel shows its full configuration form. Same
 
 Workflow execution reuses the existing sidecar architecture. The Tauri layer orchestrates — the sidecar executes individual steps.
 
+**Critical design rule**: Workflow execution uses `POST /chat/direct` (stateless), NOT `POST /chat` (stateful). Rust owns all state — it builds the context window for each LLM node based on the DAG traversal path and sends the full message history. The sidecar is a pure compute engine for workflows, with zero in-memory conversation state. This prevents the split-brain bugs seen in session branching where Python held state that diverged from Rust's persisted state.
+
 ```
 User clicks "Run"
     │
@@ -449,18 +452,18 @@ UI sends: invoke('run_workflow', { workflowId, inputs })
     │
     ▼
 Tauri (Rust):
-    1. Validates workflow DAG (no cycles, all required inputs)
+    1. Validates workflow DAG (no cycles, all required inputs, no subworkflow cycles)
     2. Creates a Session for this run
     3. Topologically sorts nodes
     4. Walks the DAG:
        │
        ├─ Input node → inject user-provided values
-       ├─ LLM node → POST /chat to sidecar → receive events
+       ├─ LLM node → POST /chat/direct to sidecar (Rust builds full context)
        ├─ Tool node → POST /tools/* to sidecar → approve if needed
        ├─ Router node → evaluate condition → pick branch
        ├─ Approval node → emit to UI → wait for response
        ├─ Transform node → evaluate locally in Rust (no sidecar call)
-       ├─ Subworkflow → recursive execution
+       ├─ Subworkflow → recursive execution (cycle check prevents A→B→A)
        └─ Output node → collect result
     │
     5. Each node execution emits events:
@@ -474,6 +477,16 @@ Tauri (Rust):
     ▼
 UI receives events → updates node states in real-time
 ```
+
+### Parallel Execution
+
+When the DAG has independent branches (nodes with no data dependency between them), Rust executes them concurrently using `tokio::join_all`. This applies to:
+- Router output branches (only the selected branch executes, but if multiple independent paths exist downstream they can run in parallel)
+- Independent subgraphs within the workflow
+
+**Concurrency limit**: Configurable per-workflow, default 4. This prevents overwhelming the sidecar with concurrent LLM requests. The sidecar must run with `uvicorn --workers 4` (or matching concurrency limit) for production workflows.
+
+**Sidecar compatibility**: Since workflow execution uses `/chat/direct` (stateless), concurrent requests are safe — each request is independent with no shared conversation state.
 
 ### Node Execution States
 
@@ -631,6 +644,8 @@ This maps directly to React Flow's `toObject()` / `setNodes()` / `setEdges()` �
 // Execution
 #[tauri::command] fn run_workflow(workflow_id: String, inputs: HashMap<String, String>) -> RunResult;
 #[tauri::command] fn validate_workflow(workflow_id: String) -> ValidationResult;
+// ValidationResult includes: DAG cycle check, required inputs, type compatibility,
+// subworkflow cycle detection (A→B→A), disconnected node warnings
 ```
 
 ---
@@ -822,8 +837,8 @@ Install: `npm install @xyflow/react`
 ## Open Questions
 
 1. **Module placement**: Should Node Editor be the 6th module, or should it replace the Runs module (since workflow runs are a superset of headless runs)?
-2. **Execution location**: Should the workflow DAG walker live in Rust (Tauri) or Python (sidecar)? Rust is closer to persistence and approval; Python is closer to LLM providers. Leaning Rust since it already orchestrates sessions.
-3. **Parallel execution**: When a router splits into multiple branches, or when a workflow has independent parallel paths — should they execute concurrently? Leaning yes, with a configurable concurrency limit.
+2. ~~**Execution location**~~: **RESOLVED** — DAG walker lives in Rust. Sidecar is stateless compute only (uses `/chat/direct`). Confirmed by Gemini 3 Pro review (2026-02-15).
+3. ~~**Parallel execution**~~: **RESOLVED** — Yes, independent branches execute concurrently via `tokio::join_all`. Default concurrency limit: 4. Sidecar needs matching worker count.
 4. **Versioning**: Should workflows have version history (like git for graphs)? Useful but adds complexity. Defer to post-launch.
 5. **Hybrid mode**: After a workflow completes, should the user be able to continue chatting in the same session? Leaning yes — the workflow output becomes context for free-form conversation.
 

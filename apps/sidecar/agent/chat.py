@@ -176,12 +176,28 @@ class ChatService:
                 )
 
             llm_start = time.monotonic()
-            response = await provider.chat(
-                messages=conv.messages,
-                model=model or conv.model,
-                temperature=temperature,
-                tools=tool_definitions,
-            )
+            try:
+                response = await provider.chat(
+                    messages=conv.messages,
+                    model=model or conv.model,
+                    temperature=temperature,
+                    tools=tool_definitions,
+                )
+            except Exception as e:
+                llm_duration_ms = int((time.monotonic() - llm_start) * 1000)
+                if event_bus:
+                    await event_bus.emit(
+                        "llm.response.error", conversation_id, "sidecar.chat",
+                        {
+                            "error": str(e),
+                            "error_code": type(e).__name__,
+                            "model": model or conv.model or "",
+                            "provider": provider.name,
+                            "duration_ms": llm_duration_ms,
+                            "turn": turn,
+                        },
+                    )
+                raise
             llm_duration_ms = int((time.monotonic() - llm_start) * 1000)
 
             input_toks = (response.usage or {}).get("prompt_tokens", 0)

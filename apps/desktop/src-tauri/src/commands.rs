@@ -1269,8 +1269,8 @@ pub async fn send_message(
 
     let resp = sidecar.proxy_request("POST", "/chat", Some(chat_body)).await
         .map_err(|e| {
-            let _ = record_event(&db, &request.session_id, "llm.response.error", "desktop.chat",
-                serde_json::json!({ "error": format!("{e}") }));
+            let _ = record_event(&db, &request.session_id, "agent.error", "desktop.chat",
+                serde_json::json!({ "error": format!("{e}"), "error_code": "SidecarRequestFailed", "severity": "error" }));
             format!("LLM call failed: {e}")
         })?;
 

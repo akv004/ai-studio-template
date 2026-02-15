@@ -12,6 +12,7 @@ Run modes:
 """
 
 import os
+import time
 import uuid
 import asyncio
 from contextlib import asynccontextmanager
@@ -364,13 +365,36 @@ async def chat(request: ChatRequest):
             )
         else:
             # Simple chat (no tools)
-            response = await chat_service.chat(
-                conversation_id=conversation_id,
-                user_message=request.message,
-                provider_name=request.provider,
-                model=request.model,
-                temperature=request.temperature,
-            )
+            if event_bus:
+                await event_bus.emit(
+                    "llm.request.started", conversation_id, "sidecar.chat",
+                    {"model": request.model or "", "provider": request.provider or ""},
+                )
+
+            llm_start = time.monotonic()
+            try:
+                response = await chat_service.chat(
+                    conversation_id=conversation_id,
+                    user_message=request.message,
+                    provider_name=request.provider,
+                    model=request.model,
+                    temperature=request.temperature,
+                )
+            except Exception as e:
+                llm_duration = int((time.monotonic() - llm_start) * 1000)
+                if event_bus:
+                    await event_bus.emit(
+                        "llm.response.error", conversation_id, "sidecar.chat",
+                        {
+                            "error": str(e),
+                            "error_code": type(e).__name__,
+                            "model": request.model or "",
+                            "provider": request.provider or "",
+                            "duration_ms": llm_duration,
+                        },
+                    )
+                raise
+            llm_duration = int((time.monotonic() - llm_start) * 1000)
 
             # Emit llm.response.completed event
             if event_bus:
@@ -382,6 +406,7 @@ async def chat(request: ChatRequest):
                         "provider": response.provider,
                         "input_tokens": (response.usage or {}).get("prompt_tokens", 0),
                         "output_tokens": (response.usage or {}).get("completion_tokens", 0),
+                        "duration_ms": llm_duration,
                         "stop_reason": response.stop_reason or "end_turn",
                     },
                 )
@@ -395,8 +420,20 @@ async def chat(request: ChatRequest):
             )
 
     except ValueError as e:
+        if event_bus and conversation_id:
+            await event_bus.emit(
+                "agent.error", conversation_id, "sidecar.chat",
+                {"error": str(e), "error_code": "ValueError", "severity": "warning"},
+            )
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
+        if event_bus and conversation_id:
+            await event_bus.emit(
+                "agent.error", conversation_id, "sidecar.chat",
+                {"error": str(e), "error_code": type(e).__name__, "severity": "error"},
+            )
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
 

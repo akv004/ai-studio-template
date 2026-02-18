@@ -2622,6 +2622,26 @@ fn resolve_template(
     }).to_string()
 }
 
+/// Emit a workflow event with full canonical envelope fields.
+fn emit_workflow_event(
+    app: &tauri::AppHandle,
+    session_id: &str,
+    event_type: &str,
+    payload: serde_json::Value,
+    seq: &std::sync::atomic::AtomicI64,
+) {
+    let _ = app.emit("agent_event", serde_json::json!({
+        "event_id": Uuid::new_v4().to_string(),
+        "type": event_type,
+        "ts": chrono::Utc::now().to_rfc3339(),
+        "session_id": session_id,
+        "source": "desktop.workflow",
+        "seq": seq.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+        "payload": payload,
+        "cost_usd": null,
+    }));
+}
+
 /// Core workflow execution — DAG walker with sequential node execution.
 async fn execute_workflow(
     db: &Database,
@@ -2633,6 +2653,7 @@ async fn execute_workflow(
     all_settings: &std::collections::HashMap<String, String>,
 ) -> Result<WorkflowRunResult, String> {
     let start_time = std::time::Instant::now();
+    let seq_counter = std::sync::atomic::AtomicI64::new(1);
     let graph: serde_json::Value = serde_json::from_str(graph_json)
         .map_err(|e| format!("Invalid graph JSON: {e}"))?;
 
@@ -2644,10 +2665,9 @@ async fn execute_workflow(
     // Emit workflow.started
     let _ = record_event_db(db, session_id, "workflow.started", "desktop.workflow",
         serde_json::json!({ "node_count": nodes.len(), "edge_count": edges.len() }));
-    let _ = app.emit("agent_event", serde_json::json!({
-        "type": "workflow.started", "session_id": session_id,
-        "payload": { "node_count": nodes.len(), "edge_count": edges.len() },
-    }));
+    emit_workflow_event(app, session_id, "workflow.started",
+        serde_json::json!({ "node_count": nodes.len(), "edge_count": edges.len() }),
+        &seq_counter);
 
     // Build adjacency + in-degree for topological sort
     let mut node_map: std::collections::HashMap<String, &serde_json::Value> = std::collections::HashMap::new();
@@ -2655,6 +2675,8 @@ async fn execute_workflow(
     let mut in_degree: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
     // Map: target_node_id → vec of (source_node_id, source_handle, target_handle)
     let mut incoming_edges: std::collections::HashMap<String, Vec<(String, String, String)>> = std::collections::HashMap::new();
+    // Map: (source_node_id, source_handle) → vec of target_node_ids (for router branch skipping)
+    let mut outgoing_by_handle: std::collections::HashMap<(String, String), Vec<String>> = std::collections::HashMap::new();
 
     for node in nodes {
         let id = node.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
@@ -2671,7 +2693,8 @@ async fn execute_workflow(
         if !source.is_empty() && !target.is_empty() {
             adj.entry(source.clone()).or_default().push(target.clone());
             *in_degree.entry(target.clone()).or_insert(0) += 1;
-            incoming_edges.entry(target.clone()).or_default().push((source, source_handle, target_handle));
+            incoming_edges.entry(target.clone()).or_default().push((source.clone(), source_handle.clone(), target_handle));
+            outgoing_by_handle.entry((source, source_handle)).or_default().push(target);
         }
     }
 
@@ -2707,14 +2730,22 @@ async fn execute_workflow(
     let mut skipped_nodes: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for node_id in &topo_order {
+        // Transitive skip: if ALL predecessors are skipped, skip this node too
+        if !skipped_nodes.contains(node_id) {
+            if let Some(preds) = incoming_edges.get(node_id) {
+                if !preds.is_empty() && preds.iter().all(|(src, _, _)| skipped_nodes.contains(src)) {
+                    skipped_nodes.insert(node_id.clone());
+                }
+            }
+        }
+
         // Skip nodes downstream of non-selected router branches
         if skipped_nodes.contains(node_id) {
             let _ = record_event_db(db, session_id, "workflow.node.skipped", "desktop.workflow",
                 serde_json::json!({ "node_id": node_id, "reason": "downstream of skipped branch" }));
-            let _ = app.emit("agent_event", serde_json::json!({
-                "type": "workflow.node.skipped", "session_id": session_id,
-                "payload": { "node_id": node_id },
-            }));
+            emit_workflow_event(app, session_id, "workflow.node.skipped",
+                serde_json::json!({ "node_id": node_id }),
+                &seq_counter);
             continue;
         }
 
@@ -2728,10 +2759,9 @@ async fn execute_workflow(
         // Emit node.started
         let _ = record_event_db(db, session_id, "workflow.node.started", "desktop.workflow",
             serde_json::json!({ "node_id": node_id, "node_type": node_type }));
-        let _ = app.emit("agent_event", serde_json::json!({
-            "type": "workflow.node.started", "session_id": session_id,
-            "payload": { "node_id": node_id, "node_type": node_type },
-        }));
+        emit_workflow_event(app, session_id, "workflow.node.started",
+            serde_json::json!({ "node_id": node_id, "node_type": node_type }),
+            &seq_counter);
 
         // Resolve input from incoming edges
         let incoming_value = if let Some(inc) = incoming_edges.get(node_id) {
@@ -2763,24 +2793,23 @@ async fn execute_workflow(
             "router" => execute_router_node(
                 db, sidecar, session_id, node_data, node_id,
                 &incoming_value, &node_outputs, inputs, all_settings,
-                &adj, &mut skipped_nodes,
+                &adj, &outgoing_by_handle, &mut skipped_nodes,
             ).await,
             "tool" => execute_tool_node(
-                sidecar, session_id, node_data, node_id, &incoming_value,
+                db, app, sidecar, session_id, node_data, node_id, &incoming_value,
             ).await,
             "approval" => {
                 execute_approval_node(
-                    db, app, session_id, node_data, node_id, &incoming_value,
+                    db, app, session_id, node_data, node_id, &incoming_value, &seq_counter,
                 ).await
             }
             _ => {
                 // Unknown/subworkflow — skip
                 let _ = record_event_db(db, session_id, "workflow.node.skipped", "desktop.workflow",
                     serde_json::json!({ "node_id": node_id, "node_type": node_type, "reason": "unsupported type" }));
-                let _ = app.emit("agent_event", serde_json::json!({
-                    "type": "workflow.node.skipped", "session_id": session_id,
-                    "payload": { "node_id": node_id, "node_type": node_type },
-                }));
+                emit_workflow_event(app, session_id, "workflow.node.skipped",
+                    serde_json::json!({ "node_id": node_id, "node_type": node_type }),
+                    &seq_counter);
                 Ok(serde_json::Value::Null)
             }
         };
@@ -2820,13 +2849,12 @@ async fn execute_workflow(
                         "node_id": node_id, "node_type": node_type,
                         "output_preview": output_preview, "duration_ms": node_duration,
                     }));
-                let _ = app.emit("agent_event", serde_json::json!({
-                    "type": "workflow.node.completed", "session_id": session_id,
-                    "payload": {
+                emit_workflow_event(app, session_id, "workflow.node.completed",
+                    serde_json::json!({
                         "node_id": node_id, "node_type": node_type,
                         "output_preview": output_preview, "duration_ms": node_duration,
-                    },
-                }));
+                    }),
+                    &seq_counter);
             }
             Err(err) => {
                 eprintln!(
@@ -2838,10 +2866,9 @@ async fn execute_workflow(
                         "node_id": node_id, "node_type": node_type,
                         "error": err, "duration_ms": node_duration,
                     }));
-                let _ = app.emit("agent_event", serde_json::json!({
-                    "type": "workflow.node.error", "session_id": session_id,
-                    "payload": { "node_id": node_id, "error": &err },
-                }));
+                emit_workflow_event(app, session_id, "workflow.node.error",
+                    serde_json::json!({ "node_id": node_id, "error": &err }),
+                    &seq_counter);
 
                 // Emit workflow.failed
                 let total_duration = start_time.elapsed().as_millis() as i64;
@@ -2850,10 +2877,9 @@ async fn execute_workflow(
                         "node_id": node_id, "error": err,
                         "duration_ms": total_duration,
                     }));
-                let _ = app.emit("agent_event", serde_json::json!({
-                    "type": "workflow.failed", "session_id": session_id,
-                    "payload": { "node_id": node_id, "error": &err },
-                }));
+                emit_workflow_event(app, session_id, "workflow.failed",
+                    serde_json::json!({ "node_id": node_id, "error": &err }),
+                    &seq_counter);
 
                 return Ok(WorkflowRunResult {
                     session_id: session_id.to_string(),
@@ -2876,13 +2902,12 @@ async fn execute_workflow(
             "duration_ms": total_duration, "total_tokens": total_tokens,
             "total_cost_usd": total_cost, "node_count": topo_order.len(),
         }));
-    let _ = app.emit("agent_event", serde_json::json!({
-        "type": "workflow.completed", "session_id": session_id,
-        "payload": {
+    emit_workflow_event(app, session_id, "workflow.completed",
+        serde_json::json!({
             "duration_ms": total_duration, "total_tokens": total_tokens,
             "total_cost_usd": total_cost,
-        },
-    }));
+        }),
+        &seq_counter);
 
     Ok(WorkflowRunResult {
         session_id: session_id.to_string(),
@@ -3092,8 +3117,9 @@ async fn execute_router_node(
     _node_outputs: &std::collections::HashMap<String, serde_json::Value>,
     _inputs: &std::collections::HashMap<String, serde_json::Value>,
     all_settings: &std::collections::HashMap<String, String>,
-    adj: &std::collections::HashMap<String, Vec<String>>,
-    _skipped_nodes: &mut std::collections::HashSet<String>,
+    _adj: &std::collections::HashMap<String, Vec<String>>,
+    outgoing_by_handle: &std::collections::HashMap<(String, String), Vec<String>>,
+    skipped_nodes: &mut std::collections::HashSet<String>,
 ) -> Result<serde_json::Value, String> {
     // LLM classification: ask a cheap model to classify input into one of the branches
     let branches = node_data.get("branches").and_then(|v| v.as_array());
@@ -3103,8 +3129,19 @@ async fn execute_router_node(
     };
 
     let branch_names: Vec<String> = branches.iter()
-        .filter_map(|b| b.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()))
+        .filter_map(|b| {
+            // Handle both string elements (UI sends string[]) and object elements
+            if let Some(s) = b.as_str() {
+                Some(s.to_string())
+            } else {
+                b.get("name").and_then(|v| v.as_str()).map(|s| s.to_string())
+            }
+        })
         .collect();
+
+    if branch_names.is_empty() {
+        return Err(format!("Router node '{}' has no valid branch names", node_id));
+    }
 
     let incoming_text = incoming.as_ref().map(|v| match v.as_str() {
         Some(s) => s.to_string(),
@@ -3154,14 +3191,22 @@ async fn execute_router_node(
         name.eq_ignore_ascii_case(&classification)
     }).cloned().unwrap_or_else(|| branch_names[0].clone());
 
-    // Mark non-selected downstream nodes for skipping
-    // Each branch has a handle name matching the branch name
-    if let Some(neighbors) = adj.get(node_id) {
-        // For simplicity: all neighbors that aren't directly on the selected branch path get skipped
-        // In practice, branch routing maps output handles to branch names
-        // For now, mark all downstream as non-skipped (since we can't easily map handles here)
-        // This will be refined in Chunk 4 with proper handle-based routing
-        let _ = neighbors; // placeholder — proper routing in Chunk 4
+    // Mark downstream nodes of non-selected branches for skipping
+    // Router output handles are named "branch-0", "branch-1", etc. (matching React Flow Handle ids)
+    let selected_idx = branch_names.iter().position(|n| n == &selected);
+    for (i, _branch_name) in branch_names.iter().enumerate() {
+        if Some(i) == selected_idx {
+            continue; // Don't skip the selected branch
+        }
+        let handle_name = format!("branch-{}", i);
+        let key = (node_id.to_string(), handle_name);
+        if let Some(targets) = outgoing_by_handle.get(&key) {
+            for target in targets {
+                eprintln!("[workflow] Router '{}': skipping downstream node '{}' (non-selected branch '{}')",
+                    node_id, target, branch_names[i]);
+                skipped_nodes.insert(target.clone());
+            }
+        }
     }
 
     let _ = record_event_db(db, session_id, "workflow.node.completed", "desktop.workflow",
@@ -3175,15 +3220,25 @@ async fn execute_router_node(
 }
 
 async fn execute_tool_node(
+    db: &Database,
+    app: &tauri::AppHandle,
     sidecar: &crate::sidecar::SidecarManager,
-    _session_id: &str,
+    session_id: &str,
     node_data: &serde_json::Value,
     node_id: &str,
     incoming: &Option<serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
+    use tauri::Manager;
+
     let tool_name = node_data.get("toolName").and_then(|v| v.as_str()).unwrap_or("");
     if tool_name.is_empty() {
         return Err(format!("Tool node '{}' has no tool configured", node_id));
+    }
+
+    // Check approval setting
+    let approval_mode = node_data.get("approval").and_then(|v| v.as_str()).unwrap_or("auto");
+    if approval_mode == "deny" {
+        return Err(format!("Tool node '{}' has approval set to 'deny' — execution blocked", node_id));
     }
 
     // Build tool input from node config + incoming data
@@ -3194,6 +3249,42 @@ async fn execute_tool_node(
     } else {
         serde_json::json!({})
     };
+
+    // If approval="ask", request human approval before executing
+    if approval_mode == "ask" {
+        let data_preview = serde_json::to_string_pretty(&tool_input)
+            .unwrap_or_default()[..500.min(serde_json::to_string_pretty(&tool_input).unwrap_or_default().len())]
+            .to_string();
+
+        let _ = record_event_db(db, session_id, "workflow.node.waiting", "desktop.workflow",
+            serde_json::json!({ "node_id": node_id, "tool_name": tool_name }));
+
+        let approval_id = Uuid::new_v4().to_string();
+        let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
+        let approvals = app.state::<crate::sidecar::ApprovalManager>();
+        approvals.register(approval_id.clone(), tx).await;
+
+        let _ = app.emit("workflow_approval_requested", serde_json::json!({
+            "id": approval_id,
+            "nodeId": node_id,
+            "sessionId": session_id,
+            "message": format!("Approve tool execution: {} ?", tool_name),
+            "dataPreview": data_preview,
+        }));
+
+        let approved = match tokio::time::timeout(
+            std::time::Duration::from_secs(300), rx,
+        ).await {
+            Ok(Ok(v)) => v,
+            Ok(Err(_)) => false,
+            Err(_) => false,
+        };
+        approvals.remove(&approval_id).await;
+
+        if !approved {
+            return Err(format!("Tool execution denied by user for node '{}'", node_id));
+        }
+    }
 
     let body = serde_json::json!({
         "tool_name": tool_name,
@@ -3213,6 +3304,7 @@ async fn execute_approval_node(
     node_data: &serde_json::Value,
     node_id: &str,
     incoming: &Option<serde_json::Value>,
+    seq_counter: &std::sync::atomic::AtomicI64,
 ) -> Result<serde_json::Value, String> {
     use tauri::Manager;
 
@@ -3227,10 +3319,9 @@ async fn execute_approval_node(
     // Emit waiting event
     let _ = record_event_db(db, session_id, "workflow.node.waiting", "desktop.workflow",
         serde_json::json!({ "node_id": node_id, "message": message }));
-    let _ = app.emit("agent_event", serde_json::json!({
-        "type": "workflow.node.waiting", "session_id": session_id,
-        "payload": { "node_id": node_id, "message": message },
-    }));
+    emit_workflow_event(app, session_id, "workflow.node.waiting",
+        serde_json::json!({ "node_id": node_id, "message": message }),
+        seq_counter);
 
     // Create approval channel
     let approval_id = Uuid::new_v4().to_string();

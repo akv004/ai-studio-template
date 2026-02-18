@@ -12,6 +12,7 @@ import {
     type Edge,
     type Connection,
     type OnConnect,
+    type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
@@ -26,6 +27,10 @@ import { nodeColors } from './nodeColors';
 import { defaultDataForType } from './nodeDefaults';
 import { NodeConfigPanel } from './NodeConfigPanel';
 import { generateNodeId, formatRuntimeError } from './utils';
+import { TypedEdge } from './edges/TypedEdge';
+import { TypedConnectionLine } from './edges/TypedConnectionLine';
+
+const edgeTypes = { typed: TypedEdge };
 
 interface LastRunDebugInfo {
     workflowId: string;
@@ -75,7 +80,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
 
     const [nodes, setNodes, onNodesChange] = useNodesState(initialGraph.nodes);
     const [edges, setEdges, onEdgesChange] = useEdgesState(initialGraph.edges);
-    const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+    const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
     const [showRunModal, setShowRunModal] = useState(false);
@@ -86,6 +91,10 @@ export function WorkflowCanvas({ workflow, onBack }: {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null);
     const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
     const reactFlowRef = useRef<HTMLDivElement>(null);
+    const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
+
+    // A1: Derive selectedNode from nodes array — always fresh, never stale
+    const selectedNode = selectedNodeId ? nodes.find(n => n.id === selectedNodeId) ?? null : null;
 
     // Track changes
     useEffect(() => {
@@ -163,6 +172,9 @@ export function WorkflowCanvas({ workflow, onBack }: {
         if (classes.includes('handle-json')) return 'json';
         if (classes.includes('handle-bool')) return 'bool';
         if (classes.includes('handle-float')) return 'float';
+        if (classes.includes('handle-number')) return 'number';
+        if (classes.includes('handle-rows')) return 'rows';
+        if (classes.includes('handle-binary')) return 'binary';
         return 'any';
     }, []);
 
@@ -172,24 +184,40 @@ export function WorkflowCanvas({ workflow, onBack }: {
         const targetType = getHandleType(connection.target, connection.targetHandle ?? null, false);
         if (sourceType === 'any' || targetType === 'any') return true;
         if (sourceType === targetType) return true;
+        // text ↔ json coercion
         if ((sourceType === 'text' && targetType === 'json') || (sourceType === 'json' && targetType === 'text')) return true;
-        if (targetType === 'float' && (sourceType === 'text' || sourceType === 'json')) return true;
+        // number ↔ float (both numeric)
+        if ((sourceType === 'number' && targetType === 'float') || (sourceType === 'float' && targetType === 'number')) return true;
+        // number/float → text (stringify)
+        if ((sourceType === 'number' || sourceType === 'float') && targetType === 'text') return true;
+        // text → number/float (parse)
+        if (sourceType === 'text' && (targetType === 'float' || targetType === 'number')) return true;
+        // rows ↔ json (rows are JSON arrays)
+        if ((sourceType === 'rows' && targetType === 'json') || (sourceType === 'json' && targetType === 'rows')) return true;
+        // binary → text (base64 encode)
+        if (sourceType === 'binary' && targetType === 'text') return true;
         return false;
     }, [getHandleType]);
 
     const onConnect: OnConnect = useCallback(
         (connection: Connection) => {
-            setEdges((eds) => addEdge(connection, eds));
+            const handleType = getHandleType(connection.source, connection.sourceHandle ?? null, true);
+            const typedEdge = {
+                ...connection,
+                type: 'typed',
+                data: { handleType },
+            };
+            setEdges((eds) => addEdge(typedEdge, eds));
         },
-        [setEdges],
+        [setEdges, getHandleType],
     );
 
     const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-        setSelectedNode(node);
+        setSelectedNodeId(node.id);
     }, []);
 
     const onPaneClick = useCallback(() => {
-        setSelectedNode(null);
+        setSelectedNodeId(null);
         setContextMenu(null);
     }, []);
 
@@ -204,13 +232,14 @@ export function WorkflowCanvas({ workflow, onBack }: {
             const type = event.dataTransfer.getData('application/reactflow');
             if (!type) return;
 
-            const bounds = reactFlowRef.current?.getBoundingClientRect();
-            if (!bounds) return;
-
-            const position = {
-                x: event.clientX - bounds.left - 80,
-                y: event.clientY - bounds.top - 20,
-            };
+            // Use screenToFlowPosition for correct placement at any zoom/pan
+            const position = rfInstanceRef.current
+                ? rfInstanceRef.current.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+                : (() => {
+                    const bounds = reactFlowRef.current?.getBoundingClientRect();
+                    if (!bounds) return { x: 100, y: 100 };
+                    return { x: event.clientX - bounds.left, y: event.clientY - bounds.top };
+                })();
 
             const newNode: Node = {
                 id: generateNodeId(type),
@@ -370,17 +399,17 @@ export function WorkflowCanvas({ workflow, onBack }: {
             if (inInput) return;
 
             if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (selectedNode) {
-                    setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
-                    setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
-                    setSelectedNode(null);
+                if (selectedNodeId) {
+                    setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
+                    setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId));
+                    setSelectedNodeId(null);
                 }
                 return;
             }
 
             if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
                 e.preventDefault();
-                if (selectedNode) duplicateNode(selectedNode.id);
+                if (selectedNodeId) duplicateNode(selectedNodeId);
                 return;
             }
 
@@ -391,7 +420,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
             }
 
             if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
-                const selected = nodes.filter((n) => n.selected || n.id === selectedNode?.id);
+                const selected = nodes.filter((n) => n.selected || n.id === selectedNodeId);
                 if (selected.length === 0) return;
                 const selectedIds = new Set(selected.map((n) => n.id));
                 const connectedEdges = edges.filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target));
@@ -427,22 +456,21 @@ export function WorkflowCanvas({ workflow, onBack }: {
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [handleSave, selectedNode, nodes, edges, setNodes, setEdges, duplicateNode]);
+    }, [handleSave, selectedNodeId, nodes, edges, setNodes, setEdges, duplicateNode]);
 
     const handleNodeDataChange = useCallback((newData: Record<string, unknown>) => {
-        if (!selectedNode) return;
+        if (!selectedNodeId) return;
         setNodes((nds) =>
-            nds.map((n) => n.id === selectedNode.id ? { ...n, data: newData } : n)
+            nds.map((n) => n.id === selectedNodeId ? { ...n, data: newData } : n)
         );
-        setSelectedNode((prev) => prev ? { ...prev, data: newData } : null);
-    }, [selectedNode, setNodes]);
+    }, [selectedNodeId, setNodes]);
 
     const handleDeleteNode = useCallback(() => {
-        if (!selectedNode) return;
-        setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
-        setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
-        setSelectedNode(null);
-    }, [selectedNode, setNodes, setEdges]);
+        if (!selectedNodeId) return;
+        setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
+        setEdges((eds) => eds.filter((e) => e.source !== selectedNodeId && e.target !== selectedNodeId));
+        setSelectedNodeId(null);
+    }, [selectedNodeId, setNodes, setEdges]);
 
     return (
         <div className="flex flex-col h-full">
@@ -591,9 +619,10 @@ export function WorkflowCanvas({ workflow, onBack }: {
                         isValidConnection={isValidConnection}
                         onNodeClick={onNodeClick}
                         onPaneClick={onPaneClick}
+                        onInit={(instance) => { rfInstanceRef.current = instance; }}
                         onNodeContextMenu={(e, node) => {
                             e.preventDefault();
-                            setSelectedNode(node);
+                            setSelectedNodeId(node.id);
                             setContextMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
                         }}
                         onPaneContextMenu={(e) => {
@@ -603,7 +632,9 @@ export function WorkflowCanvas({ workflow, onBack }: {
                         onDragOver={onDragOver}
                         onDrop={onDrop}
                         nodeTypes={customNodeTypes}
-                        defaultEdgeOptions={{ type: 'smoothstep', animated: false }}
+                        edgeTypes={edgeTypes}
+                        connectionLineComponent={TypedConnectionLine}
+                        defaultEdgeOptions={{ type: 'typed', animated: false }}
                         defaultViewport={initialGraph.viewport}
                         fitView
                         deleteKeyCode={null}
@@ -646,12 +677,13 @@ export function WorkflowCanvas({ workflow, onBack }: {
                                 <>
                                     {NODE_CATEGORIES.flatMap((cat) => cat.types).map((t) => (
                                         <div key={t.type} className="context-menu-item" onClick={() => {
-                                            const bounds = reactFlowRef.current?.getBoundingClientRect();
-                                            if (!bounds) return;
+                                            const position = rfInstanceRef.current
+                                                ? rfInstanceRef.current.screenToFlowPosition({ x: contextMenu.x, y: contextMenu.y })
+                                                : { x: contextMenu.x, y: contextMenu.y };
                                             const newNode: Node = {
                                                 id: generateNodeId(t.type),
                                                 type: t.type,
-                                                position: { x: contextMenu.x - bounds.left - 80, y: contextMenu.y - bounds.top - 20 },
+                                                position,
                                                 data: defaultDataForType(t.type),
                                             };
                                             setNodes((nds) => [...nds, newNode]);

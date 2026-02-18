@@ -136,6 +136,6 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 15: Workflow execution bug fixes — end-to-end working
 
 **Next session should**:
-1. Phase 3C: Node editor visual polish (Blender-inspired restyling) — spec at `docs/specs/node-editor-visual-polish.md`
-2. Or: Add Tool + Router node execution (currently skipped with "unsupported" event)
-3. Or: Start hybrid intelligence routing
+1. Phase 3C: Node editor visual polish + review fixes — spec at `docs/specs/node-editor-visual-polish.md`, review fixes at `docs/reviews/architecture-review-2026-02-18.md`
+2. Review fixes feed into 3C: router branch contract (H1), tool approval (H2), event envelopes (M2), approval preview (M1), run input UX (M3), router branching (M4)
+3. After 3C: Start hybrid intelligence routing

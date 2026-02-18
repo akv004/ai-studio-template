@@ -93,3 +93,4 @@ All resolved reviews have been deleted. Summary of completed reviews:
 | 2026-02-15 | Phase 2 branching | Gemini 3 Pro | 6 items — context loss + transaction safety fixed |
 | 2026-02-15 | Node editor architecture | Gemini 3 Pro | 5 items — /chat/direct + parallelism fixed |
 | 2026-02-18 | Runtime safety | Codex (GPT-5) | 8 items — 4 fixed, 4 deferred to 3C |
+| 2026-02-18 | Platform architecture | Codex (GPT-5) | 8 items — 6 accepted for 3C, 1 fixed (STATUS drift), 1 deferred (Windows fuser) |

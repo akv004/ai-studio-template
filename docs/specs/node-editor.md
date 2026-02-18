@@ -1,8 +1,8 @@
 # AI Studio — Node Editor Specification
 
-> **Version**: 1.0
-> **Status**: Draft
-> **Phase**: 3
+> **Version**: 2.0 (expanded to universal automation canvas vision)
+> **Status**: Phase 3 DONE — Phase 4 vision documented
+> **Phase**: 3 (built), 4 (planned)
 > **Depends on**: architecture.md, event-system.md, data-model.md, mcp-integration.md, hybrid-intelligence.md
 > **Library**: React Flow (@xyflow/react)
 > **This is the 10k-star feature.**
@@ -11,9 +11,13 @@
 
 ## What Is the Node Editor?
 
-The Node Editor is a visual pipeline builder for AI agents — **Unreal Blueprints for AI workflows**. Instead of writing code to chain LLM calls, tools, and decisions together, users drag nodes onto a canvas, connect them with edges, and watch data flow through the pipeline in real-time.
+The Node Editor is a **universal automation canvas** — connect any input, any processing, any output, and watch data flow through the pipeline in real-time. AI (LLM nodes) is a first-class building block, not a bolt-on.
 
-This is where AI Studio graduates from "agent inspector" to "agent IDE." The Inspector shows you what happened. The Node Editor lets you design what should happen.
+**Phase 3** (DONE): AI workflow builder — Input/Output/LLM/Tool/Router/Approval/Transform/Subworkflow nodes with DAG execution engine.
+
+**Phase 4** (Vision): Universal automation — database connectors, file I/O, HTTP/webhook, message queues, IoT devices, code execution, validators, loops, caching. Any input source → any processing → any output destination.
+
+This is where AI Studio graduates from "agent IDE" to "visual automation platform." Think **Node-RED meets ComfyUI** — but with AI-native observability, hybrid model routing, and full cost tracking on every node.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -84,6 +88,7 @@ interface WorkflowNode {
   data: NodeData;                   // Type-specific configuration
 }
 
+// Phase 3 — Built and working
 type NodeType =
   | 'input'          // Workflow entry point (user prompt, file, data)
   | 'output'         // Workflow exit point (final result)
@@ -92,7 +97,29 @@ type NodeType =
   | 'router'         // Conditional branching (if/else, switch)
   | 'approval'       // Human-in-the-loop gate
   | 'transform'      // Data transformation (template, extract, merge)
-  | 'subworkflow';   // Embed another workflow as a node
+  | 'subworkflow'    // Embed another workflow as a node
+  // Phase 4 — Planned (universal automation canvas)
+  | 'database_read'  // SQL query against any database
+  | 'database_write' // INSERT/UPDATE/DELETE
+  | 'file_read'      // Read CSV/JSON/text/PDF from filesystem
+  | 'file_write'     // Write files to filesystem
+  | 'http_request'   // GET/POST to REST/GraphQL APIs
+  | 'http_post'      // Send data to external endpoints
+  | 'webhook_listen' // HTTP endpoint triggers workflow
+  | 'queue_consume'  // Read from message queues (Kafka, RabbitMQ, MQTT)
+  | 'queue_publish'  // Push to message queues
+  | 'iot_sensor'     // Read from IoT devices
+  | 'iot_command'    // Send commands to IoT devices
+  | 'cron_trigger'   // Scheduled execution
+  | 'notification'   // Email, Slack, Discord, SMS
+  | 'display'        // Rich visual output (charts, tables)
+  | 'code'           // Python/JS sandboxed execution
+  | 'validator'      // JSON Schema / data quality checks
+  | 'merge'          // Wait for N branches (AND/OR logic)
+  | 'loop'           // Iterate over array input
+  | 'cache'          // Memoize expensive operations
+  | 'rate_limiter'   // Throttle execution rate
+  | 'error_handler'; // Catch errors, retry, fallback
 ```
 
 ### Edge
@@ -115,7 +142,17 @@ interface WorkflowEdge {
 **Handles** are typed connection ports on nodes. Type checking prevents invalid connections.
 
 ```typescript
-type HandleDataType = 'text' | 'json' | 'boolean' | 'file' | 'any';
+type HandleDataType =
+  | 'text'        // String data
+  | 'json'        // Structured data (objects, arrays)
+  | 'boolean'     // True/false
+  | 'file'        // File path or binary data
+  | 'any'         // Accepts any type
+  // Phase 4 additions:
+  | 'rows'        // Database result set (array of objects)
+  | 'stream'      // Continuous data stream (IoT, queue)
+  | 'binary'      // Raw binary data (images, PDFs)
+  | 'number';     // Numeric value (sensor readings, counts)
 
 interface HandleDef {
   id: string;
@@ -844,7 +881,114 @@ Install: `npm install @xyflow/react`
 
 ---
 
+## Phase 4: Universal Automation Canvas (Vision)
+
+Phase 3 built the AI workflow engine. Phase 4 expands the node type system to make AI Studio a universal automation platform. The architecture already supports this — each node type is an executor function in Rust + a React component. Adding new node types is the same pattern.
+
+### Node Type Roadmap
+
+The current 8 node types handle AI workflows. Phase 4 adds connector and processing nodes that handle everything else.
+
+#### Data Source Nodes (Inputs)
+
+| Node Type | What It Does | Example Use Case |
+|-----------|-------------|-----------------|
+| `database_read` | Execute SQL query against SQLite, PostgreSQL, MySQL | Read customer records → LLM summarizes → Output |
+| `file_read` | Read CSV, JSON, XML, text, PDF from filesystem | Ingest CSV → LLM extracts insights → file_write results |
+| `http_request` | GET/POST to any REST/GraphQL API | Fetch GitHub issues → LLM triages → Slack notify |
+| `webhook_listen` | HTTP endpoint that triggers workflow on request | Receive Stripe webhook → LLM processes → database_write |
+| `queue_consume` | Read from Kafka, RabbitMQ, Redis Streams, MQTT | Process message queue → LLM classifies → Router → different queues |
+| `iot_sensor` | Read from IoT devices via MQTT, serial, GPIO | Temperature sensor → LLM anomaly detection → notification |
+| `cron_trigger` | Time-based scheduled execution | Every hour: query DB → LLM generates report → email |
+
+#### Data Destination Nodes (Outputs)
+
+| Node Type | What It Does | Example Use Case |
+|-----------|-------------|-----------------|
+| `database_write` | INSERT/UPDATE/DELETE against any database | LLM extracts entities → database_write structured records |
+| `file_write` | Write CSV, JSON, text, PDF, image to filesystem | LLM generates report → file_write as PDF |
+| `http_post` | Send data to any REST/GraphQL/webhook endpoint | LLM response → POST to Slack/Discord/custom API |
+| `queue_publish` | Push messages to Kafka, RabbitMQ, Redis, MQTT | Router classifies → queue_publish to appropriate topic |
+| `iot_command` | Send commands to IoT devices | LLM decides action → iot_command turns on/off device |
+| `notification` | Email, Slack, Discord, Teams, SMS, push notification | Any workflow → notification on completion/error |
+| `display` | Rich visual output (charts, tables, formatted reports) | Data pipeline → display as chart in UI |
+
+#### Processing Nodes
+
+| Node Type | What It Does | Example Use Case |
+|-----------|-------------|-----------------|
+| `code` | Execute Python/JavaScript snippets (sandboxed) | Custom data transformation that template can't handle |
+| `validator` | JSON Schema validation, data quality checks | Validate LLM output matches expected schema before writing to DB |
+| `merge` | Wait for N branches, combine results (AND/OR logic) | 3 parallel LLMs → merge when any 2 complete (quorum) |
+| `loop` | Iterate over array, execute subgraph per item | File with 100 records → loop: LLM processes each → collect results |
+| `cache` | Memoize expensive operations by input hash | Cache LLM responses for identical prompts (save cost) |
+| `rate_limiter` | Throttle execution rate | API with 100 req/min limit → rate_limiter before http_post |
+| `error_handler` | Catch errors from upstream, provide fallback | LLM fails → error_handler retries with different model |
+
+### Example: Full-Stack Automation Pipeline
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│ database │    │   LLM    │    │ validator│    │ database │    │  Slack   │
+│  _read   │───▶│  Claude  │───▶│  JSON    │───▶│  _write  │───▶│  notify  │
+│ (orders) │    │ (analyze)│    │  Schema  │    │ (results)│    │          │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
+     │                                               │
+     │           ┌──────────┐                        │
+     └──────────▶│  file    │◀───────────────────────┘
+                 │  _write  │
+                 │  (CSV)   │
+                 └──────────┘
+```
+
+This pipeline: reads orders from a database → LLM analyzes patterns → validates the output → writes structured results back to DB → notifies Slack → also exports as CSV. Every node shows its data, cost, and latency. The Inspector replays the entire flow.
+
+### Architecture: How New Node Types Plug In
+
+Each node type is a self-contained unit:
+
+```
+Node Type = {
+    executor:   Rust async fn(inputs, config) -> Result<outputs>
+    component:  React component (handles, config panel, data preview)
+    schema:     JSON (input handles, output handles, config fields)
+    category:   "data_source" | "data_dest" | "processing" | "ai" | "logic"
+}
+```
+
+**Phase 4 implementation path:**
+1. Define the `NodeTypePlugin` trait in Rust (executor interface)
+2. Build ~6 high-value connector nodes as built-in (database_read/write, file_read/write, http_request/post)
+3. Ship the plugin system so the community can build the rest
+4. Each community node type is a crate (Rust executor) + npm package (React component)
+
+**What stays the same for all node types:**
+- Events: every node emits `workflow.node.started/completed/error`
+- Inspector: full visibility into every node's I/O
+- Cost tracking: nodes that cost money (LLM, API calls) report `cost_usd`
+- Approval gates: can be placed before any node
+- Validation: DAG cycle check, type compatibility, required inputs
+
+### Why This Wins
+
+| Capability | n8n | Node-RED | Make.com | AI Studio |
+|---|---|---|---|---|
+| Visual canvas | Yes | Yes | Yes | Yes |
+| 500+ integrations | Yes | Yes | Yes | Plugin system (community) |
+| AI/LLM as first-class | No (bolt-on) | No (bolt-on) | No (bolt-on) | **Yes — hybrid routing, cost tracking, multi-model** |
+| Execution Inspector | No | No | No | **Yes — replay, branch, diff** |
+| Human-in-the-loop | No | No | Limited | **Yes — approval gates anywhere** |
+| Cost tracking per node | No | No | No | **Yes** |
+| Local-first / offline | No | Partial | No | **Yes — all data on disk** |
+| Open standard tools | No | No | No | **Yes — MCP** |
+
+The insight: n8n/Node-RED have 500+ connectors but treat AI as an afterthought. ComfyUI/Langflow are AI-native but can't connect to databases or IoT devices. AI Studio is both: **universal connectivity + AI-native intelligence + full observability**.
+
+---
+
 ## What Success Looks Like
+
+### Phase 3 (NOW — AI Workflows)
 
 A developer:
 1. Opens Node Editor
@@ -857,3 +1001,17 @@ A developer:
 8. Opens Inspector → sees the full event log with costs per node
 9. Shares the workflow JSON with a colleague who imports it in 2 clicks
 10. Screenshots it and posts on X. AI Studio gets 500 new stars.
+
+### Phase 4 (NEXT — Universal Automation)
+
+A developer:
+1. Drags a `database_read` node → connects to their PostgreSQL
+2. Adds an LLM node that summarizes each row
+3. Adds a `validator` node to check the LLM output matches their JSON schema
+4. Adds a `database_write` node that writes results back
+5. Adds a `notification` node for Slack alerts on completion
+6. Adds an `error_handler` that retries with a different model on failure
+7. Sets it on a `cron_trigger` to run every morning
+8. Opens Inspector → sees the full pipeline with cost breakdown
+9. Shares the workflow → teammate imports it, swaps the database connection, running in 60 seconds
+10. Posts the screenshot. "This replaced our entire data pipeline." AI Studio gets 10,000 stars.

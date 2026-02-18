@@ -1,6 +1,6 @@
 # AI Studio — Product Vision
 
-> **Version**: 2.1 (restructured + hybrid intelligence + UI vision)
+> **Version**: 3.0 (universal automation canvas + expanded node vision)
 > **Status**: Draft
 > **Supersedes**: competitive-roadmap.md, agent-roadmap.md (these remain as historical references)
 
@@ -8,37 +8,55 @@
 
 ## One-Line Pitch
 
-**AI Studio is a desktop-native IDE for AI agents — build, run, debug, and compare agents across any model, with full visibility into every decision and dollar spent.**
+**AI Studio is a visual automation platform where AI is a first-class building block — connect any input, any model, any tool, any output, and watch data flow through your pipeline in real-time.**
 
 ---
 
 ## The Problem
 
-The AI agent ecosystem has a massive UX gap:
+Two gaps exist in tooling today:
+
+**Gap 1 — AI Agent tooling**: No tool gives developers a visual, interactive control plane for AI agents with hybrid intelligence, full debugging, and cost control.
 
 | Existing Tool | What It Does Well | What It Lacks |
 |---|---|---|
-| **OpenClaw** (145K+ stars) | Autonomous agents in messaging apps. Actually does things. | Black box — no visibility into what agent did. Security concerns. No cost tracking. No debugging. |
-| **Claude Code / Cursor** | Great coding assistants | Single-model, no tool visibility, no replay, can't compare models |
-| **LangChain / CrewAI** | Powerful frameworks | Code-only, no visual debugging, painful iteration cycles |
-| **LangSmith** | Tracing & monitoring | Cloud-only, paid, no local-first, no replay/branching |
-| **LM Studio / Jan.ai** | Easy local model UIs | Chat-only — no agent orchestration, no tools, no pipelines |
+| **OpenClaw** (145K+ stars) | Autonomous agents in messaging apps | Black box — no visibility, no cost tracking, no debugging |
+| **Claude Code / Cursor** | Great coding assistants | Single-model, no tool visibility, no replay |
+| **LangChain / CrewAI** | Powerful frameworks | Code-only, no visual debugging, painful iteration |
+| **LangSmith** | Tracing & monitoring | Cloud-only, paid, no local-first |
+| **LM Studio / Jan.ai** | Easy local model UIs | Chat-only — no orchestration, no pipelines |
 
-**The gap**: No tool gives developers a **visual, interactive control plane** for AI agents with hybrid intelligence (auto-pick best model), full debugging, and cost control.
+**Gap 2 — Visual automation**: Existing automation platforms (n8n, Node-RED, Make.com) connect systems visually but treat AI as an afterthought — a single "OpenAI" node bolted on. None of them have hybrid model routing, cost tracking per node, approval gates, or an Inspector that replays every decision.
+
+**The intersection**: No tool exists that is both a **visual automation canvas** (connect anything to anything) AND an **AI-native runtime** (smart model routing, full observability, human-in-the-loop). AI Studio fills this gap.
 
 ---
 
 ## The Solution
 
-AI Studio is a **desktop-native control plane** where developers:
+AI Studio is a **visual automation platform with AI as a first-class building block**.
 
-1. **Define** agents (system prompt, model, provider, tools, permissions)
-2. **Run** agents interactively or headlessly
-3. **Inspect** every decision — token-by-token, tool-by-tool, with cost tracking
-4. **Debug** by replaying, branching, and diffing agent sessions
-5. **Automate** with batch runs and event-driven pipelines
+The Node Editor is the core experience. Users build pipelines by connecting nodes on a canvas:
 
-Think of it as **Chrome DevTools meets an AI agent runtime — with the intelligence to pick the right model for each step automatically.**
+1. **Any input** — text prompts, SQL queries, file reads, webhook payloads, IoT sensor data, message queue consumers
+2. **Any processing** — LLM inference (any provider/model), data transforms, conditional routing, human approval gates, code execution
+3. **Any output** — text results, file writes, database inserts, API calls, message queue publish, IoT device commands, email/Slack notifications
+4. **Full visibility** — every node shows its I/O, cost, latency in real-time. The Inspector replays any execution step-by-step.
+5. **Hybrid intelligence** — the platform auto-picks the right model per step based on task complexity and budget
+
+Think of it as **Node-RED meets ComfyUI — a universal automation canvas where AI nodes sit alongside database nodes, file nodes, and API nodes, all with full observability and cost control.**
+
+### What Makes This Different from n8n/Node-RED/Make.com
+
+| Capability | n8n / Node-RED | AI Studio |
+|---|---|---|
+| AI/LLM support | Single "OpenAI" node, no routing | Multi-provider, hybrid routing, cost per node |
+| Model comparison | Not possible | Fan-out to N models, compare side-by-side |
+| Observability | Basic logs | Inspector — replay, branch, diff any execution |
+| Approval gates | Not native | First-class human-in-the-loop gates |
+| Cost tracking | None | Per-node, per-model, budget controls |
+| Local-first | Cloud-hosted (mostly) | All data on disk, no account required |
+| Plugin architecture | Proprietary | MCP-native (open standard) |
 
 ---
 
@@ -179,26 +197,31 @@ The right model for each step, automatically. Simple questions go to local Llama
 
 ## Competitive Positioning
 
+### vs. n8n / Node-RED / Make.com (Automation Platforms)
+These are workflow automation tools with hundreds of integrations. They're great at connecting SaaS services. But they treat AI as a bolt-on — a single "OpenAI" node. No model routing, no cost tracking, no approval gates, no Inspector. AI Studio is **AI-native automation**: every node in the pipeline has full observability, and the platform intelligently routes between models.
+
+**Positioning: "n8n connects your apps. AI Studio connects your apps AND your AI — with full visibility into every decision and dollar spent."**
+
+### vs. ComfyUI / Langflow (AI Visual Builders)
+ComfyUI is image generation focused. Langflow is LLM-chain focused. Both are narrow. AI Studio is a **universal automation canvas** — SQL databases, file systems, message queues, APIs, IoT devices are all node types alongside LLM and tool nodes. Plus: desktop-native, local-first, with an Inspector that no visual builder offers.
+
 ### vs. OpenClaw (145K stars)
-OpenClaw is messaging-first (WhatsApp, Telegram). Agents run autonomously. Huge ecosystem. But: **black box** — you can't see what the agent did. No cost tracking. Security researchers are raising alarms about its broad permissions. AI Studio is the opposite: full visibility, full control, full audit trail.
-
-**Positioning: "OpenClaw lets agents run wild. AI Studio lets you see and control everything."**
-
-### vs. LM Studio / Jan.ai
-Model runners with chat UIs. AI Studio is an **agent runtime** — it has tools, approval workflows, session management, hybrid intelligence, and deep inspection. Different category.
+Messaging-first, autonomous agents. Black box — you can't see what the agent did. AI Studio is the opposite: full visibility, full control, full audit trail. Agents are visual pipelines you can inspect step-by-step.
 
 ### vs. LangSmith
-Cloud-only tracing and monitoring. Paid. AI Studio is **local-first, free, and open-source** with richer debugging (branching, replay, compare). LangSmith shows traces. AI Studio lets you replay and branch from any point.
+Cloud-only tracing. Paid. AI Studio is **local-first, free, and open-source** with richer debugging (branching, replay, compare). LangSmith shows traces. AI Studio lets you replay and branch from any point.
 
 ### vs. Claude Code / Cursor
-Coding-focused, single-model. AI Studio is agent-focused with **hybrid intelligence** — auto-picks the best model per step. The Inspector provides visibility these tools don't offer. You can compare Claude vs GPT side-by-side.
+Coding-focused, single-model. AI Studio is a visual automation platform with **hybrid intelligence** — auto-picks the best model per step. Compare Claude vs GPT side-by-side on the same pipeline.
 
 ### The Moat
-**Hybrid Intelligence + Inspector + MCP + Local-first** — this combination doesn't exist anywhere else:
-- Hybrid: auto-route across local + cloud models with budget control (no one does this)
-- Inspector: replay, branch, compare any session (no one does this for free)
-- MCP: interoperable with the entire growing tool ecosystem
+**Universal Canvas + AI-Native + Inspector + Local-first** — this combination doesn't exist:
+- Universal: any input source → any processing → any output destination (not just LLM chains)
+- AI-native: hybrid model routing, cost per node, approval gates (not a bolt-on OpenAI node)
+- Inspector: replay, branch, compare any execution (no one does this for free)
+- MCP: interoperable with the growing tool ecosystem
 - Local-first: your data never leaves your machine
+- Plugin system: community-contributed node types via open standard
 
 ---
 
@@ -217,14 +240,55 @@ Coding-focused, single-model. AI Studio is agent-focused with **hybrid intellige
 
 ## Phased Delivery (Summary)
 
-Detailed phase plan will be in a separate spec (`phase-plan.md`). High-level:
+Detailed phase plan in `phase-plan.md`. High-level:
 
 | Phase | Focus | Outcome |
 |---|---|---|
 | **0: Foundation** | Event system, data model, API contracts, MCP integration design | All specs written, architecture locked |
 | **1: Core Loop** | Agent CRUD, Sessions (real chat), basic Inspector, SQLite persistence | Usable product for early adopters |
-| **2: Power Features** | Full Inspector (replay, branch, diff, cost), Runs, auto-approval rules, export/import | Feature-complete for developers |
-| **3: Ecosystem** | Plugin system, MCP server marketplace, community templates, one-click installer | Growth-ready product |
+| **2: Power Features** | Full Inspector (replay, branch, diff, cost), Runs, auto-approval rules | Feature-complete for developers |
+| **3: Node Editor** | Visual pipeline builder (3A canvas, 3B execution, 3C polish + templates) | AI workflow automation |
+| **4: Universal Canvas** | I/O connector nodes (database, file, HTTP, queue, IoT), plugin system | Connect anything to anything |
+| **5: Community** | Plugin marketplace, community templates, one-click installers | Growth-ready product |
+
+### Phase 4 Vision: Universal Automation Canvas
+
+Phase 4 transforms the Node Editor from an "AI workflow builder" into a **universal automation platform**. The architecture already supports this — each node type is just an executor function. Phase 4 adds connector nodes:
+
+**New Input Node Types:**
+- `database_read` — SQL query against SQLite/PostgreSQL/MySQL, returns rows as JSON
+- `file_read` — Read CSV, JSON, XML, text files from local filesystem
+- `http_request` — GET/POST to any REST API, returns response
+- `webhook_listen` — HTTP endpoint that triggers the workflow on incoming request
+- `queue_consume` — Read from Kafka, RabbitMQ, Redis Streams, MQTT
+- `iot_sensor` — Read from connected IoT devices (MQTT, serial, GPIO)
+- `cron_trigger` — Time-based scheduled execution
+
+**New Output Node Types:**
+- `database_write` — INSERT/UPDATE/DELETE against any supported database
+- `file_write` — Write CSV, JSON, text, PDF to local filesystem
+- `http_post` — Send data to any REST/GraphQL API endpoint
+- `queue_publish` — Push messages to Kafka, RabbitMQ, Redis Streams, MQTT
+- `iot_command` — Send commands to IoT devices
+- `notification` — Email, Slack, Discord, webhook notification
+- `display` — Rich visual output (charts, tables, formatted reports)
+
+**New Processing Node Types:**
+- `code` — Execute Python/JavaScript snippets (sandboxed)
+- `validator` — JSON Schema validation, data quality checks
+- `merge` — Wait for multiple branches and combine results (OR/AND logic)
+- `loop` — Iterate over array input, execute subgraph per item
+- `cache` — Memoize expensive operations (LLM calls, API requests)
+- `rate_limiter` — Throttle execution rate for API compliance
+
+**What stays the same:**
+- Every node emits events → Inspector shows full pipeline execution
+- Every node tracks cost → budget controls apply universally
+- Approval gates work anywhere in the pipeline
+- Hybrid intelligence routes LLM nodes automatically
+- All data stays local-first on disk
+
+**Plugin system enables community node types** — anyone can build a node type (e.g., "Snowflake connector", "Stripe payments", "Arduino GPIO") and share it. The node is a Rust executor + React component + JSON schema.
 
 ---
 

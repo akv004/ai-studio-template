@@ -129,16 +129,18 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-18 (session 22)
+**Date**: 2026-02-18 (session 23)
 **What happened**:
-- **Phase 4 spec v1.2**: Updated with all review triage results
-- **Both peer reviews DONE and triaged**:
-  - Gemini (architecture): 5 findings — all accepted. Container model validated, engine refactoring confirmed.
-  - Codex (implementation): 10 findings — 9 accepted, 1 deferred (F10 event consistency → 4C). Found 2 critical existing bugs in engine.rs:
-    - `_src_handle` unused in edge resolution — multi-output handles broken
-    - `clean_output` destroys structured data — LLM usage/cost handles unusable
-  - Codex review significantly more thorough than Gemini
-- **Spec updated**: Pre-Phase 4 engine fixes section, SSRF protection, path allowlists, env_clear, Python-only code node, scope isolation, schema caching, csv crate
+- **Phase 4A.V visual overhaul DONE** (0924d2f):
+  - TypedEdge: colored bezier wires by source handle type
+  - TypedConnectionLine: colored dashed drag preview
+  - Inline editing on all 8 node types via useNodeData hook
+  - Fixed drop position bug (screenToFlowPosition)
+  - Fixed stale selectedNode (now selectedNodeId, derived from nodes array)
+  - CSS polish: node shadows, selection glow (2px ring + glow), header gradient
+  - Edge flow animation during workflow execution
+  - Handle improvements: 10px size, hover glow, title tooltips
+  - New inline input CSS classes (node-inline-input, node-inline-slider)
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -146,9 +148,8 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 19: One-click installers, plugin subprocess lifecycle, open-source infra
 - Session 20: Docker cleanup, template gallery (10 total), launch prep
 - Session 21: Phase 4 spec v1.1 written (10+ nodes, EIP patterns, Unreal architecture, containers)
+- Session 22: Phase 4 spec v1.2, peer reviews triaged, engine bugs fixed, 4A.1 monolith split
 
 **Next session should**:
-1. Fix Pre-Phase 4 engine bugs (sourceHandle + clean_output) — BLOCKING
-2. Begin 4A.1: Split NodeEditorPage.tsx monolith into modules
-3. Then 4A.2-4A.7: New handle types + data I/O executors
-4. Consider v0.1.0 tag for Phase 3 before starting Phase 4 code
+1. Resume 4A.3-4A.8: New node types + data I/O executors (all new nodes get inline editing from day one)
+2. Consider v0.1.0 tag for Phase 3 before starting Phase 4 Rust code

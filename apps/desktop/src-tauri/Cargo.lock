@@ -37,6 +37,7 @@ dependencies = [
  "dirs 5.0.1",
  "futures-util",
  "hostname",
+ "regex",
  "reqwest",
  "rusqlite",
  "serde",

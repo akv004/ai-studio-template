@@ -7,6 +7,7 @@ import type {
     CreateRunRequest,
     ApprovalRule, CreateApprovalRuleRequest, UpdateApprovalRuleRequest,
     Workflow, WorkflowSummary, CreateWorkflowRequest, UpdateWorkflowRequest,
+    ValidationResult, WorkflowRunResult, NodeExecutionState, NodeExecutionStatus,
 } from '@ai-studio/shared';
 
 // ============================================
@@ -128,6 +129,15 @@ interface AppState {
     deleteWorkflow: (id: string) => Promise<void>;
     duplicateWorkflow: (id: string) => Promise<Workflow>;
     setSelectedWorkflow: (workflow: Workflow | null) => void;
+    validateWorkflow: (id: string) => Promise<ValidationResult>;
+
+    // Workflow Execution (Phase 3B)
+    workflowRunning: boolean;
+    workflowRunSessionId: string | null;
+    workflowNodeStates: Record<string, NodeExecutionState>;
+    runWorkflow: (workflowId: string, inputs: Record<string, unknown>) => Promise<WorkflowRunResult>;
+    setNodeState: (nodeId: string, status: NodeExecutionStatus, extra?: Partial<NodeExecutionState>) => void;
+    resetNodeStates: () => void;
 
     // Inspector navigation (set by Sessions "Inspect" button)
     inspectorSessionId: string | null;
@@ -373,6 +383,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                 agents: [], sessions: [], runs: [], messages: [], events: [],
                 mcpServers: [], workflows: [], settings: {}, sessionStats: null,
                 selectedWorkflow: null,
+                workflowRunning: false, workflowNodeStates: {}, workflowRunSessionId: null,
             });
             get().addToast('Database wiped', 'success');
         } catch (e) {
@@ -599,6 +610,51 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
     },
     setSelectedWorkflow: (workflow) => set({ selectedWorkflow: workflow }),
+    validateWorkflow: async (id) => {
+        try {
+            return await invoke<ValidationResult>('validate_workflow', { id });
+        } catch (e) {
+            const msg = `Validation failed: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
+    },
+
+    // Workflow Execution (Phase 3B)
+    workflowRunning: false,
+    workflowRunSessionId: null,
+    workflowNodeStates: {},
+    runWorkflow: async (workflowId, inputs) => {
+        set({ workflowRunning: true, workflowNodeStates: {}, workflowRunSessionId: null, error: null });
+        try {
+            const result = await invoke<WorkflowRunResult>('run_workflow', {
+                request: { workflowId, inputs },
+            });
+            set({ workflowRunning: false, workflowRunSessionId: result.sessionId });
+            if (result.status === 'completed') {
+                get().addToast(`Workflow completed in ${(result.durationMs / 1000).toFixed(1)}s`, 'success');
+            } else {
+                get().addToast(`Workflow failed: ${result.error || 'unknown error'}`, 'error');
+            }
+            return result;
+        } catch (e) {
+            set({ workflowRunning: false });
+            const msg = `Workflow execution failed: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            throw e;
+        }
+    },
+    setNodeState: (nodeId, status, extra) => {
+        set((s) => ({
+            workflowNodeStates: {
+                ...s.workflowNodeStates,
+                [nodeId]: { nodeId, status, ...extra },
+            },
+        }));
+    },
+    resetNodeStates: () => set({ workflowNodeStates: {}, workflowRunSessionId: null }),
 
     // System Info
     systemInfo: null,

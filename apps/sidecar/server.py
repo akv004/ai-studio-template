@@ -68,6 +68,11 @@ class ChatMessageRequest(BaseModel):
     provider: Optional[str] = "ollama"
     model: Optional[str] = None
     temperature: float = 0.7
+    # Per-request provider config (for workflow LLM nodes)
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    extra_config: Optional[dict] = None
+    system_prompt: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -457,9 +462,22 @@ async def chat(request: ChatRequest):
 
 @app.post("/chat/direct")
 async def chat_direct(request: ChatMessageRequest):
-    """Direct chat without conversation history."""
+    """Direct chat without conversation history. Used by workflow LLM nodes."""
     try:
-        messages = [Message(role=m["role"], content=m["content"]) for m in request.messages]
+        # Register provider on-the-fly if config provided
+        if request.provider and (request.api_key or request.base_url or request.extra_config):
+            provider_inst = create_provider_for_request(
+                name=request.provider,
+                api_key=request.api_key,
+                base_url=request.base_url,
+                extra_config=request.extra_config,
+            )
+            chat_service.register_provider(provider_inst)
+
+        messages = []
+        if request.system_prompt:
+            messages.append(Message(role="system", content=request.system_prompt))
+        messages.extend(Message(role=m["role"], content=m["content"]) for m in request.messages)
         provider = chat_service.get_provider(request.provider or "ollama")
 
         response = await provider.chat(
@@ -479,6 +497,36 @@ async def chat_direct(request: ChatMessageRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+
+class ToolExecuteRequest(BaseModel):
+    """Execute a single tool by name"""
+    tool_name: str
+    tool_input: dict = {}
+
+
+@app.post("/tools/execute")
+async def execute_tool(request: ToolExecuteRequest):
+    """Execute a tool directly by name (used by workflow Tool nodes)."""
+    try:
+        tool_def = tool_registry.resolve(request.tool_name)
+        if tool_def and tool_def.handler:
+            result = await tool_def.handler(**request.tool_input)
+            return {"result": result}
+
+        # Try MCP servers
+        parts = request.tool_name.split("__", 1)
+        if len(parts) == 2:
+            server, local_name = parts
+            if mcp_client.is_connected(server):
+                result = await mcp_client.call_tool(server, local_name, request.tool_input)
+                return {"result": result}
+
+        raise HTTPException(status_code=404, detail=f"Tool '{request.tool_name}' not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Tool execution error: {str(e)}")
 
 
 @app.delete("/chat/{conversation_id}")

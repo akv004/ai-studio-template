@@ -98,6 +98,9 @@ pub fn run() {
             update_workflow,
             delete_workflow,
             duplicate_workflow,
+            // Workflow Execution (Phase 3B)
+            validate_workflow,
+            run_workflow,
             // Sidecar
             sidecar_start,
             sidecar_stop,

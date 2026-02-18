@@ -246,3 +246,36 @@ export interface UpdateWorkflowRequest {
     variablesJson?: string;
     agentId?: string | null;
 }
+
+// ============================================
+// WORKFLOW EXECUTION TYPES (Phase 3B)
+// ============================================
+
+export type NodeExecutionStatus = 'idle' | 'running' | 'completed' | 'error' | 'waiting' | 'skipped';
+
+export interface NodeExecutionState {
+    nodeId: string;
+    status: NodeExecutionStatus;
+    output?: string;
+    error?: string;
+    tokens?: number;
+    costUsd?: number;
+    durationMs?: number;
+}
+
+export interface ValidationResult {
+    valid: boolean;
+    errors: string[];
+    warnings: string[];
+}
+
+export interface WorkflowRunResult {
+    sessionId: string;
+    status: string;
+    outputs: Record<string, unknown>;
+    totalTokens: number;
+    totalCostUsd: number;
+    durationMs: number;
+    nodeCount: number;
+    error?: string;
+}

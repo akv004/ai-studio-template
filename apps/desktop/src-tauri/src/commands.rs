@@ -1569,6 +1569,53 @@ fn record_event(
     })
 }
 
+/// Record an event using a direct Database reference (for background tasks / tokio::spawn).
+pub fn record_event_db(
+    db: &Database,
+    session_id: &str,
+    event_type: &str,
+    source: &str,
+    payload: serde_json::Value,
+) -> Result<Event, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let event_id = Uuid::new_v4().to_string();
+    let ts = now_iso();
+
+    let next_seq: i64 = conn
+        .query_row(
+            "SELECT COALESCE(MAX(seq), 0) + 1 FROM events WHERE session_id = ?1",
+            params![session_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(1);
+
+    let cost_usd = payload.get("cost_usd").and_then(|v| v.as_f64());
+    let payload_str = serde_json::to_string(&payload).unwrap_or_else(|_| "{}".to_string());
+
+    conn.execute(
+        "INSERT INTO events (event_id, type, ts, session_id, source, seq, payload, cost_usd)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        params![event_id, event_type, ts, session_id, source, next_seq, payload_str, cost_usd],
+    )
+    .map_err(|e| format!("Failed to record event: {e}"))?;
+
+    conn.execute(
+        "UPDATE sessions SET event_count = event_count + 1 WHERE id = ?1",
+        params![session_id],
+    ).ok();
+
+    Ok(Event {
+        event_id,
+        event_type: event_type.to_string(),
+        ts,
+        session_id: session_id.to_string(),
+        source: source.to_string(),
+        seq: next_seq,
+        payload,
+        cost_usd,
+    })
+}
+
 // ============================================
 // MCP SERVER COMMANDS
 // ============================================
@@ -2246,6 +2293,849 @@ pub fn duplicate_workflow(db: tauri::State<'_, Database>, id: String) -> Result<
         created_at: now.clone(),
         updated_at: now,
     })
+}
+
+// ============================================
+// WORKFLOW VALIDATION (Phase 3B)
+// ============================================
+
+#[tauri::command]
+pub fn validate_workflow(db: tauri::State<'_, Database>, id: String) -> Result<ValidationResult, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let graph_json: String = conn
+        .query_row(
+            "SELECT graph_json FROM workflows WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("Workflow not found: {e}"))?;
+
+    validate_graph_json(&graph_json)
+}
+
+/// Validate a workflow graph. Pure function — no DB needed.
+pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String> {
+    let graph: serde_json::Value = serde_json::from_str(graph_json)
+        .map_err(|e| format!("Invalid graph JSON: {e}"))?;
+
+    let mut errors: Vec<String> = Vec::new();
+    let mut warnings: Vec<String> = Vec::new();
+
+    let nodes = graph.get("nodes").and_then(|v| v.as_array());
+    let edges = graph.get("edges").and_then(|v| v.as_array());
+
+    let nodes = match nodes {
+        Some(n) => n,
+        None => {
+            errors.push("Graph has no nodes array".to_string());
+            return Ok(ValidationResult { valid: false, errors, warnings });
+        }
+    };
+
+    if nodes.is_empty() {
+        errors.push("Workflow has no nodes".to_string());
+        return Ok(ValidationResult { valid: false, errors, warnings });
+    }
+
+    let edges = edges.cloned().unwrap_or_default();
+
+    // Collect node IDs and types
+    let mut node_ids: Vec<String> = Vec::new();
+    let mut node_types: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut has_input = false;
+    let mut has_output = false;
+
+    for node in nodes {
+        let id = node.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let ntype = node.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if ntype == "input" { has_input = true; }
+        if ntype == "output" { has_output = true; }
+        node_ids.push(id.clone());
+        node_types.insert(id, ntype);
+    }
+
+    if !has_input {
+        errors.push("Workflow must have at least one Input node".to_string());
+    }
+    if !has_output {
+        errors.push("Workflow must have at least one Output node".to_string());
+    }
+
+    // Build adjacency list for cycle detection
+    let mut adj: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut in_degree: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut connected_nodes: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for id in &node_ids {
+        adj.entry(id.clone()).or_default();
+        in_degree.entry(id.clone()).or_insert(0);
+    }
+
+    for edge in &edges {
+        let source = edge.get("source").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let target = edge.get("target").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        if !source.is_empty() && !target.is_empty() {
+            adj.entry(source.clone()).or_default().push(target.clone());
+            *in_degree.entry(target.clone()).or_insert(0) += 1;
+            connected_nodes.insert(source);
+            connected_nodes.insert(target);
+        }
+    }
+
+    // Kahn's algorithm for cycle detection (also gives topological order)
+    let mut queue: std::collections::VecDeque<String> = std::collections::VecDeque::new();
+    for (id, &deg) in &in_degree {
+        if deg == 0 {
+            queue.push_back(id.clone());
+        }
+    }
+
+    let mut visited_count = 0usize;
+    while let Some(node) = queue.pop_front() {
+        visited_count += 1;
+        if let Some(neighbors) = adj.get(&node) {
+            for n in neighbors {
+                if let Some(d) = in_degree.get_mut(n) {
+                    *d -= 1;
+                    if *d == 0 {
+                        queue.push_back(n.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    if visited_count < node_ids.len() {
+        errors.push("Workflow contains a cycle — execution would loop forever".to_string());
+    }
+
+    // Check for orphan nodes (not connected by any edge)
+    for id in &node_ids {
+        let ntype = node_types.get(id).map(|s| s.as_str()).unwrap_or("");
+        // Input nodes with no outgoing edges and Output nodes with no incoming edges are errors
+        // Nodes with no connections at all are warnings
+        if !connected_nodes.contains(id) && nodes.len() > 1 {
+            if ntype == "input" || ntype == "output" {
+                warnings.push(format!("Node '{}' ({}) has no connections", id, ntype));
+            } else {
+                warnings.push(format!("Orphan node '{}' ({}) — not connected to any edge", id, ntype));
+            }
+        }
+    }
+
+    Ok(ValidationResult {
+        valid: errors.is_empty(),
+        errors,
+        warnings,
+    })
+}
+
+// ============================================
+// WORKFLOW EXECUTION ENGINE (Phase 3B)
+// ============================================
+
+#[tauri::command]
+pub async fn run_workflow(
+    db: tauri::State<'_, Database>,
+    sidecar: tauri::State<'_, crate::sidecar::SidecarManager>,
+    app: tauri::AppHandle,
+    request: RunWorkflowRequest,
+) -> Result<WorkflowRunResult, String> {
+    // 1. Load workflow
+    let (workflow_name, graph_json) = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.query_row(
+            "SELECT name, graph_json FROM workflows WHERE id = ?1 AND is_archived = 0",
+            params![request.workflow_id],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .map_err(|e| format!("Workflow not found: {e}"))?
+    };
+
+    // 2. Validate
+    let validation = validate_graph_json(&graph_json)?;
+    if !validation.valid {
+        return Err(format!("Invalid workflow: {}", validation.errors.join("; ")));
+    }
+
+    // 3. Create a session for this workflow run
+    let session_id = Uuid::new_v4().to_string();
+    let now = now_iso();
+    {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT INTO sessions (id, agent_id, title, status, created_at, updated_at)
+             VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
+            params![session_id, "", format!("Workflow: {}", workflow_name), now, now],
+        )
+        .map_err(|e| format!("Failed to create workflow session: {e}"))?;
+    }
+
+    // 4. Load provider config (for LLM nodes)
+    let all_settings = {
+        let conn = db.conn.lock().map_err(|e| e.to_string())?;
+        let mut stmt = conn.prepare("SELECT key, value FROM settings")
+            .map_err(|e| e.to_string())?;
+        let mut settings = std::collections::HashMap::<String, String>::new();
+        let rows = stmt.query_map([], |row| {
+            let key: String = row.get(0)?;
+            let value: String = row.get(1)?;
+            Ok((key, value))
+        }).map_err(|e| e.to_string())?;
+        for row in rows {
+            let (k, v) = row.map_err(|e| e.to_string())?;
+            settings.insert(k, v);
+        }
+        settings
+    };
+
+    // 5. Spawn background execution
+    let db_clone = db.inner().clone();
+    let sidecar_clone = sidecar.inner().clone();
+    let session_id_clone = session_id.clone();
+    let inputs = request.inputs.clone();
+
+    let result_handle = tauri::async_runtime::spawn(async move {
+        execute_workflow(
+            &db_clone, &sidecar_clone, &app,
+            &session_id_clone, &graph_json, &inputs, &all_settings,
+        ).await
+    });
+
+    match result_handle.await {
+        Ok(result) => result,
+        Err(e) => Err(format!("Workflow execution panicked: {e}")),
+    }
+}
+
+/// Template variable resolution: replaces `{{node_id.handle}}` and `{{input.name}}` patterns.
+fn resolve_template(
+    template: &str,
+    node_outputs: &std::collections::HashMap<String, serde_json::Value>,
+    inputs: &std::collections::HashMap<String, serde_json::Value>,
+) -> String {
+    let re = regex::Regex::new(r"\{\{([^}]+)\}\}").unwrap();
+    re.replace_all(template, |caps: &regex::Captures| {
+        let key = caps[1].trim();
+        let parts: Vec<&str> = key.splitn(2, '.').collect();
+        if parts.len() == 2 {
+            let (source, field) = (parts[0], parts[1]);
+            if source == "input" || source == "inputs" {
+                if let Some(val) = inputs.get(field) {
+                    return match val.as_str() {
+                        Some(s) => s.to_string(),
+                        None => val.to_string(),
+                    };
+                }
+            }
+            // Look up node output
+            if let Some(val) = node_outputs.get(source) {
+                if field == "output" || field == "result" {
+                    return match val.as_str() {
+                        Some(s) => s.to_string(),
+                        None => val.to_string(),
+                    };
+                }
+                // Try as JSON object field
+                if let Some(obj) = val.as_object() {
+                    if let Some(field_val) = obj.get(field) {
+                        return match field_val.as_str() {
+                            Some(s) => s.to_string(),
+                            None => field_val.to_string(),
+                        };
+                    }
+                }
+                return match val.as_str() {
+                    Some(s) => s.to_string(),
+                    None => val.to_string(),
+                };
+            }
+        }
+        // Unresolved — return placeholder as-is
+        caps[0].to_string()
+    }).to_string()
+}
+
+/// Core workflow execution — DAG walker with sequential node execution.
+async fn execute_workflow(
+    db: &Database,
+    sidecar: &crate::sidecar::SidecarManager,
+    app: &tauri::AppHandle,
+    session_id: &str,
+    graph_json: &str,
+    inputs: &std::collections::HashMap<String, serde_json::Value>,
+    all_settings: &std::collections::HashMap<String, String>,
+) -> Result<WorkflowRunResult, String> {
+    let start_time = std::time::Instant::now();
+    let graph: serde_json::Value = serde_json::from_str(graph_json)
+        .map_err(|e| format!("Invalid graph JSON: {e}"))?;
+
+    let nodes = graph.get("nodes").and_then(|v| v.as_array())
+        .ok_or("No nodes in graph")?;
+    let edges = graph.get("edges").and_then(|v| v.as_array())
+        .cloned().unwrap_or_default();
+
+    // Emit workflow.started
+    let _ = record_event_db(db, session_id, "workflow.started", "desktop.workflow",
+        serde_json::json!({ "node_count": nodes.len(), "edge_count": edges.len() }));
+    let _ = app.emit("agent_event", serde_json::json!({
+        "type": "workflow.started", "session_id": session_id,
+        "payload": { "node_count": nodes.len(), "edge_count": edges.len() },
+    }));
+
+    // Build adjacency + in-degree for topological sort
+    let mut node_map: std::collections::HashMap<String, &serde_json::Value> = std::collections::HashMap::new();
+    let mut adj: std::collections::HashMap<String, Vec<String>> = std::collections::HashMap::new();
+    let mut in_degree: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    // Map: target_node_id → vec of (source_node_id, source_handle, target_handle)
+    let mut incoming_edges: std::collections::HashMap<String, Vec<(String, String, String)>> = std::collections::HashMap::new();
+
+    for node in nodes {
+        let id = node.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        node_map.insert(id.clone(), node);
+        adj.entry(id.clone()).or_default();
+        in_degree.entry(id.clone()).or_insert(0);
+    }
+
+    for edge in &edges {
+        let source = edge.get("source").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let target = edge.get("target").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let source_handle = edge.get("sourceHandle").and_then(|v| v.as_str()).unwrap_or("output").to_string();
+        let target_handle = edge.get("targetHandle").and_then(|v| v.as_str()).unwrap_or("input").to_string();
+        if !source.is_empty() && !target.is_empty() {
+            adj.entry(source.clone()).or_default().push(target.clone());
+            *in_degree.entry(target.clone()).or_insert(0) += 1;
+            incoming_edges.entry(target.clone()).or_default().push((source, source_handle, target_handle));
+        }
+    }
+
+    // Kahn's topological sort
+    let mut queue: std::collections::VecDeque<String> = std::collections::VecDeque::new();
+    for (id, &deg) in &in_degree {
+        if deg == 0 {
+            queue.push_back(id.clone());
+        }
+    }
+    let mut topo_order: Vec<String> = Vec::new();
+    let mut temp_degree = in_degree.clone();
+    while let Some(node_id) = queue.pop_front() {
+        topo_order.push(node_id.clone());
+        if let Some(neighbors) = adj.get(&node_id) {
+            for n in neighbors {
+                if let Some(d) = temp_degree.get_mut(n) {
+                    *d -= 1;
+                    if *d == 0 {
+                        queue.push_back(n.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Execute nodes in topological order
+    let mut node_outputs: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
+    let mut workflow_outputs: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
+    let mut total_tokens: i64 = 0;
+    let mut total_cost: f64 = 0.0;
+    let mut skipped_nodes: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for node_id in &topo_order {
+        // Skip nodes downstream of non-selected router branches
+        if skipped_nodes.contains(node_id) {
+            let _ = record_event_db(db, session_id, "workflow.node.skipped", "desktop.workflow",
+                serde_json::json!({ "node_id": node_id, "reason": "downstream of skipped branch" }));
+            let _ = app.emit("agent_event", serde_json::json!({
+                "type": "workflow.node.skipped", "session_id": session_id,
+                "payload": { "node_id": node_id },
+            }));
+            continue;
+        }
+
+        let node = match node_map.get(node_id) {
+            Some(n) => *n,
+            None => continue,
+        };
+        let node_type = node.get("type").and_then(|v| v.as_str()).unwrap_or("");
+        let node_data = node.get("data").unwrap_or(&serde_json::Value::Null);
+
+        // Emit node.started
+        let _ = record_event_db(db, session_id, "workflow.node.started", "desktop.workflow",
+            serde_json::json!({ "node_id": node_id, "node_type": node_type }));
+        let _ = app.emit("agent_event", serde_json::json!({
+            "type": "workflow.node.started", "session_id": session_id,
+            "payload": { "node_id": node_id, "node_type": node_type },
+        }));
+
+        // Resolve input from incoming edges
+        let incoming_value = if let Some(inc) = incoming_edges.get(node_id) {
+            if inc.len() == 1 {
+                node_outputs.get(&inc[0].0).cloned()
+            } else {
+                // Multiple inputs — build object keyed by target handle
+                let mut obj = serde_json::Map::new();
+                for (src_id, _src_handle, tgt_handle) in inc {
+                    if let Some(val) = node_outputs.get(src_id) {
+                        obj.insert(tgt_handle.clone(), val.clone());
+                    }
+                }
+                if obj.is_empty() { None } else { Some(serde_json::Value::Object(obj)) }
+            }
+        } else {
+            None
+        };
+
+        let node_start = std::time::Instant::now();
+        let result = match node_type {
+            "input" => execute_input_node(node_data, node_id, inputs),
+            "output" => execute_output_node(node_data, node_id, &incoming_value, &mut workflow_outputs),
+            "llm" => execute_llm_node(
+                db, sidecar, session_id, node_data, node_id,
+                &incoming_value, &node_outputs, inputs, all_settings,
+            ).await,
+            "transform" => execute_transform_node(node_data, node_id, &incoming_value, &node_outputs, inputs),
+            "router" => execute_router_node(
+                db, sidecar, session_id, node_data, node_id,
+                &incoming_value, &node_outputs, inputs, all_settings,
+                &adj, &mut skipped_nodes,
+            ).await,
+            "tool" => execute_tool_node(
+                sidecar, session_id, node_data, node_id, &incoming_value,
+            ).await,
+            "approval" => {
+                // Approval node — emit waiting event, handled in Chunk 5
+                let _ = record_event_db(db, session_id, "workflow.node.skipped", "desktop.workflow",
+                    serde_json::json!({ "node_id": node_id, "reason": "approval node not yet implemented" }));
+                Ok(incoming_value.unwrap_or(serde_json::Value::Null))
+            }
+            _ => {
+                // Unknown/subworkflow — skip
+                let _ = record_event_db(db, session_id, "workflow.node.skipped", "desktop.workflow",
+                    serde_json::json!({ "node_id": node_id, "node_type": node_type, "reason": "unsupported type" }));
+                let _ = app.emit("agent_event", serde_json::json!({
+                    "type": "workflow.node.skipped", "session_id": session_id,
+                    "payload": { "node_id": node_id, "node_type": node_type },
+                }));
+                Ok(serde_json::Value::Null)
+            }
+        };
+        let node_duration = node_start.elapsed().as_millis() as i64;
+
+        match result {
+            Ok(output) => {
+                // Track tokens/cost from LLM nodes
+                if let Some(usage) = output.as_object().and_then(|o| o.get("__usage")) {
+                    let toks = usage.get("total_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+                    let cost = usage.get("cost_usd").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                    total_tokens += toks;
+                    total_cost += cost;
+                }
+
+                // Store output (strip __usage metadata before storing)
+                let clean_output = if let Some(obj) = output.as_object() {
+                    if obj.contains_key("__usage") {
+                        obj.get("content").cloned()
+                            .or_else(|| obj.get("result").cloned())
+                            .unwrap_or(output.clone())
+                    } else {
+                        output.clone()
+                    }
+                } else {
+                    output.clone()
+                };
+                node_outputs.insert(node_id.clone(), clean_output.clone());
+
+                // Emit node.completed
+                let output_preview = match clean_output.as_str() {
+                    Some(s) => s[..s.len().min(200)].to_string(),
+                    None => serde_json::to_string(&clean_output).unwrap_or_default()[..200.min(serde_json::to_string(&clean_output).unwrap_or_default().len())].to_string(),
+                };
+                let _ = record_event_db(db, session_id, "workflow.node.completed", "desktop.workflow",
+                    serde_json::json!({
+                        "node_id": node_id, "node_type": node_type,
+                        "output_preview": output_preview, "duration_ms": node_duration,
+                    }));
+                let _ = app.emit("agent_event", serde_json::json!({
+                    "type": "workflow.node.completed", "session_id": session_id,
+                    "payload": {
+                        "node_id": node_id, "node_type": node_type,
+                        "output_preview": output_preview, "duration_ms": node_duration,
+                    },
+                }));
+            }
+            Err(err) => {
+                let _ = record_event_db(db, session_id, "workflow.node.error", "desktop.workflow",
+                    serde_json::json!({
+                        "node_id": node_id, "node_type": node_type,
+                        "error": err, "duration_ms": node_duration,
+                    }));
+                let _ = app.emit("agent_event", serde_json::json!({
+                    "type": "workflow.node.error", "session_id": session_id,
+                    "payload": { "node_id": node_id, "error": &err },
+                }));
+
+                // Emit workflow.failed
+                let total_duration = start_time.elapsed().as_millis() as i64;
+                let _ = record_event_db(db, session_id, "workflow.failed", "desktop.workflow",
+                    serde_json::json!({
+                        "node_id": node_id, "error": err,
+                        "duration_ms": total_duration,
+                    }));
+                let _ = app.emit("agent_event", serde_json::json!({
+                    "type": "workflow.failed", "session_id": session_id,
+                    "payload": { "node_id": node_id, "error": &err },
+                }));
+
+                return Ok(WorkflowRunResult {
+                    session_id: session_id.to_string(),
+                    status: "failed".to_string(),
+                    outputs: workflow_outputs,
+                    total_tokens,
+                    total_cost_usd: total_cost,
+                    duration_ms: total_duration,
+                    node_count: topo_order.len(),
+                    error: Some(err),
+                });
+            }
+        }
+    }
+
+    // Workflow completed successfully
+    let total_duration = start_time.elapsed().as_millis() as i64;
+    let _ = record_event_db(db, session_id, "workflow.completed", "desktop.workflow",
+        serde_json::json!({
+            "duration_ms": total_duration, "total_tokens": total_tokens,
+            "total_cost_usd": total_cost, "node_count": topo_order.len(),
+        }));
+    let _ = app.emit("agent_event", serde_json::json!({
+        "type": "workflow.completed", "session_id": session_id,
+        "payload": {
+            "duration_ms": total_duration, "total_tokens": total_tokens,
+            "total_cost_usd": total_cost,
+        },
+    }));
+
+    Ok(WorkflowRunResult {
+        session_id: session_id.to_string(),
+        status: "completed".to_string(),
+        outputs: workflow_outputs,
+        total_tokens,
+        total_cost_usd: total_cost,
+        duration_ms: total_duration,
+        node_count: topo_order.len(),
+        error: None,
+    })
+}
+
+// ============================================
+// NODE EXECUTORS
+// ============================================
+
+fn execute_input_node(
+    node_data: &serde_json::Value,
+    node_id: &str,
+    inputs: &std::collections::HashMap<String, serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    // Input node: reads from the workflow inputs map
+    // Try node_id first, then label from node data, then "input" key
+    let label = node_data.get("label").and_then(|v| v.as_str()).unwrap_or(node_id);
+    let input_name = node_data.get("inputName").and_then(|v| v.as_str()).unwrap_or(label);
+
+    if let Some(val) = inputs.get(node_id) {
+        return Ok(val.clone());
+    }
+    if let Some(val) = inputs.get(input_name) {
+        return Ok(val.clone());
+    }
+    // Use default value if configured
+    if let Some(default_val) = node_data.get("defaultValue") {
+        return Ok(default_val.clone());
+    }
+    Err(format!("No input provided for Input node '{}' (expected key: '{}')", node_id, input_name))
+}
+
+fn execute_output_node(
+    _node_data: &serde_json::Value,
+    node_id: &str,
+    incoming: &Option<serde_json::Value>,
+    workflow_outputs: &mut std::collections::HashMap<String, serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    let value = incoming.clone().unwrap_or(serde_json::Value::Null);
+    workflow_outputs.insert(node_id.to_string(), value.clone());
+    Ok(value)
+}
+
+async fn execute_llm_node(
+    db: &Database,
+    sidecar: &crate::sidecar::SidecarManager,
+    session_id: &str,
+    node_data: &serde_json::Value,
+    node_id: &str,
+    incoming: &Option<serde_json::Value>,
+    node_outputs: &std::collections::HashMap<String, serde_json::Value>,
+    inputs: &std::collections::HashMap<String, serde_json::Value>,
+    all_settings: &std::collections::HashMap<String, String>,
+) -> Result<serde_json::Value, String> {
+    let provider_name = node_data.get("provider").and_then(|v| v.as_str()).unwrap_or("ollama");
+    let model = node_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
+    let temperature = node_data.get("temperature").and_then(|v| v.as_f64()).unwrap_or(0.7);
+    let system_prompt = node_data.get("systemPrompt").and_then(|v| v.as_str()).unwrap_or("");
+
+    // Build the user prompt from template + incoming data
+    let prompt_template = node_data.get("prompt").and_then(|v| v.as_str()).unwrap_or("{{input}}");
+    let prompt = if prompt_template.contains("{{") {
+        resolve_template(prompt_template, node_outputs, inputs)
+    } else if let Some(inc) = incoming {
+        let inc_str = match inc.as_str() {
+            Some(s) => s.to_string(),
+            None => serde_json::to_string(inc).unwrap_or_default(),
+        };
+        format!("{}\n\n{}", prompt_template, inc_str)
+    } else {
+        prompt_template.to_string()
+    };
+
+    // Load provider config from settings
+    let prefix = format!("provider.{}.", provider_name);
+    let mut api_key = String::new();
+    let mut base_url = String::new();
+    let mut extra_config = serde_json::Map::new();
+    for (k, v) in all_settings {
+        if let Some(field) = k.strip_prefix(&prefix) {
+            let clean_val = v.trim_matches('"').to_string();
+            match field {
+                "api_key" => api_key = clean_val,
+                "base_url" | "endpoint" => base_url = clean_val,
+                _ => { extra_config.insert(field.to_string(), serde_json::Value::String(clean_val)); }
+            }
+        }
+    }
+
+    // Build /chat/direct request
+    let mut body = serde_json::json!({
+        "messages": [{ "role": "user", "content": prompt }],
+        "provider": provider_name,
+        "model": model,
+        "temperature": temperature,
+    });
+    if !system_prompt.is_empty() {
+        body["system_prompt"] = serde_json::Value::String(system_prompt.to_string());
+    }
+    if !api_key.is_empty() {
+        body["api_key"] = serde_json::Value::String(api_key);
+    }
+    if !base_url.is_empty() {
+        body["base_url"] = serde_json::Value::String(base_url);
+    }
+    if !extra_config.is_empty() {
+        body["extra_config"] = serde_json::Value::Object(extra_config);
+    }
+
+    // Record LLM request event
+    let _ = record_event_db(db, session_id, "llm.request.started", "desktop.workflow",
+        serde_json::json!({ "node_id": node_id, "model": model, "provider": provider_name }));
+
+    let resp = sidecar.proxy_request("POST", "/chat/direct", Some(body)).await
+        .map_err(|e| format!("LLM call failed for node '{}': {}", node_id, e))?;
+
+    let content = resp.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let usage = resp.get("usage");
+    let input_tokens = usage.and_then(|u| u.get("prompt_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
+    let output_tokens = usage.and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
+    let resp_model = resp.get("model").and_then(|v| v.as_str()).unwrap_or(model).to_string();
+
+    // Record LLM response event
+    let _ = record_event_db(db, session_id, "llm.response.completed", "desktop.workflow",
+        serde_json::json!({
+            "node_id": node_id, "model": resp_model, "provider": provider_name,
+            "input_tokens": input_tokens, "output_tokens": output_tokens,
+        }));
+
+    // Return content with usage metadata (stripped by caller)
+    Ok(serde_json::json!({
+        "content": content,
+        "__usage": {
+            "total_tokens": input_tokens + output_tokens,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost_usd": 0.0,
+        }
+    }))
+}
+
+fn execute_transform_node(
+    node_data: &serde_json::Value,
+    _node_id: &str,
+    incoming: &Option<serde_json::Value>,
+    node_outputs: &std::collections::HashMap<String, serde_json::Value>,
+    inputs: &std::collections::HashMap<String, serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    // Template mode only (first pass)
+    let template = node_data.get("template").and_then(|v| v.as_str()).unwrap_or("{{input}}");
+
+    // If template has variables, resolve them
+    if template.contains("{{") {
+        let result = resolve_template(template, node_outputs, inputs);
+        return Ok(serde_json::Value::String(result));
+    }
+
+    // Pass-through if no template
+    Ok(incoming.clone().unwrap_or(serde_json::Value::Null))
+}
+
+async fn execute_router_node(
+    db: &Database,
+    sidecar: &crate::sidecar::SidecarManager,
+    session_id: &str,
+    node_data: &serde_json::Value,
+    node_id: &str,
+    incoming: &Option<serde_json::Value>,
+    _node_outputs: &std::collections::HashMap<String, serde_json::Value>,
+    _inputs: &std::collections::HashMap<String, serde_json::Value>,
+    all_settings: &std::collections::HashMap<String, String>,
+    adj: &std::collections::HashMap<String, Vec<String>>,
+    _skipped_nodes: &mut std::collections::HashSet<String>,
+) -> Result<serde_json::Value, String> {
+    // LLM classification: ask a cheap model to classify input into one of the branches
+    let branches = node_data.get("branches").and_then(|v| v.as_array());
+    let branches = match branches {
+        Some(b) if !b.is_empty() => b,
+        _ => return Err(format!("Router node '{}' has no branches configured", node_id)),
+    };
+
+    let branch_names: Vec<String> = branches.iter()
+        .filter_map(|b| b.get("name").and_then(|v| v.as_str()).map(|s| s.to_string()))
+        .collect();
+
+    let incoming_text = incoming.as_ref().map(|v| match v.as_str() {
+        Some(s) => s.to_string(),
+        None => serde_json::to_string(v).unwrap_or_default(),
+    }).unwrap_or_default();
+
+    let classify_prompt = format!(
+        "Classify the following input into exactly one of these categories: {}.\n\n\
+         Input: {}\n\n\
+         Respond with ONLY the category name, nothing else.",
+        branch_names.join(", "),
+        incoming_text,
+    );
+
+    // Use the router's configured provider or default
+    let provider_name = node_data.get("provider").and_then(|v| v.as_str()).unwrap_or("ollama");
+    let model = node_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
+
+    // Build LLM body using sidecar helper
+    let mut body = serde_json::json!({
+        "messages": [{ "role": "user", "content": classify_prompt }],
+        "provider": provider_name,
+        "model": model,
+        "temperature": 0.0,
+    });
+
+    // Load provider config
+    let prefix = format!("provider.{}.", provider_name);
+    for (k, v) in all_settings {
+        if let Some(field) = k.strip_prefix(&prefix) {
+            let clean_val = v.trim_matches('"').to_string();
+            match field {
+                "api_key" => { body["api_key"] = serde_json::Value::String(clean_val); }
+                "base_url" | "endpoint" => { body["base_url"] = serde_json::Value::String(clean_val); }
+                _ => {}
+            }
+        }
+    }
+
+    let resp = sidecar.proxy_request("POST", "/chat/direct", Some(body)).await
+        .map_err(|e| format!("Router LLM call failed: {}", e))?;
+
+    let classification = resp.get("content").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+
+    // Find matching branch (case-insensitive)
+    let selected = branch_names.iter().find(|name| {
+        name.eq_ignore_ascii_case(&classification)
+    }).cloned().unwrap_or_else(|| branch_names[0].clone());
+
+    // Mark non-selected downstream nodes for skipping
+    // Each branch has a handle name matching the branch name
+    if let Some(neighbors) = adj.get(node_id) {
+        // For simplicity: all neighbors that aren't directly on the selected branch path get skipped
+        // In practice, branch routing maps output handles to branch names
+        // For now, mark all downstream as non-skipped (since we can't easily map handles here)
+        // This will be refined in Chunk 4 with proper handle-based routing
+        let _ = neighbors; // placeholder — proper routing in Chunk 4
+    }
+
+    let _ = record_event_db(db, session_id, "workflow.node.completed", "desktop.workflow",
+        serde_json::json!({
+            "node_id": node_id, "node_type": "router",
+            "classification": &classification, "selected_branch": &selected,
+        }));
+
+    // Pass through incoming value to next node
+    Ok(incoming.clone().unwrap_or(serde_json::Value::Null))
+}
+
+async fn execute_tool_node(
+    sidecar: &crate::sidecar::SidecarManager,
+    _session_id: &str,
+    node_data: &serde_json::Value,
+    node_id: &str,
+    incoming: &Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    let tool_name = node_data.get("toolName").and_then(|v| v.as_str()).unwrap_or("");
+    if tool_name.is_empty() {
+        return Err(format!("Tool node '{}' has no tool configured", node_id));
+    }
+
+    // Build tool input from node config + incoming data
+    let tool_input = if let Some(configured_input) = node_data.get("toolInput") {
+        configured_input.clone()
+    } else if let Some(inc) = incoming {
+        inc.clone()
+    } else {
+        serde_json::json!({})
+    };
+
+    let body = serde_json::json!({
+        "tool_name": tool_name,
+        "tool_input": tool_input,
+    });
+
+    let resp = sidecar.proxy_request("POST", "/tools/execute", Some(body)).await
+        .map_err(|e| format!("Tool execution failed for node '{}': {}", node_id, e))?;
+
+    Ok(resp.get("result").cloned().unwrap_or(resp))
+}
+
+// ============================================
+// WORKFLOW EXECUTION TYPES (Phase 3B)
+// ============================================
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunWorkflowRequest {
+    pub workflow_id: String,
+    pub inputs: std::collections::HashMap<String, serde_json::Value>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct WorkflowRunResult {
+    pub session_id: String,
+    pub status: String,
+    pub outputs: std::collections::HashMap<String, serde_json::Value>,
+    pub total_tokens: i64,
+    pub total_cost_usd: f64,
+    pub duration_ms: i64,
+    pub node_count: usize,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidationResult {
+    pub valid: bool,
+    pub errors: Vec<String>,
+    pub warnings: Vec<String>,
 }
 
 // ============================================

@@ -42,9 +42,10 @@
 | Rust module restructuring | — | DONE |
 | Budget enforcement (deep critique fix) | `hybrid-intelligence.md` | DONE |
 | Plugin system foundation | `plugin-system.md` | DONE |
+| Plugin subprocess lifecycle | `plugin-system.md` | DONE |
 | README update | — | DONE |
+| One-click installers | `phase-plan.md` | DONE |
 | Community templates | `phase-plan.md` | TODO (5 bundled done in 3C) |
-| One-click installers | `phase-plan.md` | TODO |
 
 ---
 
@@ -56,8 +57,8 @@
 4. ~~Hybrid intelligence routing~~ DONE
 5. ~~Plugin system foundation~~ DONE (spec + schema v7 + CRUD + Settings UI)
 6. ~~README update~~ DONE
-7. One-click installers — `phase-plan.md` — DMG, MSI, AppImage via Tauri bundler
-8. Plugin subprocess lifecycle — Wire plugins to sidecar MCP tool registry
+7. ~~One-click installers~~ DONE (Tauri bundler config + MIT LICENSE)
+8. ~~Plugin subprocess lifecycle~~ DONE (enable→spawn→MCP connect, disable→disconnect, startup auto-connect)
 9. Community template gallery — GitHub-based, beyond the 5 bundled templates
 10. Open-source launch prep — Demo video, screenshots, Show HN assets
 
@@ -71,7 +72,7 @@
 
 **Phase 2** (COMPLETE): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (5778124). Inspector improvements (0a5895c).
 
-**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d). **3B execution DONE**: DAG walker engine, 7 node executors, validation, live node states, approval dialog, run button + input form. **3C polish DONE**: Codex review fixes (H1/H2/M1-M4 — 2380b83, 280be8c), Blender-inspired node restyling + collapse (ba82190), context menu + keyboard shortcuts (74d97df), 5 bundled templates + export/import (bb37147). **Hybrid Intelligence DONE**: Schema v6 (routing_mode, routing_rules on agents), Smart Router in Rust (3 modes: single/auto/manual, 14 unit tests), budget tracking (monthly cost aggregation, threshold warnings), UI (agent routing config, Settings budget tab), Inspector integration (llm.routed + budget.warning events, routing stats, savings tracking). **Rust refactoring** (6e338c9): monolithic commands.rs → 13 domain modules + workflow/. **Budget enforcement** (5117302): BudgetExhausted error, enforcement in chat + workflow before sidecar calls. **Plugin system** (750b4f6): Spec, schema v7, CRUD commands, scanner, Settings UI. **README** (9a630e8): Full update reflecting Phase 3 features.
+**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d). **3B execution DONE**: DAG walker engine, 7 node executors, validation, live node states, approval dialog, run button + input form. **3C polish DONE**: Codex review fixes (H1/H2/M1-M4 — 2380b83, 280be8c), Blender-inspired node restyling + collapse (ba82190), context menu + keyboard shortcuts (74d97df), 5 bundled templates + export/import (bb37147). **Hybrid Intelligence DONE**: Schema v6 (routing_mode, routing_rules on agents), Smart Router in Rust (3 modes: single/auto/manual, 14 unit tests), budget tracking (monthly cost aggregation, threshold warnings), UI (agent routing config, Settings budget tab), Inspector integration (llm.routed + budget.warning events, routing stats, savings tracking). **Rust refactoring** (6e338c9): monolithic commands.rs → 13 domain modules + workflow/. **Budget enforcement** (5117302): BudgetExhausted error, enforcement in chat + workflow before sidecar calls. **Plugin system** (750b4f6): Spec, schema v7, CRUD commands, scanner, Settings UI. **Plugin lifecycle** (0823cc8): Subprocess spawning via MCP connect, tool discovery, auto-connect on startup. **README** (9a630e8): Full update reflecting Phase 3 features. **Installers** (425f85c): Tauri bundler config + MIT LICENSE.
 
 Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav/grouping/actions), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling, onboarding wizard, session branching, peer review workflow.
 
@@ -108,21 +109,17 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-18 (session 18)
+**Date**: 2026-02-18 (session 19)
 **What happened**:
-- Committed Rust module restructuring (monolithic commands.rs → 13 domain modules + workflow/)
-- Triaged "deep critique" review (4 findings: 1 fixed, 2 deferred, 1 rejected)
-- **Fixed budget enforcement**: BudgetExhausted error variant, enforcement in chat.rs + workflow/mod.rs before sidecar calls. local_only → force ollama, ask → error, cheapest_cloud → force gemini-flash
-- **Plugin system foundation**: Full spec (plugin-system.md), schema v7 (plugins table), Rust CRUD (list/scan/enable/disable/remove), TS types, Zustand store, Settings UI with Plugins tab
-- **README update**: Full rewrite reflecting Phase 3 features (node editor, hybrid intelligence, plugins, updated roadmap)
+- **One-click installers** (425f85c): Enhanced tauri.conf.json with bundle metadata (category, descriptions, copyright, license, platform configs). Created MIT LICENSE file.
+- **Plugin subprocess lifecycle** (0823cc8): Full MCP integration — enable_plugin now spawns subprocess via /mcp/connect, discovers tools, registers in tool registry. disable_plugin disconnects. remove_plugin disconnects if enabled. New connect_enabled_plugins command for startup auto-connect. UI shows connection status, loading spinners, "Reconnect All" button, tool count toasts.
 - All 31 Rust tests pass, TypeScript clean
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
-- Session 17: Hybrid intelligence — complete (schema v6, router, budget, UI, inspector)
+- Session 18: Rust refactoring, budget enforcement, plugin foundation, README update
 
 **Next session should**:
-1. One-click installers (Tauri bundler config)
-2. Plugin subprocess lifecycle (wire to sidecar MCP tool registry)
-3. Open-source launch prep (demo video, screenshots)
-4. Consider Phase 4 planning (universal automation canvas)
+1. Community template gallery (GitHub-based, beyond 5 bundled)
+2. Open-source launch prep (demo video, screenshots, Show HN assets)
+3. Consider Phase 4 planning (universal automation canvas)

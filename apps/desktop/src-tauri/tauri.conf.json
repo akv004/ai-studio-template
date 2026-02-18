@@ -34,6 +34,29 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "DeveloperTool",
+    "shortDescription": "The open-source IDE for AI agents",
+    "longDescription": "AI Studio is a desktop IDE for building, running, debugging, and comparing AI agents. Features include an Agent Inspector, visual Node Editor for AI pipelines, hybrid intelligence (smart model routing), MCP-native tool system, and local-first SQLite persistence.",
+    "copyright": "Copyright 2026 AI Studio Contributors",
+    "license": "MIT",
+    "licenseFile": "../../../LICENSE",
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libgtk-3-0", "python3", "python3-pip"],
+        "section": "devel"
+      },
+      "appimage": {
+        "bundleMediaFramework": false
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    },
+    "windows": {
+      "certificateThumbprint": null,
+      "digestAlgorithm": "sha256",
+      "timestampUrl": ""
+    }
   }
 }

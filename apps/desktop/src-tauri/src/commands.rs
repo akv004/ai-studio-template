@@ -3206,3 +3206,210 @@ pub struct ValidationResult {
 pub fn greet(name: &str) -> String {
     format!("Hello, {}! Welcome to AI Studio.", name)
 }
+
+// ============================================
+// TESTS
+// ============================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    // -- validate_graph_json tests --
+
+    fn make_graph(nodes: &[(&str, &str)], edges: &[(&str, &str)]) -> String {
+        let nodes_json: Vec<String> = nodes.iter().map(|(id, ntype)| {
+            format!(r#"{{"id":"{}","type":"{}","position":{{"x":0,"y":0}},"data":{{}}}}"#, id, ntype)
+        }).collect();
+        let edges_json: Vec<String> = edges.iter().enumerate().map(|(i, (src, tgt))| {
+            format!(r#"{{"id":"e{}","source":"{}","target":"{}"}}"#, i, src, tgt)
+        }).collect();
+        format!(r#"{{"nodes":[{}],"edges":[{}]}}"#, nodes_json.join(","), edges_json.join(","))
+    }
+
+    #[test]
+    fn test_valid_simple_pipeline() {
+        let graph = make_graph(
+            &[("in1", "input"), ("llm1", "llm"), ("out1", "output")],
+            &[("in1", "llm1"), ("llm1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid, "errors: {:?}", result.errors);
+        assert!(result.warnings.is_empty(), "warnings: {:?}", result.warnings);
+    }
+
+    #[test]
+    fn test_missing_input_node() {
+        let graph = make_graph(
+            &[("llm1", "llm"), ("out1", "output")],
+            &[("llm1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.contains("Input node")));
+    }
+
+    #[test]
+    fn test_missing_output_node() {
+        let graph = make_graph(
+            &[("in1", "input"), ("llm1", "llm")],
+            &[("in1", "llm1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.contains("Output node")));
+    }
+
+    #[test]
+    fn test_empty_workflow() {
+        let graph = r#"{"nodes":[],"edges":[]}"#;
+        let result = validate_graph_json(graph).unwrap();
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.contains("no nodes")));
+    }
+
+    #[test]
+    fn test_cycle_detection() {
+        let graph = make_graph(
+            &[("in1", "input"), ("a", "llm"), ("b", "transform"), ("out1", "output")],
+            &[("in1", "a"), ("a", "b"), ("b", "a"), ("b", "out1")],
+        );
+        let result = validate_graph_json(graph.as_str()).unwrap();
+        assert!(!result.valid);
+        assert!(result.errors.iter().any(|e| e.contains("cycle")));
+    }
+
+    #[test]
+    fn test_orphan_node_warning() {
+        let graph = make_graph(
+            &[("in1", "input"), ("llm1", "llm"), ("orphan", "transform"), ("out1", "output")],
+            &[("in1", "llm1"), ("llm1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid, "should be valid despite orphan");
+        assert!(result.warnings.iter().any(|w| w.contains("Orphan") || w.contains("orphan")));
+    }
+
+    #[test]
+    fn test_complex_dag_valid() {
+        // Input → LLM → Router → (branch1: Tool → Output, branch2: Transform → Output)
+        let graph = make_graph(
+            &[
+                ("in1", "input"),
+                ("llm1", "llm"),
+                ("router1", "router"),
+                ("tool1", "tool"),
+                ("transform1", "transform"),
+                ("out1", "output"),
+                ("out2", "output"),
+            ],
+            &[
+                ("in1", "llm1"),
+                ("llm1", "router1"),
+                ("router1", "tool1"),
+                ("router1", "transform1"),
+                ("tool1", "out1"),
+                ("transform1", "out2"),
+            ],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid, "errors: {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_invalid_json() {
+        let result = validate_graph_json("not json at all");
+        assert!(result.is_err() || !result.unwrap().valid);
+    }
+
+    // -- resolve_template tests --
+
+    #[test]
+    fn test_resolve_input_variable() {
+        let node_outputs = HashMap::new();
+        let mut inputs = HashMap::new();
+        inputs.insert("query".to_string(), serde_json::json!("What is AI?"));
+
+        let result = resolve_template("User asks: {{input.query}}", &node_outputs, &inputs);
+        assert_eq!(result, "User asks: What is AI?");
+    }
+
+    #[test]
+    fn test_resolve_inputs_alias() {
+        let node_outputs = HashMap::new();
+        let mut inputs = HashMap::new();
+        inputs.insert("text".to_string(), serde_json::json!("hello"));
+
+        let result = resolve_template("{{inputs.text}}", &node_outputs, &inputs);
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn test_resolve_node_output() {
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("llm_1".to_string(), serde_json::json!("The answer is 42"));
+        let inputs = HashMap::new();
+
+        let result = resolve_template("LLM said: {{llm_1.output}}", &node_outputs, &inputs);
+        assert_eq!(result, "LLM said: The answer is 42");
+    }
+
+    #[test]
+    fn test_resolve_node_result_alias() {
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("tool_1".to_string(), serde_json::json!("file contents here"));
+        let inputs = HashMap::new();
+
+        let result = resolve_template("{{tool_1.result}}", &node_outputs, &inputs);
+        assert_eq!(result, "file contents here");
+    }
+
+    #[test]
+    fn test_resolve_json_field() {
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("llm_1".to_string(), serde_json::json!({"answer": "42", "confidence": 0.95}));
+        let inputs = HashMap::new();
+
+        let result = resolve_template("Answer: {{llm_1.answer}}", &node_outputs, &inputs);
+        assert_eq!(result, "Answer: 42");
+    }
+
+    #[test]
+    fn test_resolve_unresolved_placeholder() {
+        let node_outputs = HashMap::new();
+        let inputs = HashMap::new();
+
+        let result = resolve_template("Hello {{unknown.var}}", &node_outputs, &inputs);
+        assert_eq!(result, "Hello {{unknown.var}}");
+    }
+
+    #[test]
+    fn test_resolve_multiple_variables() {
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("llm_1".to_string(), serde_json::json!("summary text"));
+        let mut inputs = HashMap::new();
+        inputs.insert("topic".to_string(), serde_json::json!("Rust"));
+
+        let result = resolve_template(
+            "Topic: {{input.topic}}, Summary: {{llm_1.output}}",
+            &node_outputs, &inputs,
+        );
+        assert_eq!(result, "Topic: Rust, Summary: summary text");
+    }
+
+    #[test]
+    fn test_resolve_no_templates() {
+        let result = resolve_template("plain text no vars", &HashMap::new(), &HashMap::new());
+        assert_eq!(result, "plain text no vars");
+    }
+
+    #[test]
+    fn test_resolve_whitespace_in_braces() {
+        let mut inputs = HashMap::new();
+        inputs.insert("name".to_string(), serde_json::json!("Amit"));
+
+        let result = resolve_template("Hello {{ input.name }}", &HashMap::new(), &inputs);
+        assert_eq!(result, "Hello Amit");
+    }
+}

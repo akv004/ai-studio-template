@@ -96,3 +96,4 @@ All resolved reviews have been deleted. Summary of completed reviews:
 | 2026-02-18 | Platform architecture | Codex (GPT-5) | 8 items — 7 fixed in 3C (2380b83, 280be8c), 1 deferred (Windows fuser) |
 | 2026-02-18 | Node editor 3C polish | Antigravity (Gemini) | APPROVED — 3 minor suggestions deferred to Phase 4 (skipped edge styling, merge node, template thumbnails) |
 | 2026-02-18 | Node editor architecture critique | Antigravity (Gemini) | 4 findings — all accepted, deferred to Phase 4 (dynamic handles, type viz, loops, script nodes) |
+| 2026-02-17 | Hybrid intelligence | Antigravity (Gemini) | 6 checks PASS, 1 WARN (timezone). 3 items: 1 accepted (model list TODO), 1 rejected, 1 deferred (retry fallback) |

@@ -3,6 +3,7 @@ import { Plus, RefreshCw, Bot, Trash2, Loader2, Shield, Server, Zap } from 'luci
 import { useAppStore } from '../../state/store';
 import type { ToolsMode, RoutingMode } from '@ai-studio/shared';
 
+// TODO: Source from `get_model_capabilities` IPC to stay in sync with MODEL_CAPABILITIES in routing.rs
 const MODELS_BY_PROVIDER: Record<string, string[]> = {
     anthropic: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-haiku-4-5-20251001'],
     google: ['gemini-2.0-flash', 'gemini-2.0-flash-lite', 'gemini-1.5-pro', 'gemini-1.5-flash'],

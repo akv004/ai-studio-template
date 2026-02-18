@@ -49,3 +49,7 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+
+# Claude Code (keep memory.md tracked, ignore local/session files)
+.claude/settings.local.json
+.claude/handover/

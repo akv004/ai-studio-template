@@ -10,8 +10,8 @@
 </p>
 
 <p align="center">
-  <a href="#what-can-you-do-with-ai-studio">What It Does</a> &middot;
-  <a href="#why-ai-studio">Why AI Studio</a> &middot;
+  <a href="#features">Features</a> &middot;
+  <a href="#node-editor">Node Editor</a> &middot;
   <a href="#quick-start">Quick Start</a> &middot;
   <a href="#architecture">Architecture</a> &middot;
   <a href="#roadmap">Roadmap</a>
@@ -26,9 +26,9 @@
 
 ---
 
-## What can you do with AI Studio?
+## What is AI Studio?
 
-**See everything your AI agent does.**
+**Chrome DevTools for AI agents** — a desktop IDE where you build, run, inspect, and compare AI agents with full visibility into every step, every token, and every dollar.
 
 > You say: "Refactor the auth module to use JWT"
 >
@@ -36,52 +36,31 @@
 >
 > Something wrong? Click any step. See the exact input and output. Click **Branch from here**. Try a different approach. Compare results side-by-side.
 
-**Hybrid Intelligence — the right model for each step.**
-
-> Simple question? Runs on your local Llama (free, private). Complex code? Routes to Claude Sonnet. Need vision? GPT-4o. You set a monthly budget — AI Studio picks the best model automatically and never surprises you with a bill.
-
-**Control what your agent can do.**
-
-> Read files? Auto-approved. Write files? You approve each one. `rm -rf`? Blocked. Always. Every decision logged and auditable.
-
-**Compare models side-by-side.**
-
-> Same prompt. Claude vs GPT vs Gemini vs local Llama. Compare output quality, speed, and cost in a split-screen view. Make data-driven decisions.
-
-**Run agents at scale.**
-
-> Batch 50 tasks. Auto-approve safe operations. See which ones failed and why. Export results. Total cost: $0.58.
-
----
-
-## Why AI Studio?
-
-| | ChatGPT / Claude | OpenClaw | Cursor | **AI Studio** |
-|---|---|---|---|---|
-| Can it use tools (files, shell, APIs)? | No | Yes | Limited | **Yes (MCP + built-in)** |
-| Can you see what it did? | No | No | No | **Full Inspector** |
-| Can you replay / branch? | No | No | No | **Yes** |
-| Can you compare models? | No | No | No | **Side-by-side** |
-| Hybrid intelligence (auto-pick model)? | No | No | No | **Yes** |
-| Cost tracking per message? | No | No | No | **Yes** |
-| Approval rules for safety? | N/A | Minimal | N/A | **Full rules engine** |
-| Local-first (data stays on machine)? | No | Yes | No | **Yes** |
-| Open source and free? | No | Yes | No | **Yes** |
-
 ---
 
 ## Features
 
 ### Agent Inspector (Flagship)
 
-The **Chrome DevTools for AI agents**. No other tool gives you this level of visibility:
+No other tool gives you this level of visibility into AI agent behavior:
 
 - **Event Timeline** — every message, LLM call, tool execution as a navigable timeline
 - **Tool Call Deep-Dive** — click any tool call to see input, output, approval status, duration
 - **Token & Cost Tracking** — per-turn and cumulative, with model pricing
-- **Replay** — re-run from any point with the same or modified context
-- **Branch & Compare** — fork from any point, try different models, diff results side-by-side
+- **Session Branching** — fork from any point, try different models, diff results
 - **Export** — full session as JSON or Markdown
+- **Keyboard Navigation** — arrow keys, vim-style, filter chips
+
+### Node Editor — Visual AI Pipelines
+
+**"Unreal Blueprints for AI agents."** Build complex AI workflows by connecting nodes — no code required:
+
+- **8 Node Types** — Input, Output, LLM, Tool, Router, Approval, Transform, Subworkflow
+- **DAG Execution Engine** — topological sort, parallel branches via `tokio::join_all`
+- **Live Execution View** — watch data flow through nodes with status badges and cost per node
+- **5 Bundled Templates** — Code Review, Research, Data Pipeline, Multi-Model Compare, Safe Executor
+- **Export/Import** — share workflows as JSON files
+- **Blender-inspired UI** — dark theme, labeled handles, collapsible nodes, context menu + keyboard shortcuts
 
 ### Hybrid Intelligence
 
@@ -91,7 +70,8 @@ AI Studio auto-picks the best model for each step:
 - **Complex code** &rarr; Claude Sonnet (best at code)
 - **Vision tasks** &rarr; GPT-4o (strong vision)
 - **Large context** &rarr; Gemini Flash (1M context, cheap)
-- **Budget controls** — set monthly limits, per-agent budgets, automatic fallback to local when budget runs low
+- **Budget controls** — set monthly limits, automatic fallback to local when budget runs low
+- **Budget enforcement** — hard limits respected: `local_only`, `cheapest_cloud`, or `ask` when exhausted
 
 ### MCP-Native Tools
 
@@ -102,15 +82,42 @@ Built on [Model Context Protocol](https://modelcontextprotocol.io/) — the open
 - One-click setup from curated server list
 - Full approval workflow for every tool call
 
-### 5 Focused Modules
+### Plugin System
+
+Extend AI Studio with third-party capabilities:
+
+- Plugins live in `~/.ai-studio/plugins/` with a `plugin.json` manifest
+- Communicate via stdio JSON-RPC (MCP protocol)
+- Permission declarations (network, filesystem, shell, env)
+- Enable/disable/scan from Settings UI
+- See the [plugin spec](docs/specs/plugin-system.md) for details
+
+### 6 Focused Modules
 
 | Module | What It Does |
 |--------|-------------|
-| **Agents** | Create and configure AI agents (model, prompt, tools, permissions) |
+| **Agents** | Create and configure AI agents (model, prompt, tools, permissions, routing) |
 | **Sessions** | Interactive chat with real-time tool approval and streaming |
 | **Runs** | Headless batch execution — CI/CD for agents |
 | **Inspector** | Deep-dive into any session: timeline, traces, cost, replay |
-| **Settings** | Providers, MCP servers, budget, preferences |
+| **Node Editor** | Visual pipeline builder — connect LLM, tool, router, and approval nodes |
+| **Settings** | Providers, MCP servers, plugins, budget, preferences |
+
+---
+
+## Why AI Studio?
+
+| | ChatGPT / Claude | Cursor | LangFlow | **AI Studio** |
+|---|---|---|---|---|
+| Full Inspector (traces, replay, branch)? | No | No | No | **Yes** |
+| Visual pipeline builder? | No | No | Yes | **Yes (+ execution engine)** |
+| Hybrid intelligence (auto-pick model)? | No | No | No | **Yes** |
+| Cost tracking per message? | No | No | No | **Yes** |
+| Approval rules for safety? | N/A | N/A | Minimal | **Full rules engine** |
+| Local-first (data stays on machine)? | No | No | Partial | **Yes** |
+| MCP-native tool system? | Limited | Limited | No | **Yes** |
+| Desktop app (not SaaS)? | No | Yes | No | **Yes** |
+| Open source and free? | No | No | Yes | **Yes** |
 
 ---
 
@@ -215,81 +222,55 @@ docker compose --profile gpu up
 
 </details>
 
-<details>
-<summary><strong>Sidecar API Examples</strong> (for development and testing)</summary>
-
-```bash
-# Chat with conversation memory
-curl -X POST http://localhost:8765/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hello!", "provider": "ollama"}'
-
-# List available providers
-curl http://localhost:8765/providers
-
-# Health check
-curl http://localhost:8765/status
-
-# Execute shell command (via tool)
-curl -X POST http://localhost:8765/tools/shell \
-  -H "Content-Type: application/json" \
-  -d '{"command": "ls -la"}'
-
-# Read a file (via tool)
-curl -X POST http://localhost:8765/tools/filesystem \
-  -H "Content-Type: application/json" \
-  -d '{"action": "read", "path": "README.md"}'
-```
-
-Swagger docs available at `http://localhost:8765/docs` when sidecar is running.
-
-</details>
-
 ---
 
 ## Architecture
 
 ```
 ┌──────────────────────────────────────────────────┐
-│              UI Layer (React + Tauri)             │
-│  Agents  |  Sessions  |  Runs  |  Inspector      │
+│              UI Layer (React 19 + Tauri)          │
+│  Agents | Sessions | Runs | Inspector | Workflows│
 └────────────────────┬─────────────────────────────┘
                      │ Tauri IPC
 ┌────────────────────┴─────────────────────────────┐
-│            Desktop Layer (Rust/Tauri)             │
-│  SQLite DB  |  Tool Approval  |  Event Bridge    │
+│            Desktop Layer (Rust/Tauri 2)           │
+│  SQLite DB | Smart Router | Approval | Events    │
+│  Workflow Engine (DAG walker, node executors)     │
 └────────────────────┬─────────────────────────────┘
                      │ HTTP + WebSocket
 ┌────────────────────┴─────────────────────────────┐
 │            Agent Layer (Python Sidecar)           │
-│  LLM Providers  |  MCP Client  |  Event Emitter  │
+│  LLM Providers | MCP Client | Event Emitter      │
 └──────────────────────────────────────────────────┘
 ```
 
 **3 layers, clear responsibilities:**
 
-- **UI (React)** — what you see. Never talks to the sidecar directly.
-- **Desktop (Rust/Tauri)** — security boundary. Owns persistence (SQLite), tool approval, event bridging.
-- **Agent (Python)** — does the work. Calls LLMs, executes tools, emits events.
+- **UI (React 19)** — what you see. Never talks to the sidecar directly.
+- **Desktop (Rust/Tauri 2)** — security boundary. SQLite persistence, smart model router, tool approval, event bridging, workflow execution engine.
+- **Agent (Python FastAPI)** — does the work. Calls LLMs, executes tools, emits events.
 
 **Key design decisions:**
 - **Local-first**: All data in SQLite on your machine. No cloud, no account.
 - **Event-sourced**: Every agent action is a typed event. Inspector reads from the event log.
 - **MCP-native**: Tools are MCP servers. Interoperable with Claude Desktop, Cursor, Zed, etc.
 - **Hybrid intelligence**: Smart router picks the best model per step with budget awareness.
+- **Spec-driven**: Every feature has a [design specification](docs/specs/) written before implementation.
 
 ### Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Desktop Shell | Tauri 2.0 (Rust) |
-| UI | React 19 + TypeScript + Vite 7 |
+| UI | React 19 + TypeScript + Vite |
 | Styling | Tailwind CSS 4 |
 | State | Zustand |
-| Database | SQLite (via rusqlite) |
+| Database | SQLite (WAL mode, via rusqlite) |
 | AI Backend | FastAPI (Python 3.10+) |
-| LLM Providers | Ollama, Anthropic, OpenAI, Google AI |
+| LLM Providers | Ollama, Anthropic, OpenAI, Google AI, Azure OpenAI |
 | Tool System | Model Context Protocol (MCP) |
+| Node Editor | React Flow (@xyflow/react) |
+| Smart Router | Rust (static rules + budget-aware routing) |
 
 ---
 
@@ -298,13 +279,19 @@ Swagger docs available at `http://localhost:8765/docs` when sidecar is running.
 ```
 ai-studio-template/
 ├── apps/
-│   ├── ui/                  # React frontend (5 modules)
-│   ├── desktop/src-tauri/   # Tauri/Rust (persistence, security, IPC)
+│   ├── ui/                  # React frontend (6 modules)
+│   │   └── src/app/pages/   # AgentsPage, SessionsPage, NodeEditorPage, etc
+│   ├── desktop/src-tauri/   # Tauri/Rust backend
+│   │   └── src/
+│   │       ├── commands/    # 13 command modules (agents, chat, workflows, etc)
+│   │       ├── workflow/    # DAG engine, validators, 7 node executors
+│   │       ├── routing.rs   # Smart model router (14 tests)
+│   │       └── db.rs        # SQLite schema v7 + migrations
 │   └── sidecar/             # Python (LLM providers, MCP, tools, events)
 ├── packages/
 │   └── shared/              # Shared TypeScript types
 ├── docs/
-│   └── specs/               # 11 design specifications
+│   └── specs/               # 12 design specifications
 └── package.json             # Monorepo workspace config
 ```
 
@@ -312,7 +299,7 @@ ai-studio-template/
 
 ## Design Specs
 
-The product is designed spec-first. Every feature has a detailed specification:
+Every feature is designed spec-first:
 
 | Spec | Covers |
 |------|--------|
@@ -323,9 +310,10 @@ The product is designed spec-first. Every feature has a detailed specification:
 | [Agent Inspector](docs/specs/agent-inspector.md) | Flagship: timeline, replay, branch, export |
 | [MCP Integration](docs/specs/mcp-integration.md) | Tool system, discovery, approval |
 | [Hybrid Intelligence](docs/specs/hybrid-intelligence.md) | Smart routing, budget, savings |
+| [Node Editor](docs/specs/node-editor.md) | Visual pipelines: 8 node types, DAG engine |
+| [Plugin System](docs/specs/plugin-system.md) | Manifest, loader, permissions, lifecycle |
 | [API Contracts](docs/specs/api-contracts.md) | Every IPC command, endpoint, WebSocket |
 | [UI Design](docs/specs/ui-design.md) | Wireframes, colors, interactions |
-| [Use Cases](docs/specs/use-cases.md) | Real-world scenarios, demo script |
 | [Phase Plan](docs/specs/phase-plan.md) | Implementation roadmap (Phase 0-3) |
 
 ---
@@ -335,11 +323,29 @@ The product is designed spec-first. Every feature has a detailed specification:
 | Phase | Focus | Status |
 |-------|-------|--------|
 | **Phase 0** | Specs + codebase cleanup | Done |
-| **Phase 1** | Core loop — agents, sessions, persistence, events, basic inspector, MCP | In progress |
-| **Phase 2** | Power features — full inspector (replay, branch, compare), runs, hybrid intelligence | Planned |
-| **Phase 3** | Ecosystem — plugins, templates, one-click installer, community launch | Planned |
+| **Phase 1** | Core loop — agents, sessions, persistence, events, inspector, MCP | Done |
+| **Phase 2** | Polish — session branching, cost tracking, inspector improvements, onboarding | Done |
+| **Phase 3** | Node editor, hybrid intelligence, plugin system | **In progress** |
+| **Phase 4** | Universal automation — custom node types, loop/merge nodes, plugin marketplace | Planned |
 
-See [Phase Plan](docs/specs/phase-plan.md) for the full task breakdown.
+### What's Built
+
+- SQLite local-first persistence (WAL mode, schema v7, 7 migrations)
+- 5 LLM providers (Ollama, Anthropic, OpenAI, Google AI, Azure)
+- MCP-native tool system with registry, approval rules, and stdio client
+- Multi-turn tool calling with event-sourced audit trail
+- Agent Inspector with timeline, grouping, filters, keyboard nav, markdown export
+- Session branching (fork-and-compare)
+- Headless runs with async background execution
+- Node Editor with 8 custom node types, React Flow canvas, DAG execution engine
+- Smart model router (3 modes: single, auto, manual) with 14 unit tests
+- Budget tracking with monthly limits and enforcement
+- Plugin system with manifest scanning and Settings UI
+- Blender-inspired node styling, context menus, keyboard shortcuts
+- 5 bundled workflow templates + JSON export/import
+- 31 Rust unit tests across routing, validation, and template resolution
+
+See [STATUS.md](STATUS.md) for the detailed sprint board.
 
 ---
 
@@ -348,13 +354,15 @@ See [Phase Plan](docs/specs/phase-plan.md) for the full task breakdown.
 | Shortcut | Action |
 |----------|--------|
 | `Cmd+K` | Command Palette |
-| `Cmd+1-4` | Navigate modules |
+| `Cmd+1-5` | Navigate modules |
 | `Cmd+,` | Settings |
 | `Cmd+N` | New agent |
 | `Cmd+Shift+N` | New session |
 | `Cmd+I` | Inspector for current session |
 | `Cmd+Enter` | Send message |
-| `Cmd+Shift+Enter` | Approve tool request |
+| `Ctrl+D` | Delete selected node (Node Editor) |
+| `Ctrl+A` | Select all nodes (Node Editor) |
+| `Ctrl+C/V` | Copy/paste nodes (Node Editor) |
 
 ---
 
@@ -371,20 +379,11 @@ Creates platform-specific installers:
 
 ---
 
-## Troubleshooting
-
-| Issue | Fix |
-|-------|-----|
-| `cargo: command not found` | Run `source ~/.cargo/env` or restart terminal |
-| Port 1420 already in use | `lsof -ti:1420 \| xargs kill -9` |
-| First Rust build is slow | Normal (~3-5 min). Subsequent builds are instant. |
-| Sidecar won't start | Check Python 3.10+ installed, `pip install -r apps/sidecar/requirements.txt` |
-
----
-
 ## Contributing
 
-We welcome contributions! Check the [Phase Plan](docs/specs/phase-plan.md) for open tasks, or look at issues labeled `good first issue`.
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+Check the [Phase Plan](docs/specs/phase-plan.md) for open tasks, or look at issues labeled `good first issue`.
 
 ---
 
@@ -396,5 +395,5 @@ MIT
 
 <p align="center">
   <strong>AI Studio</strong> — See everything. Control everything. Spend less.<br>
-  Built with Tauri, React, and Python.
+  Built with Tauri 2, React 19, and Python.
 </p>

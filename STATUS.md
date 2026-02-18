@@ -36,7 +36,7 @@
 | CONTRIBUTING.md | — | DONE |
 | Node editor foundation (3A) | `node-editor.md` | DONE |
 | Node editor execution (3B) | `node-editor.md` | DONE |
-| Node editor polish (3C) | `node-editor.md` | TODO |
+| Node editor polish (3C) | `node-editor.md` | DONE |
 | Hybrid intelligence routing | `hybrid-intelligence.md` | TODO |
 | Plugin system | `phase-plan.md` | TODO |
 | Community templates | `phase-plan.md` | TODO |
@@ -65,7 +65,7 @@
 
 **Phase 2** (COMPLETE): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (5778124). Inspector improvements (0a5895c).
 
-**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d). **3B execution DONE**: DAG walker engine, 7 node executors, validation, live node states, approval dialog, run button + input form.
+**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d). **3B execution DONE**: DAG walker engine, 7 node executors, validation, live node states, approval dialog, run button + input form. **3C polish DONE**: Codex review fixes (H1/H2/M1-M4 — 2380b83, 280be8c), Blender-inspired node restyling + collapse (ba82190), context menu + keyboard shortcuts (74d97df), 5 bundled templates + export/import (bb37147).
 
 Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav/grouping/actions), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling, onboarding wizard, session branching, peer review workflow.
 
@@ -102,20 +102,16 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-17 (session 15)
+**Date**: 2026-02-18 (session 16)
 **What happened**:
-- Fixed and tested end-to-end workflow execution (Input → LLM → Output) — **working!**
-- Fixed 6 bugs blocking workflow execution:
-  1. **Stale sidecar 401 (root cause fix)**: `sidecar.rs` `start()` now checks if we own a running child before reusing. Fresh starts (after hot-reload) kill orphaned processes via `fuser -k {port}/tcp`.
-  2. **FOREIGN KEY constraint**: Workflow sessions now use workflow's agent_id or fall back to first available agent.
-  3. **Template resolver**: `{{input}}` (single-part, no dot) was unresolved — added single-part reference handling.
-  4. **Input key resolution**: Backward-compatible with fallback chain: `node_id → inputName → "input" → single-input fallback`.
-  5. **Provider/model mismatch**: Model field changed from text input to provider-filtered dropdown with auto-correct.
-  6. **Output display**: Fixed event field mismatch (`output_preview` vs `output`), added green success banner with actual LLM response.
-- Added comprehensive `eprintln!("[workflow] ...")` debug logging throughout execution path.
-- Auto-save graph before workflow run to prevent stale graph_json issues.
-- Frontend sends both `node.id` and `node.data.name` as input keys for compatibility.
-- Cleaned up duplicate screenshots, marked reviews as Resolved.
+- Completed Phase 3C (Node Editor Polish) — all 5 chunks done:
+  - **Chunk 1** (2380b83): Rust correctness fixes — H1 (router branch types), H2 (tool approval), M2 (event envelopes), M4 (router branch skipping with transitive propagation)
+  - **Chunk 2** (280be8c): UI correctness fixes — M1 (approval preview key), M3 (run input duplicate IDs)
+  - **Chunk 3** (ba82190): Blender-inspired node restyling — dark theme, thin colored headers, labeled handles, data-type-colored dots, smoothstep edges, collapse support, execution state CSS
+  - **Chunk 4** (74d97df): Context menu (node + canvas) + keyboard shortcuts (Ctrl+D/A/C/V, Del)
+  - **Chunk 5** (bb37147): 5 bundled templates (Code Review, Research, Data Pipeline, Multi-Model Compare, Safe Executor), template picker UI, export/import workflow JSON
+- Codex architecture review fully resolved (6/6 accepted findings fixed, 1 deferred L2)
+- All 17 Rust tests pass, TypeScript clean throughout
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -134,8 +130,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 13: Codex runtime review triage (deb6c3b) + Phase 3B execution engine
 - Session 14: Design references, unit tests, UI bug fixes, review cleanup
 - Session 15: Workflow execution bug fixes — end-to-end working
+- Session 16: Phase 3C complete — visual polish + review fixes + templates
 
 **Next session should**:
-1. Phase 3C: Node editor visual polish + review fixes — spec at `docs/specs/node-editor-visual-polish.md`, review fixes at `docs/reviews/architecture-review-2026-02-18.md`
-2. Review fixes feed into 3C: router branch contract (H1), tool approval (H2), event envelopes (M2), approval preview (M1), run input UX (M3), router branching (M4)
-3. After 3C: Start hybrid intelligence routing
+1. Start hybrid intelligence routing (`hybrid-intelligence.md`) — smart model router, budget controls
+2. Or: Plugin system (`phase-plan.md`) — manifest, loader, permissions
+3. README update with node editor screenshots
+4. Consider post-3C peer review to validate the full node editor feature

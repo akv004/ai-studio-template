@@ -11,6 +11,7 @@ pub struct TemplateSummary {
 }
 
 pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
+    // Original 5
     ("code-review", "Code Review", "Analyze PR, classify by severity, output structured review",
         include_str!("../../templates/code-review.json")),
     ("research", "Research Assistant", "Research a topic and produce a formatted report",
@@ -21,6 +22,17 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
         include_str!("../../templates/multi-model-compare.json")),
     ("safe-executor", "Safe Executor", "Plan a shell command with LLM, approve, then execute",
         include_str!("../../templates/safe-executor.json")),
+    // Community templates
+    ("email-classifier", "Email Classifier", "Classify emails as urgent/normal/spam, auto-draft replies for urgent",
+        include_str!("../../templates/email-classifier.json")),
+    ("content-moderator", "Content Moderator", "Screen content for policy violations with human review for borderline cases",
+        include_str!("../../templates/content-moderator.json")),
+    ("translation-pipeline", "Translation Pipeline", "Detect language, translate to target language with formatting preserved",
+        include_str!("../../templates/translation-pipeline.json")),
+    ("meeting-notes", "Meeting Notes", "Summarize transcript and extract action items in parallel",
+        include_str!("../../templates/meeting-notes.json")),
+    ("rag-search", "RAG Search", "Search for information with a tool, then answer using retrieved context",
+        include_str!("../../templates/rag-search.json")),
 ];
 
 #[tauri::command]

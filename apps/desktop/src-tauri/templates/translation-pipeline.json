@@ -1,0 +1,18 @@
+{
+  "nodes": [
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 100 }, "data": { "name": "source_text", "dataType": "text", "default": "" } },
+    { "id": "input_2", "type": "input", "position": { "x": 50, "y": 250 }, "data": { "name": "target_language", "dataType": "text", "default": "English" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 400, "y": 100 }, "data": { "provider": "", "model": "", "systemPrompt": "Detect the language of the following text. Reply with ONLY the language name (e.g., 'French', 'Japanese', 'Spanish'), nothing else.", "temperature": 0.0, "maxTokens": 16 } },
+    { "id": "transform_1", "type": "transform", "position": { "x": 700, "y": 150 }, "data": { "mode": "template", "template": "Translate the following text from {{llm_1.response}} to {{input_2}}. Preserve the original tone, formatting, and meaning. Output ONLY the translation.\n\nText to translate:\n{{input_1}}" } },
+    { "id": "llm_2", "type": "llm", "position": { "x": 1000, "y": 150 }, "data": { "provider": "", "model": "", "systemPrompt": "You are a professional translator. Follow the instructions exactly.", "temperature": 0.3, "maxTokens": 4096 } },
+    { "id": "output_1", "type": "output", "position": { "x": 1300, "y": 150 }, "data": { "name": "translation", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-llm_1-transform_1", "source": "llm_1", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-input_2-transform_1", "source": "input_2", "target": "transform_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-transform_1-llm_2", "source": "transform_1", "target": "llm_2", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-llm_2-output_1", "source": "llm_2", "target": "output_1", "sourceHandle": "response", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

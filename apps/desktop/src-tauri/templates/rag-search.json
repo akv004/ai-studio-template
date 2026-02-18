@@ -1,0 +1,17 @@
+{
+  "nodes": [
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 150 }, "data": { "name": "question", "dataType": "text", "default": "" } },
+    { "id": "tool_1", "type": "tool", "position": { "x": 350, "y": 100 }, "data": { "toolName": "builtin__shell", "serverName": "", "approval": "always" } },
+    { "id": "transform_1", "type": "transform", "position": { "x": 650, "y": 150 }, "data": { "mode": "template", "template": "Answer the following question using ONLY the search results provided below. If the results don't contain enough information, say so.\n\nQuestion: {{input_1}}\n\nSearch Results:\n{{tool_1.result}}" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 1000, "y": 150 }, "data": { "provider": "", "model": "", "systemPrompt": "You are a helpful research assistant. Answer questions accurately based on the provided search results. Cite sources when possible.", "temperature": 0.3, "maxTokens": 2048 } },
+    { "id": "output_1", "type": "output", "position": { "x": 1300, "y": 150 }, "data": { "name": "answer", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-input_1-tool_1", "source": "input_1", "target": "tool_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-tool_1-transform_1", "source": "tool_1", "target": "transform_1", "sourceHandle": "result", "targetHandle": "input" },
+    { "id": "e-input_1-transform_1", "source": "input_1", "target": "transform_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-transform_1-llm_1", "source": "transform_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-llm_1-output_1", "source": "llm_1", "target": "output_1", "sourceHandle": "response", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

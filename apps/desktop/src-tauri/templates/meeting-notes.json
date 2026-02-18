@@ -1,0 +1,17 @@
+{
+  "nodes": [
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 200 }, "data": { "name": "transcript", "dataType": "text", "default": "" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 400, "y": 50 }, "data": { "provider": "", "model": "", "systemPrompt": "Summarize the following meeting transcript in 3-5 bullet points. Focus on key decisions, outcomes, and next steps. Be concise.", "temperature": 0.3, "maxTokens": 1024 } },
+    { "id": "llm_2", "type": "llm", "position": { "x": 400, "y": 350 }, "data": { "provider": "", "model": "", "systemPrompt": "Extract all action items from the following meeting transcript. Format as a numbered list with: 1) What needs to be done, 2) Who is responsible (if mentioned), 3) Deadline (if mentioned). If no action items found, say 'No action items identified.'", "temperature": 0.1, "maxTokens": 1024 } },
+    { "id": "transform_1", "type": "transform", "position": { "x": 800, "y": 200 }, "data": { "mode": "template", "template": "# Meeting Notes\n\n## Summary\n{{llm_1.response}}\n\n## Action Items\n{{llm_2.response}}" } },
+    { "id": "output_1", "type": "output", "position": { "x": 1150, "y": 200 }, "data": { "name": "meeting_notes", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-input_1-llm_2", "source": "input_1", "target": "llm_2", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-llm_1-transform_1", "source": "llm_1", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-llm_2-transform_1", "source": "llm_2", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-transform_1-output_1", "source": "transform_1", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

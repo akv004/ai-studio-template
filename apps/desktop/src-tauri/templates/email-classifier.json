@@ -1,0 +1,18 @@
+{
+  "nodes": [
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 200 }, "data": { "name": "email_body", "dataType": "text", "default": "" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 350, "y": 150 }, "data": { "provider": "", "model": "", "systemPrompt": "Classify this email into exactly one category: urgent, normal, or spam. Reply with ONLY the category name in lowercase, nothing else.", "temperature": 0.0, "maxTokens": 16 } },
+    { "id": "router_1", "type": "router", "position": { "x": 650, "y": 150 }, "data": { "mode": "llm", "provider": "", "model": "", "branches": ["urgent", "normal", "spam"] } },
+    { "id": "llm_2", "type": "llm", "position": { "x": 950, "y": 50 }, "data": { "provider": "", "model": "", "systemPrompt": "This email was classified as URGENT. Draft a brief, professional acknowledgment reply that confirms receipt and promises follow-up within the hour.", "temperature": 0.5, "maxTokens": 512 } },
+    { "id": "output_1", "type": "output", "position": { "x": 1250, "y": 200 }, "data": { "name": "result", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-llm_1-router_1", "source": "llm_1", "target": "router_1", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-router_1-llm_2", "source": "router_1", "target": "llm_2", "sourceHandle": "branch-0", "targetHandle": "prompt" },
+    { "id": "e-llm_2-output_1", "source": "llm_2", "target": "output_1", "sourceHandle": "response", "targetHandle": "value" },
+    { "id": "e-router_1-output_1-1", "source": "router_1", "target": "output_1", "sourceHandle": "branch-1", "targetHandle": "value" },
+    { "id": "e-router_1-output_1-2", "source": "router_1", "target": "output_1", "sourceHandle": "branch-2", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

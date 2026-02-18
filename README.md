@@ -58,7 +58,7 @@ No other tool gives you this level of visibility into AI agent behavior:
 - **8 Node Types** — Input, Output, LLM, Tool, Router, Approval, Transform, Subworkflow
 - **DAG Execution Engine** — topological sort, parallel branches via `tokio::join_all`
 - **Live Execution View** — watch data flow through nodes with status badges and cost per node
-- **5 Bundled Templates** — Code Review, Research, Data Pipeline, Multi-Model Compare, Safe Executor
+- **10 Bundled Templates** — Code Review, Research, Data Pipeline, Multi-Model Compare, Safe Executor, Email Classifier, Content Moderator, Translation Pipeline, Meeting Notes, RAG Search
 - **Export/Import** — share workflows as JSON files
 - **Blender-inspired UI** — dark theme, labeled handles, collapsible nodes, context menu + keyboard shortcuts
 
@@ -342,7 +342,7 @@ Every feature is designed spec-first:
 - Budget tracking with monthly limits and enforcement
 - Plugin system with manifest scanning and Settings UI
 - Blender-inspired node styling, context menus, keyboard shortcuts
-- 5 bundled workflow templates + JSON export/import
+- 10 bundled workflow templates + JSON export/import
 - 31 Rust unit tests across routing, validation, and template resolution
 
 See [STATUS.md](STATUS.md) for the detailed sprint board.

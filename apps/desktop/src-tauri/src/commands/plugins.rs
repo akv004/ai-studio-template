@@ -1,5 +1,6 @@
 use crate::db::{Database, now_iso};
 use crate::error::AppError;
+use crate::sidecar::SidecarManager;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 
@@ -30,6 +31,20 @@ pub struct Plugin {
 pub struct ScanResult {
     pub installed: usize,
     pub updated: usize,
+    pub errors: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginConnectResult {
+    pub tools: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PluginStartupResult {
+    pub connected: usize,
+    pub failed: usize,
     pub errors: Vec<String>,
 }
 
@@ -237,21 +252,111 @@ fn read_and_install_plugin(
     }
 }
 
-#[tauri::command]
-pub fn enable_plugin(db: tauri::State<'_, Database>, id: String) -> Result<(), AppError> {
-    let conn = db.conn.lock()?;
-    let rows = conn.execute(
-        "UPDATE plugins SET enabled = 1, updated_at = ?1 WHERE id = ?2",
-        params![now_iso(), id],
-    )?;
-    if rows == 0 {
-        return Err(AppError::NotFound(format!("Plugin not found: {id}")));
+/// Build the shell command + args for a plugin based on its runtime and entry point.
+fn build_plugin_command(runtime: &str, directory: &str, entry_point: &str) -> (String, Vec<String>) {
+    let full_path = std::path::Path::new(directory).join(entry_point);
+    let full_path_str = full_path.to_string_lossy().to_string();
+
+    match runtime {
+        "python" => ("python3".to_string(), vec![full_path_str]),
+        "node" => ("node".to_string(), vec![full_path_str]),
+        "binary" => (full_path_str, vec![]),
+        _ => ("python3".to_string(), vec![full_path_str]),
     }
+}
+
+/// Connect a single plugin to the sidecar as an MCP server.
+async fn connect_plugin_to_sidecar(
+    sidecar: &SidecarManager,
+    id: &str,
+    runtime: &str,
+    directory: &str,
+    entry_point: &str,
+) -> Result<Vec<String>, String> {
+    let (command, args) = build_plugin_command(runtime, directory, entry_point);
+
+    let body = serde_json::json!({
+        "name": format!("plugin:{}", id),
+        "transport": "stdio",
+        "command": command,
+        "args": args,
+        "env": {},
+    });
+
+    let resp = sidecar.proxy_request("POST", "/mcp/connect", Some(body)).await?;
+
+    // Extract discovered tool names from response
+    let tools = resp.get("tools")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    Ok(tools)
+}
+
+/// Disconnect a plugin from the sidecar.
+async fn disconnect_plugin_from_sidecar(
+    sidecar: &SidecarManager,
+    id: &str,
+) -> Result<(), String> {
+    let body = serde_json::json!({
+        "name": format!("plugin:{}", id),
+    });
+    sidecar.proxy_request("POST", "/mcp/disconnect", Some(body)).await?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn disable_plugin(db: tauri::State<'_, Database>, id: String) -> Result<(), AppError> {
+pub async fn enable_plugin(
+    db: tauri::State<'_, Database>,
+    sidecar: tauri::State<'_, SidecarManager>,
+    id: String,
+) -> Result<PluginConnectResult, AppError> {
+    // 1. Read plugin metadata from DB
+    let (runtime, directory, entry_point) = {
+        let conn = db.conn.lock()?;
+        conn.query_row(
+            "SELECT runtime, directory, entry_point FROM plugins WHERE id = ?1",
+            params![id],
+            |row| Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+            )),
+        ).map_err(|_| AppError::NotFound(format!("Plugin not found: {id}")))?
+    };
+
+    // 2. Connect to sidecar as MCP server
+    let tools = connect_plugin_to_sidecar(&sidecar, &id, &runtime, &directory, &entry_point)
+        .await
+        .map_err(|e| AppError::Sidecar(format!("Failed to connect plugin: {e}")))?;
+
+    // 3. Set enabled in DB (only after successful connect)
+    {
+        let conn = db.conn.lock()?;
+        conn.execute(
+            "UPDATE plugins SET enabled = 1, updated_at = ?1 WHERE id = ?2",
+            params![now_iso(), id],
+        )?;
+    }
+
+    Ok(PluginConnectResult { tools })
+}
+
+#[tauri::command]
+pub async fn disable_plugin(
+    db: tauri::State<'_, Database>,
+    sidecar: tauri::State<'_, SidecarManager>,
+    id: String,
+) -> Result<(), AppError> {
+    // 1. Disconnect from sidecar (best-effort — don't fail if sidecar is down)
+    let _ = disconnect_plugin_from_sidecar(&sidecar, &id).await;
+
+    // 2. Set disabled in DB
     let conn = db.conn.lock()?;
     let rows = conn.execute(
         "UPDATE plugins SET enabled = 0, updated_at = ?1 WHERE id = ?2",
@@ -264,13 +369,77 @@ pub fn disable_plugin(db: tauri::State<'_, Database>, id: String) -> Result<(), 
 }
 
 #[tauri::command]
-pub fn remove_plugin(db: tauri::State<'_, Database>, id: String) -> Result<(), AppError> {
+pub async fn remove_plugin(
+    db: tauri::State<'_, Database>,
+    sidecar: tauri::State<'_, SidecarManager>,
+    id: String,
+) -> Result<(), AppError> {
+    // 1. Check if plugin was enabled — if so, disconnect first
+    let was_enabled = {
+        let conn = db.conn.lock()?;
+        conn.query_row(
+            "SELECT enabled FROM plugins WHERE id = ?1",
+            params![id],
+            |row| row.get::<_, i64>(0),
+        ).unwrap_or(0) != 0
+    };
+
+    if was_enabled {
+        let _ = disconnect_plugin_from_sidecar(&sidecar, &id).await;
+    }
+
+    // 2. Delete from DB
     let conn = db.conn.lock()?;
     let rows = conn.execute("DELETE FROM plugins WHERE id = ?1", params![id])?;
     if rows == 0 {
         return Err(AppError::NotFound(format!("Plugin not found: {id}")));
     }
     Ok(())
+}
+
+/// Connect all enabled plugins to the sidecar on app startup.
+#[tauri::command]
+pub async fn connect_enabled_plugins(
+    db: tauri::State<'_, Database>,
+    sidecar: tauri::State<'_, SidecarManager>,
+) -> Result<PluginStartupResult, AppError> {
+    // Read all enabled plugins from DB
+    let plugins = {
+        let conn = db.conn.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT id, runtime, directory, entry_point FROM plugins WHERE enabled = 1"
+        )?;
+        let result = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+        result
+    };
+
+    let mut connected = 0;
+    let mut failed = 0;
+    let mut errors = Vec::new();
+
+    for (id, runtime, directory, entry_point) in &plugins {
+        match connect_plugin_to_sidecar(&sidecar, id, runtime, directory, entry_point).await {
+            Ok(tools) => {
+                println!("[plugins] Connected '{}' — {} tools", id, tools.len());
+                connected += 1;
+            }
+            Err(e) => {
+                eprintln!("[plugins] Failed to connect '{}': {}", id, e);
+                errors.push(format!("{}: {}", id, e));
+                failed += 1;
+            }
+        }
+    }
+
+    Ok(PluginStartupResult { connected, failed, errors })
 }
 
 /// Returns the plugin directory path (~/.ai-studio/plugins/)

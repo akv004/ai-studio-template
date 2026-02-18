@@ -9,7 +9,7 @@ import type {
     Workflow, WorkflowSummary, CreateWorkflowRequest, UpdateWorkflowRequest,
     ValidationResult, WorkflowRunResult, NodeExecutionState, NodeExecutionStatus,
     BudgetStatus,
-    Plugin, ScanResult,
+    Plugin, ScanResult, PluginConnectResult, PluginStartupResult,
 } from '@ai-studio/shared';
 
 // ============================================
@@ -174,9 +174,10 @@ interface AppState {
     pluginsLoading: boolean;
     fetchPlugins: () => Promise<void>;
     scanPlugins: () => Promise<ScanResult>;
-    enablePlugin: (id: string) => Promise<void>;
+    enablePlugin: (id: string) => Promise<PluginConnectResult>;
     disablePlugin: (id: string) => Promise<void>;
     removePlugin: (id: string) => Promise<void>;
+    connectEnabledPlugins: () => Promise<PluginStartupResult>;
 
     // Error tracking
     error: string | null;
@@ -757,19 +758,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     },
     enablePlugin: async (id) => {
         try {
-            await invoke<void>('enable_plugin', { id });
-            get().addToast('Plugin enabled', 'success');
+            const result = await invoke<PluginConnectResult>('enable_plugin', { id });
+            const toolCount = result.tools.length;
+            get().addToast(`Plugin enabled — ${toolCount} tool${toolCount !== 1 ? 's' : ''} discovered`, 'success');
             get().fetchPlugins();
+            return result;
         } catch (e) {
             const msg = `Failed to enable plugin: ${formatInvokeError(e)}`;
             set({ error: msg });
             get().addToast(msg, 'error');
+            throw e;
         }
     },
     disablePlugin: async (id) => {
         try {
             await invoke<void>('disable_plugin', { id });
-            get().addToast('Plugin disabled', 'success');
+            get().addToast('Plugin disabled and disconnected', 'success');
             get().fetchPlugins();
         } catch (e) {
             const msg = `Failed to disable plugin: ${formatInvokeError(e)}`;
@@ -786,6 +790,22 @@ export const useAppStore = create<AppState>((set, get) => ({
             const msg = `Failed to remove plugin: ${formatInvokeError(e)}`;
             set({ error: msg });
             get().addToast(msg, 'error');
+        }
+    },
+    connectEnabledPlugins: async () => {
+        try {
+            const result = await invoke<PluginStartupResult>('connect_enabled_plugins');
+            if (result.connected > 0) {
+                get().addToast(`${result.connected} plugin${result.connected !== 1 ? 's' : ''} connected`, 'info');
+            }
+            if (result.failed > 0) {
+                get().addToast(`${result.failed} plugin${result.failed !== 1 ? 's' : ''} failed to connect`, 'error');
+            }
+            return result;
+        } catch (e) {
+            const msg = `Plugin startup failed: ${formatInvokeError(e)}`;
+            get().addToast(msg, 'error');
+            return { connected: 0, failed: 0, errors: [msg] };
         }
     },
 

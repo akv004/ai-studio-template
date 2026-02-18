@@ -23,7 +23,7 @@ import { WelcomePage } from './app/pages/WelcomePage';
  * Implements global keyboard shortcuts and command palette.
  */
 function App() {
-  const { activeModule, isCommandPaletteOpen, agents, agentsLoading, fetchAgents, settings, fetchSettings } = useAppStore();
+  const { activeModule, isCommandPaletteOpen, agents, agentsLoading, fetchAgents, settings, fetchSettings, connectEnabledPlugins } = useAppStore();
   const [toolApprovalQueue, setToolApprovalQueue] = useState<
     Array<{ id: string; method: string; path: string; body?: unknown }>
   >([]);
@@ -37,12 +37,14 @@ function App() {
 
   const pushEvent = useAppStore((s) => s.pushEvent);
 
-  // Load agents + settings on mount to detect first-run
+  // Load agents + settings on mount to detect first-run, then connect enabled plugins
   useEffect(() => {
     Promise.all([fetchAgents(), fetchSettings()]).then(() => {
       setInitialLoadDone(true);
+      // Auto-connect enabled plugins to sidecar after initial load
+      connectEnabledPlugins().catch(() => {});
     });
-  }, [fetchAgents, fetchSettings]);
+  }, [fetchAgents, fetchSettings, connectEnabledPlugins]);
 
   // Detect first-run: no agents AND onboarding not yet completed
   useEffect(() => {

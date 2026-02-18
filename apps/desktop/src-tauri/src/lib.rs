@@ -117,6 +117,7 @@ pub fn run() {
             enable_plugin,
             disable_plugin,
             remove_plugin,
+            connect_enabled_plugins,
             // Sidecar
             sidecar_start,
             sidecar_stop,

@@ -361,3 +361,13 @@ export interface ScanResult {
     updated: number;
     errors: string[];
 }
+
+export interface PluginConnectResult {
+    tools: string[];
+}
+
+export interface PluginStartupResult {
+    connected: number;
+    failed: number;
+    errors: string[];
+}

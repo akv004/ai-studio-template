@@ -40,7 +40,7 @@ interface ProviderConfig {
  * - Hotkeys customization
  */
 export function SettingsPage() {
-    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer, wipeDatabase, addToast, budgetStatus, fetchBudgetStatus, setBudget, plugins, pluginsLoading, fetchPlugins, scanPlugins, enablePlugin, disablePlugin, removePlugin } = useAppStore();
+    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer, wipeDatabase, addToast, budgetStatus, fetchBudgetStatus, setBudget, plugins, pluginsLoading, fetchPlugins, scanPlugins, enablePlugin, disablePlugin, removePlugin, connectEnabledPlugins } = useAppStore();
     const [activeTab, setActiveTab] = useState<SettingsTab>('providers');
     const [providerStatus, setProviderStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
     const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
@@ -59,8 +59,9 @@ export function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
-    // Scanning state
+    // Scanning and connecting state
     const [scanning, setScanning] = useState(false);
+    const [pluginConnecting, setPluginConnecting] = useState<string | null>(null);
 
     // Load settings + MCP servers + budget + plugins from SQLite on mount
     useEffect(() => { fetchSettings(); fetchMcpServers(); fetchBudgetStatus(); fetchPlugins(); }, [fetchSettings, fetchMcpServers, fetchBudgetStatus, fetchPlugins]);
@@ -593,18 +594,35 @@ export function SettingsPage() {
                                         Install plugins to extend AI Studio with new tools and capabilities.
                                         Place plugin folders in <code className="text-xs bg-[var(--bg-tertiary)] px-1 py-0.5 rounded">~/.ai-studio/plugins/</code>
                                     </p>
-                                    <button
-                                        className="btn btn-secondary btn-sm"
-                                        onClick={async () => {
-                                            setScanning(true);
-                                            await scanPlugins();
-                                            setScanning(false);
-                                        }}
-                                        disabled={scanning}
-                                    >
-                                        {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                        Scan for Plugins
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        {plugins.some(p => p.enabled) && (
+                                            <button
+                                                className="btn btn-secondary btn-sm"
+                                                onClick={async () => {
+                                                    setPluginConnecting('__all__');
+                                                    await connectEnabledPlugins();
+                                                    setPluginConnecting(null);
+                                                }}
+                                                disabled={pluginConnecting !== null}
+                                                title="Reconnect all enabled plugins to the sidecar"
+                                            >
+                                                {pluginConnecting === '__all__' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plug className="w-4 h-4" />}
+                                                Reconnect All
+                                            </button>
+                                        )}
+                                        <button
+                                            className="btn btn-secondary btn-sm"
+                                            onClick={async () => {
+                                                setScanning(true);
+                                                await scanPlugins();
+                                                setScanning(false);
+                                            }}
+                                            disabled={scanning}
+                                        >
+                                            {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                            Scan for Plugins
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Plugin list */}
@@ -630,11 +648,17 @@ export function SettingsPage() {
                                             >
                                                 <div className="flex items-center justify-between mb-2">
                                                     <div className="flex items-center gap-3">
-                                                        <div className={`w-2.5 h-2.5 rounded-full ${plugin.enabled ? 'bg-green-400' : 'bg-gray-500'}`} />
+                                                        <div className={`w-2.5 h-2.5 rounded-full ${
+                                                            pluginConnecting === plugin.id ? 'bg-amber-400 animate-pulse' :
+                                                            plugin.enabled ? 'bg-green-400' : 'bg-gray-500'
+                                                        }`} />
                                                         <div>
                                                             <div className="font-medium text-sm">
                                                                 {plugin.name}
                                                                 <span className="ml-2 text-xs font-mono text-[var(--text-muted)]">v{plugin.version}</span>
+                                                                {plugin.enabled && (
+                                                                    <span className="ml-2 text-xs text-green-400">connected</span>
+                                                                )}
                                                             </div>
                                                             {plugin.author && (
                                                                 <div className="text-xs text-[var(--text-muted)]">by {plugin.author}</div>
@@ -655,14 +679,32 @@ export function SettingsPage() {
                                                         )}
                                                         <button
                                                             className="btn btn-secondary btn-sm"
-                                                            onClick={() => plugin.enabled ? disablePlugin(plugin.id) : enablePlugin(plugin.id)}
-                                                            title={plugin.enabled ? 'Disable' : 'Enable'}
+                                                            disabled={pluginConnecting === plugin.id}
+                                                            onClick={async () => {
+                                                                if (plugin.enabled) {
+                                                                    setPluginConnecting(plugin.id);
+                                                                    await disablePlugin(plugin.id);
+                                                                    setPluginConnecting(null);
+                                                                } else {
+                                                                    setPluginConnecting(plugin.id);
+                                                                    try { await enablePlugin(plugin.id); } catch { /* toast */ }
+                                                                    setPluginConnecting(null);
+                                                                }
+                                                            }}
+                                                            title={plugin.enabled ? 'Disable (disconnect from sidecar)' : 'Enable (connect to sidecar)'}
                                                         >
-                                                            {plugin.enabled ? <Power className="w-4 h-4 text-green-400" /> : <PowerOff className="w-4 h-4" />}
+                                                            {pluginConnecting === plugin.id ? (
+                                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                            ) : plugin.enabled ? (
+                                                                <Power className="w-4 h-4 text-green-400" />
+                                                            ) : (
+                                                                <PowerOff className="w-4 h-4" />
+                                                            )}
                                                         </button>
                                                         <button
                                                             className="btn btn-secondary btn-sm text-red-400 hover:text-red-300"
                                                             onClick={() => removePlugin(plugin.id)}
+                                                            disabled={pluginConnecting === plugin.id}
                                                             title="Remove"
                                                         >
                                                             <Trash2 className="w-4 h-4" />
@@ -691,8 +733,9 @@ export function SettingsPage() {
                                 {/* Plugin directory info */}
                                 <div className="p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
                                     <div className="text-xs text-[var(--text-muted)]">
-                                        <strong>Plugin format:</strong> Each plugin is a directory containing a <code className="bg-[var(--bg-tertiary)] px-1 rounded">plugin.json</code> manifest
-                                        and an entry point script. Plugins communicate via stdio JSON-RPC (MCP protocol).
+                                        <strong>Plugin lifecycle:</strong> Enabling a plugin spawns it as a subprocess and connects via MCP protocol (stdio JSON-RPC).
+                                        Tools discovered from the plugin are registered in the tool registry and become available to agents.
+                                        Disabling stops the subprocess and unregisters its tools.
                                         See the <a href="https://github.com/akv004/ai-studio-template/blob/main/docs/specs/plugin-system.md" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-primary)] hover:underline">plugin spec</a> for details.
                                     </div>
                                 </div>

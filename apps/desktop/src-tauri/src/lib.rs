@@ -111,6 +111,12 @@ pub fn run() {
             // Workflow Templates (Phase 3C)
             list_templates,
             load_template,
+            // Plugins
+            list_plugins,
+            scan_plugins,
+            enable_plugin,
+            disable_plugin,
+            remove_plugin,
             // Sidecar
             sidecar_start,
             sidecar_stop,

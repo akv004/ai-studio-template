@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff, Save, Plug, Plus, Trash2, Power, PowerOff, AlertTriangle, DollarSign } from 'lucide-react';
+import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff, Save, Plug, Plus, Trash2, Power, PowerOff, AlertTriangle, DollarSign, Package, RefreshCw, ExternalLink, Shield } from 'lucide-react';
 import { useAppStore } from '../../state/store';
 import { fetchApi } from '../../services/api';
 import type { BudgetExhaustedBehavior } from '@ai-studio/shared';
 
-type SettingsTab = 'providers' | 'mcp' | 'budget' | 'models' | 'paths' | 'performance' | 'hotkeys' | 'appearance';
+type SettingsTab = 'providers' | 'mcp' | 'plugins' | 'budget' | 'models' | 'paths' | 'performance' | 'hotkeys' | 'appearance';
 
 interface HotkeyConfig {
     action: string;
@@ -40,7 +40,7 @@ interface ProviderConfig {
  * - Hotkeys customization
  */
 export function SettingsPage() {
-    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer, wipeDatabase, addToast, budgetStatus, fetchBudgetStatus, setBudget } = useAppStore();
+    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer, wipeDatabase, addToast, budgetStatus, fetchBudgetStatus, setBudget, plugins, pluginsLoading, fetchPlugins, scanPlugins, enablePlugin, disablePlugin, removePlugin } = useAppStore();
     const [activeTab, setActiveTab] = useState<SettingsTab>('providers');
     const [providerStatus, setProviderStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
     const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
@@ -59,8 +59,11 @@ export function SettingsPage() {
     const [saving, setSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
-    // Load settings + MCP servers + budget from SQLite on mount
-    useEffect(() => { fetchSettings(); fetchMcpServers(); fetchBudgetStatus(); }, [fetchSettings, fetchMcpServers, fetchBudgetStatus]);
+    // Scanning state
+    const [scanning, setScanning] = useState(false);
+
+    // Load settings + MCP servers + budget + plugins from SQLite on mount
+    useEffect(() => { fetchSettings(); fetchMcpServers(); fetchBudgetStatus(); fetchPlugins(); }, [fetchSettings, fetchMcpServers, fetchBudgetStatus, fetchPlugins]);
 
     // Sync budget status → form state
     useEffect(() => {
@@ -116,6 +119,7 @@ export function SettingsPage() {
     const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
         { id: 'providers', label: 'AI Providers', icon: Cloud },
         { id: 'mcp', label: 'MCP Servers', icon: Plug },
+        { id: 'plugins', label: 'Plugins', icon: Package },
         { id: 'budget', label: 'Budget', icon: DollarSign },
         { id: 'models', label: 'Local Models', icon: Cpu },
         { id: 'paths', label: 'Paths', icon: FolderOpen },
@@ -577,6 +581,119 @@ export function SettingsPage() {
                                     <div className="text-xs text-[var(--text-muted)]">
                                         <strong>Built-in tools:</strong> shell, read_file, write_file, list_directory are always available when tool calling is enabled.
                                         External MCP servers provide additional capabilities.
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'plugins' && (
+                            <div className="space-y-6">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-sm text-[var(--text-secondary)]">
+                                        Install plugins to extend AI Studio with new tools and capabilities.
+                                        Place plugin folders in <code className="text-xs bg-[var(--bg-tertiary)] px-1 py-0.5 rounded">~/.ai-studio/plugins/</code>
+                                    </p>
+                                    <button
+                                        className="btn btn-secondary btn-sm"
+                                        onClick={async () => {
+                                            setScanning(true);
+                                            await scanPlugins();
+                                            setScanning(false);
+                                        }}
+                                        disabled={scanning}
+                                    >
+                                        {scanning ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                        Scan for Plugins
+                                    </button>
+                                </div>
+
+                                {/* Plugin list */}
+                                {pluginsLoading ? (
+                                    <div className="flex items-center gap-2 text-sm text-[var(--text-muted)]">
+                                        <Loader2 className="w-4 h-4 animate-spin" /> Loading plugins...
+                                    </div>
+                                ) : plugins.length === 0 ? (
+                                    <div className="text-center py-12 text-[var(--text-muted)]">
+                                        <Package className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                                        <p className="text-sm font-medium">No plugins installed</p>
+                                        <p className="text-xs mt-1">
+                                            Place a folder with a <code className="bg-[var(--bg-tertiary)] px-1 rounded">plugin.json</code> manifest
+                                            in <code className="bg-[var(--bg-tertiary)] px-1 rounded">~/.ai-studio/plugins/</code> and click Scan.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {plugins.map((plugin) => (
+                                            <div
+                                                key={plugin.id}
+                                                className="p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]"
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-2.5 h-2.5 rounded-full ${plugin.enabled ? 'bg-green-400' : 'bg-gray-500'}`} />
+                                                        <div>
+                                                            <div className="font-medium text-sm">
+                                                                {plugin.name}
+                                                                <span className="ml-2 text-xs font-mono text-[var(--text-muted)]">v{plugin.version}</span>
+                                                            </div>
+                                                            {plugin.author && (
+                                                                <div className="text-xs text-[var(--text-muted)]">by {plugin.author}</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {plugin.homepage && (
+                                                            <a
+                                                                href={plugin.homepage}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="btn btn-secondary btn-sm"
+                                                                title="Homepage"
+                                                            >
+                                                                <ExternalLink className="w-3.5 h-3.5" />
+                                                            </a>
+                                                        )}
+                                                        <button
+                                                            className="btn btn-secondary btn-sm"
+                                                            onClick={() => plugin.enabled ? disablePlugin(plugin.id) : enablePlugin(plugin.id)}
+                                                            title={plugin.enabled ? 'Disable' : 'Enable'}
+                                                        >
+                                                            {plugin.enabled ? <Power className="w-4 h-4 text-green-400" /> : <PowerOff className="w-4 h-4" />}
+                                                        </button>
+                                                        <button
+                                                            className="btn btn-secondary btn-sm text-red-400 hover:text-red-300"
+                                                            onClick={() => removePlugin(plugin.id)}
+                                                            title="Remove"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {plugin.description && (
+                                                    <p className="text-xs text-[var(--text-secondary)] mb-2">{plugin.description}</p>
+                                                )}
+
+                                                <div className="flex items-center gap-4 text-xs text-[var(--text-muted)]">
+                                                    <span className="flex items-center gap-1">
+                                                        <Shield className="w-3 h-3" />
+                                                        {plugin.permissions.length > 0 ? plugin.permissions.join(', ') : 'no permissions'}
+                                                    </span>
+                                                    <span>{plugin.runtime}</span>
+                                                    {plugin.providesTools && <span className="text-[var(--accent-primary)]">provides tools</span>}
+                                                    {plugin.license && <span>{plugin.license}</span>}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {/* Plugin directory info */}
+                                <div className="p-3 rounded-lg bg-[var(--bg-elevated)] border border-[var(--border-subtle)]">
+                                    <div className="text-xs text-[var(--text-muted)]">
+                                        <strong>Plugin format:</strong> Each plugin is a directory containing a <code className="bg-[var(--bg-tertiary)] px-1 rounded">plugin.json</code> manifest
+                                        and an entry point script. Plugins communicate via stdio JSON-RPC (MCP protocol).
+                                        See the <a href="https://github.com/akv004/ai-studio-template/blob/main/docs/specs/plugin-system.md" target="_blank" rel="noopener noreferrer" className="text-[var(--accent-primary)] hover:underline">plugin spec</a> for details.
                                     </div>
                                 </div>
                             </div>

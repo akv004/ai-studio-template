@@ -9,6 +9,7 @@ import type {
     Workflow, WorkflowSummary, CreateWorkflowRequest, UpdateWorkflowRequest,
     ValidationResult, WorkflowRunResult, NodeExecutionState, NodeExecutionStatus,
     BudgetStatus,
+    Plugin, ScanResult,
 } from '@ai-studio/shared';
 
 // ============================================
@@ -167,6 +168,15 @@ interface AppState {
     inspectorSessionId: string | null;
     openInspector: (sessionId: string) => void;
     clearInspectorSession: () => void;
+
+    // Plugins
+    plugins: Plugin[];
+    pluginsLoading: boolean;
+    fetchPlugins: () => Promise<void>;
+    scanPlugins: () => Promise<ScanResult>;
+    enablePlugin: (id: string) => Promise<void>;
+    disablePlugin: (id: string) => Promise<void>;
+    removePlugin: (id: string) => Promise<void>;
 
     // Error tracking
     error: string | null;
@@ -714,6 +724,66 @@ export const useAppStore = create<AppState>((set, get) => ({
             get().fetchBudgetStatus();
         } catch (e) {
             const msg = `Failed to save budget: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
+    },
+
+    // Plugins
+    plugins: [],
+    pluginsLoading: false,
+    fetchPlugins: async () => {
+        set({ pluginsLoading: true });
+        try {
+            const plugins = await invoke<Plugin[]>('list_plugins');
+            set({ plugins, pluginsLoading: false });
+        } catch (e) {
+            set({ pluginsLoading: false, error: formatInvokeError(e) });
+        }
+    },
+    scanPlugins: async () => {
+        try {
+            const result = await invoke<ScanResult>('scan_plugins');
+            const msg = `Scan complete: ${result.installed} installed, ${result.updated} updated`;
+            get().addToast(msg, 'success');
+            get().fetchPlugins();
+            return result;
+        } catch (e) {
+            const msg = `Plugin scan failed: ${formatInvokeError(e)}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+            return { installed: 0, updated: 0, errors: [msg] };
+        }
+    },
+    enablePlugin: async (id) => {
+        try {
+            await invoke<void>('enable_plugin', { id });
+            get().addToast('Plugin enabled', 'success');
+            get().fetchPlugins();
+        } catch (e) {
+            const msg = `Failed to enable plugin: ${formatInvokeError(e)}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
+    },
+    disablePlugin: async (id) => {
+        try {
+            await invoke<void>('disable_plugin', { id });
+            get().addToast('Plugin disabled', 'success');
+            get().fetchPlugins();
+        } catch (e) {
+            const msg = `Failed to disable plugin: ${formatInvokeError(e)}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
+    },
+    removePlugin: async (id) => {
+        try {
+            await invoke<void>('remove_plugin', { id });
+            get().addToast('Plugin removed', 'success');
+            get().fetchPlugins();
+        } catch (e) {
+            const msg = `Failed to remove plugin: ${formatInvokeError(e)}`;
             set({ error: msg });
             get().addToast(msg, 'error');
         }

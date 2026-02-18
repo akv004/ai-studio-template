@@ -84,6 +84,9 @@ impl Database {
         if version < 6 {
             self.migrate_v6(&conn)?;
         }
+        if version < 7 {
+            self.migrate_v7(&conn)?;
+        }
 
         Ok(())
     }
@@ -341,6 +344,39 @@ impl Database {
         ).map_err(|e| format!("Migration v6 failed: {e}"))?;
 
         println!("[db] Migrated to schema v6 (hybrid intelligence routing)");
+        Ok(())
+    }
+
+    /// V7: Plugins table for plugin system
+    fn migrate_v7(&self, conn: &Connection) -> Result<(), String> {
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS plugins (
+                id                 TEXT PRIMARY KEY,
+                name               TEXT NOT NULL,
+                version            TEXT NOT NULL,
+                description        TEXT NOT NULL DEFAULT '',
+                author             TEXT NOT NULL DEFAULT '',
+                homepage           TEXT NOT NULL DEFAULT '',
+                license            TEXT NOT NULL DEFAULT '',
+                runtime            TEXT NOT NULL DEFAULT 'python',
+                entry_point        TEXT NOT NULL,
+                transport          TEXT NOT NULL DEFAULT 'stdio',
+                permissions        TEXT NOT NULL DEFAULT '[]',
+                provides_tools     INTEGER NOT NULL DEFAULT 0,
+                provides_node_types TEXT NOT NULL DEFAULT '[]',
+                directory          TEXT NOT NULL,
+                enabled            INTEGER NOT NULL DEFAULT 0,
+                installed_at       TEXT NOT NULL,
+                updated_at         TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_plugins_enabled ON plugins(enabled);
+
+            INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '7');
+            "
+        ).map_err(|e| format!("Migration v7 failed: {e}"))?;
+
+        println!("[db] Migrated to schema v7 (plugins table)");
         Ok(())
     }
 }

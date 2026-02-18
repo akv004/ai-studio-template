@@ -328,3 +328,36 @@ export interface WorkflowRunResult {
     nodeCount: number;
     error?: string;
 }
+
+// ============================================
+// PLUGIN TYPES
+// ============================================
+
+export type PluginPermission = 'network' | 'filesystem' | 'shell' | 'env';
+export type PluginRuntime = 'python' | 'node' | 'binary';
+
+export interface Plugin {
+    id: string;
+    name: string;
+    version: string;
+    description: string;
+    author: string;
+    homepage: string;
+    license: string;
+    runtime: PluginRuntime;
+    entryPoint: string;
+    transport: 'stdio';
+    permissions: PluginPermission[];
+    providesTools: boolean;
+    providesNodeTypes: string[];
+    directory: string;
+    enabled: boolean;
+    installedAt: string;
+    updatedAt: string;
+}
+
+export interface ScanResult {
+    installed: number;
+    updated: number;
+    errors: string[];
+}

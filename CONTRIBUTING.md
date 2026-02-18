@@ -9,7 +9,7 @@ Thanks for your interest in contributing to AI Studio! This guide will help you 
 | Node.js | 18+ | [nodejs.org](https://nodejs.org/) |
 | Rust | Latest stable | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
 | Python | 3.10+ | [python.org](https://www.python.org/) |
-| pnpm or npm | Latest | `npm install -g pnpm` (optional) |
+| npm | Latest | Comes with Node.js |
 
 ## Setup
 
@@ -29,7 +29,7 @@ pip install -r requirements.txt
 cd ../..
 
 # Run the full desktop app
-cd apps/desktop/src-tauri && cargo tauri dev
+npm run tauri:dev
 ```
 
 First Rust build takes ~3-5 minutes. After that, rebuilds are fast.
@@ -38,9 +38,11 @@ First Rust build takes ~3-5 minutes. After that, rebuilds are fast.
 
 | Mode | Command | Use When |
 |------|---------|----------|
-| Full desktop | `cd apps/desktop/src-tauri && cargo tauri dev` | End-to-end testing |
-| UI only | `npm run dev` | Frontend/styling work (uses mock data) |
+| Full desktop | `npm run tauri:dev` | End-to-end testing |
+| UI only | `npm run dev` | Frontend/styling work |
 | Sidecar only | `cd apps/sidecar && python -m uvicorn server:app --port 8765` | API/provider work |
+| Rust tests | `cd apps/desktop/src-tauri && cargo test` | After Rust changes |
+| TS type check | `cd apps/ui && npx tsc --noEmit` | After TypeScript changes |
 
 ## Project Structure
 
@@ -49,19 +51,25 @@ ai-studio-template/
 ├── apps/
 │   ├── ui/                  # React 19 + TypeScript + Tailwind
 │   │   └── src/
-│   │       ├── app/pages/   # 5 modules: Agents, Sessions, Runs, Inspector, Settings
+│   │       ├── app/pages/   # 6 modules: Agents, Sessions, Runs, Inspector, Node Editor, Settings
 │   │       ├── state/       # Zustand store (all IPC calls to Tauri)
-│   │       └── types/       # TypeScript types
+│   │       └── services/    # Sidecar API client
 │   ├── desktop/src-tauri/   # Rust/Tauri — SQLite, IPC commands, event bridge
 │   │   └── src/
-│   │       ├── commands.rs  # All Tauri IPC command handlers
-│   │       ├── db.rs        # SQLite schema + migrations
-│   │       └── events.rs    # WebSocket bridge to sidecar
+│   │       ├── commands/    # 13 domain modules (agents, chat, mcp, plugins, workflows, etc.)
+│   │       ├── workflow/    # DAG execution engine, validators, 7 node executors
+│   │       ├── routing.rs   # Smart model router (3 modes, 14 unit tests)
+│   │       ├── db.rs        # SQLite schema v7 + migrations
+│   │       ├── sidecar.rs   # Python sidecar lifecycle + WS event bridge
+│   │       ├── events.rs    # Event recording helpers
+│   │       └── error.rs     # Unified error types
 │   └── sidecar/             # Python FastAPI — LLM providers, MCP, tools
 │       ├── server.py        # FastAPI app entry point
-│       └── agent/           # Providers, chat, MCP client
+│       └── agent/           # Providers, chat, MCP client + registry
 ├── packages/shared/         # Shared TypeScript types
-├── docs/specs/              # 11 design specifications
+├── docs/
+│   ├── specs/               # 13 design specifications
+│   └── reviews/             # Peer review archives
 └── package.json             # Monorepo workspace config
 ```
 
@@ -83,13 +91,23 @@ UI (React) → Tauri IPC → Rust/Tauri (SQLite, security) → HTTP/WS → Pytho
 2. Check the [Phase Plan](docs/specs/phase-plan.md) for the current roadmap
 3. Read the relevant [spec](docs/specs/) before starting any feature work
 
+### Good First Issues
+
+These areas are approachable for new contributors:
+
+- **UI improvements** — Styling, animations, responsive layout in `apps/ui/`
+- **New workflow templates** — Add JSON templates in `apps/desktop/src-tauri/src/commands/templates.rs`
+- **Provider support** — Add new LLM providers to `apps/sidecar/agent/providers/`
+- **Documentation** — Improve specs, add examples, fix typos
+- **Plugin examples** — Create example plugins for `~/.ai-studio/plugins/`
+
 ### Contribution Workflow
 
 1. **Fork** the repository
 2. **Create a branch** from `main`: `git checkout -b feat/my-feature`
 3. **Read the spec** — check `docs/specs/` for the relevant specification
 4. **Make your changes** — small, focused commits
-5. **Test** — make sure the app builds and runs
+5. **Test** — `cargo test` for Rust, `npx tsc --noEmit` for TypeScript
 6. **Push** to your fork and open a **Pull Request**
 
 ### Branch Naming
@@ -125,10 +143,12 @@ Refactor: Extract timeline event component
 
 ### Rust (Tauri)
 
-- All IPC commands in `commands.rs`
+- IPC commands organized in `src/commands/` by domain (13 modules)
 - Snake_case in Rust becomes camelCase in JS (Tauri v2 auto-converts)
 - Use `Arc<Mutex<Connection>>` for shared SQLite access
-- Always return `Result<T, String>` from commands
+- All commands return `Result<T, AppError>` (unified error type in `error.rs`)
+- Async commands when calling sidecar (e.g., `enable_plugin`, `send_message`)
+- 31 unit tests in routing + validation + template resolution
 
 ### Python (Sidecar)
 
@@ -144,13 +164,15 @@ Refactor: Extract timeline event component
 - No new dependencies without discussion in the PR
 - Test with at least one LLM provider (Ollama is free and local)
 
-## Architecture Decisions
+## Key Design Decisions
 
 Before proposing significant architectural changes, read:
 
 - [Architecture](docs/specs/architecture.md) — system design and layer responsibilities
 - [Event System](docs/specs/event-system.md) — the event-sourced backbone
-- [Data Model](docs/specs/data-model.md) — SQLite schema
+- [Data Model](docs/specs/data-model.md) — SQLite schema (v7, 7 migrations)
+- [Node Editor](docs/specs/node-editor.md) — visual pipeline builder architecture
+- [Plugin System](docs/specs/plugin-system.md) — manifest format, MCP lifecycle
 
 All architecture decisions are logged in `STATUS.md` under "Decisions Log."
 

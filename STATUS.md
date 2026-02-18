@@ -28,18 +28,18 @@
 ## Current Phase: 4 (Universal Automation Canvas)
 
 **Goal**: Graduate node editor from AI workflow builder to universal automation platform. Data I/O nodes, control flow, engine refactoring, canvas UX.
-**Status**: SPEC WRITTEN — AWAITING EXTERNAL REVIEW
+**Status**: SPEC REVIEWED — READY FOR IMPLEMENTATION
 **Specs in scope**: `phase4-automation-canvas.md` (primary), `node-editor.md` (reference)
 
 ### Phase 4 Review Cycle (CURRENT)
 | Step | Status | Description |
 |------|--------|-------------|
 | Spec v1.1 written | DONE | `docs/specs/phase4-automation-canvas.md` — 10 node types, container model, EIP patterns, canvas UX |
-| Architecture review (Gemini) | PENDING | Container/scope model, EIP mapping, engine refactoring risks |
-| Implementation review (Codex) | PENDING | Rust executor details, security model, edge cases |
-| UX review | PENDING | Comment boxes, containers, palette organization |
-| Iterate on feedback | PENDING | Address review items, update spec |
-| Begin implementation | BLOCKED | Waiting on reviews |
+| Architecture review (Gemini) | DONE | 5 findings — all accepted, spec updated |
+| Implementation review (Codex) | DONE | 10 findings — 9 accepted (spec updated), 1 deferred (F10→4C). Found 2 existing engine bugs (sourceHandle, clean_output). |
+| Iterate on feedback | DONE | Spec v1.2 updated with all accepted findings |
+| Pre-Phase 4 engine fixes | TODO | Fix sourceHandle resolution + clean_output in engine.rs (BLOCKING — must be done before 4A) |
+| Begin 4A implementation | TODO | Start with 4A.1 (UI refactor) after engine fixes |
 
 ---
 
@@ -129,25 +129,26 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-18 (session 21)
+**Date**: 2026-02-18 (session 22)
 **What happened**:
-- **Phase 4 spec written**: `docs/specs/phase4-automation-canvas.md` v1.1
-  - 10+ new node types fully specified with configs, inputs, outputs, executor details
-  - EIP pattern research (Apache Camel / MuleSoft) — 15+ patterns mapped
-  - Unreal Blueprint architecture study — dual-wire system, containers, organization
-  - Key decision: Loop + Error Handler use container/scope model (MuleSoft pattern)
-  - Canvas UX features: comment boxes, reroute nodes, graph search, collapsed graphs
-  - 3 new handle types, engine refactoring plan, 6 templates, review plan
-- **Implementation BLOCKED on external reviews**
+- **Phase 4 spec v1.2**: Updated with all review triage results
+- **Both peer reviews DONE and triaged**:
+  - Gemini (architecture): 5 findings — all accepted. Container model validated, engine refactoring confirmed.
+  - Codex (implementation): 10 findings — 9 accepted, 1 deferred (F10 event consistency → 4C). Found 2 critical existing bugs in engine.rs:
+    - `_src_handle` unused in edge resolution — multi-output handles broken
+    - `clean_output` destroys structured data — LLM usage/cost handles unusable
+  - Codex review significantly more thorough than Gemini
+- **Spec updated**: Pre-Phase 4 engine fixes section, SSRF protection, path allowlists, env_clear, Python-only code node, scope isolation, schema caching, csv crate
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
 - Session 18: Rust refactoring, budget enforcement, plugin foundation, README update
 - Session 19: One-click installers, plugin subprocess lifecycle, open-source infra
 - Session 20: Docker cleanup, template gallery (10 total), launch prep
+- Session 21: Phase 4 spec v1.1 written (10+ nodes, EIP patterns, Unreal architecture, containers)
 
 **Next session should**:
-1. Generate review prompts (Gemini for architecture, Codex for implementation)
-2. Run reviews, triage feedback, iterate on spec
-3. Only AFTER reviews: begin 4A.1 (UI refactoring)
+1. Fix Pre-Phase 4 engine bugs (sourceHandle + clean_output) — BLOCKING
+2. Begin 4A.1: Split NodeEditorPage.tsx monolith into modules
+3. Then 4A.2-4A.7: New handle types + data I/O executors
 4. Consider v0.1.0 tag for Phase 3 before starting Phase 4 code

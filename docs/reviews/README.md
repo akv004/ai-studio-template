@@ -100,3 +100,5 @@ All resolved reviews have been deleted. Summary of completed reviews:
 | 2026-02-17 | Hybrid intelligence deep critique | Simulated ChatGPT 5.2 | 4 findings: 1 fixed (budget enforcement — 5117302), 2 deferred (token estimation, supports_tools), 1 rejected (PII) |
 | 2026-02-18 | Node editor handle system | Antigravity (Gemini) | 6 checks: 2 PASS, 2 already fixed (LLM multi-handle), 1 accepted (type validation — ebeddbb), 1 deferred (tool schema handles) |
 | 2026-02-18 | README + review workflow docs | Codex (GPT-5.2) | 8 findings: 3 fixed (tauri-cli, naming, external ref — ebeddbb), 2 deferred (venv, sidecar script), 2 rejected (prompt file format), 1 accepted for future (commit hash) |
+| 2026-02-18 | Phase 4 spec — architecture | Antigravity (Gemini 3 Pro) | 5 findings — all accepted. Container model validated, engine refactoring confirmed, scope isolation added. |
+| 2026-02-18 | Phase 4 spec — implementation | Codex (GPT-5.2) | 10 findings — 9 accepted (spec updated to v1.2), 1 deferred (F10 event consistency → 4C). Found 2 existing engine bugs (sourceHandle, clean_output). Best review yet. |

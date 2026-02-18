@@ -232,6 +232,42 @@ apps/ui/src/app/pages/
 
 ---
 
+## Part 1B: Pre-Phase 4 Engine Fixes (BLOCKING)
+
+These two bugs in the existing Phase 3 engine **must be fixed before ANY Phase 4 work begins**. Both affect how node outputs are stored and resolved, which every new node type depends on.
+
+### Bug 1: sourceHandle Ignored in Edge Resolution
+
+**Location**: `engine.rs` lines 228-244
+
+The current code receives `_src_handle` (prefixed with underscore — unused). All edges resolve to the same flat output string regardless of which source handle the edge connects from. This means LLM node's three output handles (`response`, `usage`, `cost`) all return the same value.
+
+**Fix**: Store full executor output as a handle-keyed map instead of a flat string:
+
+```rust
+// Before: node_outputs[src_id] = "flat string"
+// After:  node_outputs[src_id] = { "response": "...", "usage": {...}, "cost": 0.003 }
+```
+
+Edge resolution selects by sourceHandle: `node_outputs[src_id][sourceHandle]`. If sourceHandle is empty/missing, fall back to the first output or the entire map (backward compatibility).
+
+### Bug 2: clean_output Destroys Structured Data
+
+**Location**: `engine.rs` lines 286-297
+
+The `clean_output` function strips everything except `content`/`result` fields from executor output. This destroys structured data (e.g., LLM usage stats, HTTP headers, validator error arrays) before it can be routed to downstream nodes.
+
+**Fix**: Store the full raw output from each executor for routing purposes. Compute a preview string separately for event payloads (Inspector display). The preview is what gets truncated/cleaned for human readability; the routing data stays intact.
+
+```rust
+// Routing: full output preserved in node_outputs map
+// Events: compute display_preview(output) for workflow.node.completed payload
+```
+
+**Why blocking**: Every Phase 4 node type outputs multiple handles (HTTP → body/status/headers, Shell → stdout/stderr/exit_code, Loop → results/count). Without these fixes, multi-handle output is fundamentally broken.
+
+---
+
 ## Part 2: New Handle Types
 
 ### Current Handle Types (Phase 3)
@@ -272,6 +308,7 @@ Extended `isValidConnection()` rules:
 - CSS: Add 3 new `.handle-*` classes in `index.css`
 - `connectionRules.ts`: Update coercion matrix
 - DOM class detection: `getHandleType()` already reads CSS classes — new types work automatically
+- **Backend validation**: Add `ensure_rows(val: &Value) -> Result<Vec<Value>>` helper in `types.rs` to fail-fast when non-array data is passed through a `rows` handle. This prevents confusing downstream errors when an upstream node returns a single object instead of an array. Called by any executor that reads from a `rows`-typed input handle.
 
 ---
 
@@ -375,10 +412,11 @@ Filter the node palette by typing. Already identified in the plan.
 | body | string | `""` | Request body (for POST/PUT/PATCH) |
 | timeout | number | `30` | Timeout in seconds |
 | auth | enum | `"none"` | `none`, `bearer`, `basic`, `api_key` |
-| authToken | string | `""` | Token/key value (for bearer/basic/api_key) |
+| authTokenSettingsKey | string | `""` | Settings key for token/key value (e.g., `provider.github.api_key`) — resolved at runtime from settings table |
 | authHeader | string | `"Authorization"` | Header name for api_key auth |
 | followRedirects | bool | `true` | Follow HTTP redirects |
 | validateCerts | bool | `true` | Validate TLS certificates |
+| maxResponseBytes | number | `10485760` | Max response size in bytes (default 10MB) |
 
 **Inputs**:
 - `url` (text, optional) — overrides config URL if connected
@@ -399,7 +437,9 @@ Filter the node palette by typing. Already identified in the plan.
 - Reports `cost_usd: 0.0` (HTTP calls are free from AI Studio's perspective)
 
 **Security**:
-- No auth tokens stored in graph JSON — use `authToken` config field which is runtime-only
+- **SSRF protection**: Block requests to private IP ranges by default — `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `127.0.0.0/8`, `::1`, `169.254.0.0/16` (link-local). Resolve hostname before connecting and check the resolved IP. This prevents workflows from probing internal networks.
+- No auth tokens stored in graph JSON — use `authTokenSettingsKey` config field that references a settings key (e.g., `provider.github.api_key`) instead of storing raw tokens. Executor reads the actual token from the settings table at runtime.
+- `maxResponseBytes` config field (default: `10485760` / 10MB) — reject responses larger than this to prevent memory exhaustion. Check `Content-Length` header first; if absent, stream with byte counting.
 - TODO (Phase 5): Credential vault integration for secure token storage
 - Default approval: `"auto"` (HTTP requests don't need approval by default)
 
@@ -456,10 +496,10 @@ Filter the node palette by typing. Already identified in the plan.
 - Returns descriptive errors: "File not found: /path", "File too large: 25MB > 10MB limit"
 
 **Security**:
-- Scoped to Tauri FS scope by default (`scope.allow` in `tauri.conf.json`)
-- Paths outside scope return a permission error
-- No symlink following by default (prevents path traversal)
-- Default approval: `"auto"` (reading is safe within scope)
+- Explicit allowlist approach: `canonicalize()` the resolved path, then verify it `starts_with()` one of the allowed roots (configurable per workflow or global setting). Reject paths that don't match any allowed root.
+- Deny sensitive paths regardless of allowlist: `~/.ssh`, `~/.gnupg`, `/etc/shadow`, `/etc/passwd`, `~/.config/ai-studio/` (own config). Hardcoded deny list checked after canonicalization.
+- No symlink following by default (prevents path traversal) — `canonicalize()` resolves symlinks, then the resolved path is checked against the allowlist.
+- Default approval: `"ask"` for paths outside the allowlist. `"auto"` for paths within allowed roots.
 
 ---
 
@@ -510,9 +550,10 @@ Filter the node palette by typing. Already identified in the plan.
 - Text mode: write as-is (convert non-string to `.to_string()`)
 
 **Security**:
-- Scoped to Tauri FS scope
-- Default approval: `"ask"` — writing files should be confirmed
-- Cannot overwrite system files (FS scope prevents this)
+- Same allowlist approach as File Read: `canonicalize()` + `starts_with()` against allowed roots.
+- Same deny list: `~/.ssh`, `~/.gnupg`, `/etc/shadow`, `/etc/passwd`, `~/.config/ai-studio/`.
+- Default approval: `"ask"` — writing files should always be confirmed.
+- Cannot overwrite system files — deny list + allowlist enforcement prevents this.
 
 ---
 
@@ -573,7 +614,9 @@ Filter the node palette by typing. Already identified in the plan.
 - No `run_as` or `sudo` in v1 — too dangerous without proper privilege management
 - No sandbox mode in v1 — deferred to Phase 5 (needs container/seccomp integration)
 - Blocked commands: TODO for Phase 5 (allowlist/blocklist configuration)
-- Environment variables: only those explicitly set in config — no inherited env leakage
+- Environment variables: `env_clear()` before spawning — start with empty env, then inject only `HOME`, `PATH` (minimal: `/usr/bin:/bin`), and explicitly configured `envVars`. No inherited env leakage.
+- Timeout cleanup: on Unix, kill the entire process group (`kill(-pid, SIGKILL)`) to prevent orphaned child processes. Requires spawning with `pre_exec` to call `setsid()`.
+- **Tokio requirement**: `tokio` must have the `process` feature enabled (see Part 6 Cargo dependencies).
 
 **Why Rust, not sidecar**:
 - Faster: no HTTP roundtrip to Python
@@ -625,6 +668,8 @@ Filter the node palette by typing. Already identified in the plan.
 - Validates input data against schema
 - If `failOnError` and validation fails: return `Err(...)` (node goes to error state)
 - Otherwise: return `{ valid, data, errors }` as output
+
+**Schema Caching**: Executor should cache compiled schemas (keyed by schema string hash) to avoid recompilation on each execution, especially important in loops. Use a `HashMap<u64, CompiledSchema>` in the executor, where the key is `hash(schema_string)`. Cache is per-workflow-run (lives in `ExecutionContext`), not global.
 
 **Why this matters**: LLM outputs are unpredictable. Validator + Router creates a retry loop:
 ```
@@ -849,6 +894,8 @@ async fn execute_subgraph(
 - Total cost is sum of all iteration costs
 - Progress bar on the container shows `current/total` iterations
 
+**Scope Isolation**: Nodes outside the loop CANNOT reference nodes inside the loop via template variables (`{{node_inside_loop.output}}`). They must use the Loop node's aggregated `results` output handle. This enforces clean scoping — similar to block scope in programming languages. The engine validates this at workflow validation time: any template reference to a node with a `parentId` from a node without the same `parentId` is an error.
+
 **v1 Limitations** (documented, not hidden):
 - No nested loops (would require recursive subgraph extraction — Phase 5)
 - No early exit / break condition (Phase 5: add `breakCondition` config)
@@ -928,7 +975,9 @@ async fn execute_subgraph(
 
 ### 4.4 Code Node
 
-**Purpose**: Execute arbitrary Python or JavaScript code. For transformations too complex for templates.
+**Purpose**: Execute arbitrary Python code. For transformations too complex for templates.
+
+> **Note**: JavaScript support deferred to Phase 5 (requires embedded JS engine like QuickJS or Node.js bundling). Phase 4 is Python-only.
 
 ```
 ┌────────────────────────────────┐
@@ -936,7 +985,7 @@ async fn execute_subgraph(
 │                                 │
 ●──[json]     data                │
 │                                 │
-│  Language: python ▼             │
+│  Language: python               │
 │  ┌──────────────────────────┐  │
 │  │ import json              │  │
 │  │ data = json.loads(input) │  │
@@ -957,7 +1006,7 @@ async fn execute_subgraph(
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| language | enum | `"python"` | `python`, `javascript` |
+| language | enum | `"python"` | `python` (JavaScript deferred to Phase 5) |
 | code | string | `""` | Code to execute |
 | timeout | number | `10` | Timeout in seconds |
 
@@ -976,10 +1025,9 @@ New sidecar endpoint: `POST /code/execute`
 # Sidecar endpoint
 @router.post("/code/execute")
 async def execute_code(request: CodeExecuteRequest):
-    # request: { language, code, input_data, timeout }
+    # request: { language: "python", code, input_data, timeout }
     # Runs code in subprocess with:
     #   - Python: python3 -c "..." with input as env var
-    #   - JavaScript: node -e "..." with input as env var
     # Returns: { stdout, stderr, exit_code, result }
 ```
 
@@ -997,7 +1045,7 @@ async def execute_code(request: CodeExecuteRequest):
 
 **Security**:
 - Default approval: `"ask"` — code execution requires confirmation
-- Subprocess has no network access (TODO Phase 5: network sandbox)
+- Network access cannot be restricted without OS sandboxing — document this limitation honestly. Phase 5 may add container/seccomp isolation.
 - Subprocess inherits minimal env (HOME, PATH, AI_STUDIO_INPUT only)
 - Timeout kills process
 
@@ -1094,9 +1142,13 @@ registry.insert("code".into(), Box::new(CodeExecutor));
 
 ```toml
 jsonschema = "0.28"  # For Validator node — JSON Schema draft 7 validation
+csv = "1.3"          # For File Read CSV mode — proper RFC 4180 parsing
 ```
 
-All other functionality uses existing deps (`reqwest`, `tokio`, `serde_json`, `std::fs`).
+Additional notes:
+- `base64` crate may be needed for File Read binary mode (base64 encoding). Evaluate if `base64` is already a transitive dependency before adding.
+- `tokio` features must include: `features = ["time", "sync", "process", "io-util"]`. The `process` feature is required for Shell Exec and Code node subprocess management.
+- All other functionality uses existing deps (`reqwest`, `tokio`, `serde_json`, `std::fs`).
 
 ---
 

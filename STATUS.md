@@ -102,23 +102,35 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-17 (session 13)
+**Date**: 2026-02-17 (session 14)
 **What happened**:
-- Triaged Codex (GPT-5) runtime review — 4 accepted, 4 deferred to 3C (`deb6c3b`)
-  - R1: Fixed duplicate user message in chat context (sidecar history hydration)
-  - R2: Fixed run cancellation not enforced (status guard on UPDATE)
-  - R3: Fixed local provider bootstrap (accept base_url without api_key)
-  - R7: Fixed Inspector tool detail key mismatch (fallback lookups)
-- **Phase 3B COMPLETE** — Node editor execution engine (`19d6d00`):
-  - Chunk 1: Event infra + types (record_event_db, Rust structs, TS interfaces)
-  - Chunk 2: Workflow validation (cycle detection via Kahn's, Input/Output checks, orphans)
-  - Chunk 3: Core DAG walker — topological sort, sequential execution, template resolution
-  - Node executors: Input, Output, LLM (via /chat/direct), Transform (template), Router (LLM classify), Tool (via /tools/execute)
-  - Chunk 4: Tool + Router executors (built into Chunk 3)
-  - Chunk 5: Approval node (ApprovalManager register/remove, 5min timeout, workflow_approval_requested event)
-  - Chunk 6: Live node states + data preview (6 execution states, border colors, badges, output previews)
-  - Chunk 7: Run button + input form (modal with per-Input-node fields, approval dialog)
-  - Sidecar: Extended /chat/direct with api_key/base_url/system_prompt, added POST /tools/execute
+- Collected Blender + Unreal design references for node editor visual polish (`a78091d`)
+  - 7 screenshots organized in `docs/design-references/node-editor/` with analysis README
+  - Draft visual polish spec created: `docs/specs/node-editor-visual-polish.md`
+- Added 17 Rust unit tests for validation + template resolution (`e72b080`)
+- Fixed multiple UI bugs found during user testing:
+  - White node background (React Flow default) — CSS override
+  - Empty provider dropdown — dark styling + auto-model on provider change
+  - Node delete button added to config panel
+  - Enter key to send in Sessions chat (was requiring Ctrl+Enter)
+  - FOREIGN KEY constraint on workflow session creation (agent_id fallback)
+  - Stale sidecar 401 errors (old PID lingering after hot-reload)
+- Cleaned up review statuses: node-editor-review and runtime-review both → Resolved
+- Removed duplicate screenshots from docs/screenshots/
+- **Codex is concurrently working on fixes** — code files (commands.rs, NodeEditorPage.tsx, etc.) may have pending changes
+
+**IMPORTANT — Uncommitted code changes**:
+- `commands.rs`: FK fix for workflow sessions, needs debug logging added
+- `NodeEditorPage.tsx`: Event listeners, approval dialog, run button, UI fixes
+- `SessionsPage.tsx`: Enter key to send
+- `index.css`: Dark node styling, select dropdown styling
+- `store.ts`: Execution state (workflowRunning, nodeStates, runWorkflow)
+- **Codex may be modifying these files** — re-read before editing
+
+**Blockers for end-to-end workflow test**:
+1. Need proper `eprintln!` debug logging in run_workflow/execute_workflow path
+2. Need to verify FK fix works after Rust rebuild
+3. Google provider (gemini-2.0-flash) must be configured in Settings before running
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -135,7 +147,11 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 11: Node editor review triage (Gemini 3 Pro)
 - Session 12: Phase 3A foundation (3e6c277, d2eb98d) + Codex triage
 - Session 13: Codex runtime review triage (deb6c3b) + Phase 3B execution engine
+- Session 14: Design references, unit tests, UI bug fixes, review cleanup
 
 **Next session should**:
-1. Phase 3C: Node editor polish — templates, Inspector integration, agent-workflow linking
-2. Or: Start hybrid intelligence routing
+1. Add `eprintln!` debug logging to workflow execution path (commands.rs)
+2. Test workflow Run end-to-end: Input → LLM (Google Gemini) → Output
+3. Commit all pending UI fixes (after Codex finishes)
+4. Phase 3C: Node editor visual polish (Blender-inspired restyling)
+5. Or: Start hybrid intelligence routing

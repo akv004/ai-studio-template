@@ -89,5 +89,5 @@ This workflow follows the global multi-model review pattern defined in `claude-c
 |------|-------|----------|--------|------|
 | 2026-02-09 | Phase 1 design | Gemini 3 Pro | Closed | `design-review-2026-02-09.md` |
 | 2026-02-15 | Phase 2 branching | Gemini 3 Pro | Resolved | `phase-2-review-detailed.md` |
-| 2026-02-15 | Node editor architecture | Gemini 3 Pro | Triaged | `node-editor-review-2026-02-15.md` |
-| 2026-02-18 | Runtime safety and correctness | Codex (GPT-5) | Draft | `runtime-review-2026-02-18.md` |
+| 2026-02-15 | Node editor architecture | Gemini 3 Pro | Resolved | `node-editor-review-2026-02-15.md` |
+| 2026-02-18 | Runtime safety and correctness | Codex (GPT-5) | Resolved | `runtime-review-2026-02-18.md` |

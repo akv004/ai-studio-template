@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-    Plus, Save, Play, Trash2, Copy, ChevronLeft,
+    Plus, Save, Play, Trash2, Copy, ChevronLeft, ChevronDown, ChevronRight,
     Loader2, RefreshCw, MessageSquare, Wrench, GitFork,
     ShieldCheck, Repeat, FileInput, FileOutput, Cpu,
     Check, X, Clock,
@@ -75,25 +75,25 @@ const NODE_CATEGORIES: NodeCategory[] = [
 // CUSTOM NODE COMPONENTS
 // ============================================
 
-// Execution state visual config
-const execStateStyles: Record<NodeExecutionStatus, { border: string; icon: React.ElementType | null; label: string }> = {
-    idle: { border: '', icon: null, label: '' },
-    running: { border: '2px solid #3b82f6', icon: Loader2, label: 'Running' },
-    completed: { border: '2px solid #22c55e', icon: Check, label: 'Done' },
-    error: { border: '2px solid #ef4444', icon: X, label: 'Error' },
-    waiting: { border: '2px solid #eab308', icon: Clock, label: 'Waiting' },
-    skipped: { border: '2px dashed #6b7280', icon: null, label: 'Skipped' },
+// Execution state badge labels
+const execBadgeConfig: Record<NodeExecutionStatus, { icon: React.ElementType | null; label: string }> = {
+    idle: { icon: null, label: '' },
+    running: { icon: Loader2, label: 'Running' },
+    completed: { icon: Check, label: 'Done' },
+    error: { icon: X, label: 'Error' },
+    waiting: { icon: Clock, label: 'Waiting' },
+    skipped: { icon: null, label: 'Skipped' },
 };
 
 function ExecutionBadge({ nodeId }: { nodeId: string }) {
     const state = useAppStore((s) => s.workflowNodeStates[nodeId]);
     if (!state || state.status === 'idle') return null;
-    const style = execStateStyles[state.status];
-    const Icon = style.icon;
+    const cfg = execBadgeConfig[state.status];
+    const Icon = cfg.icon;
     return (
-        <div className="absolute -top-2 -right-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-secondary)] border border-[var(--border-subtle)] z-10">
+        <div className="absolute -top-2 -right-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[#1e1e1e] border border-[#3a3a3a] z-10">
             {Icon && <Icon size={10} className={state.status === 'running' ? 'animate-spin' : ''} />}
-            {style.label}
+            {cfg.label}
         </div>
     );
 }
@@ -102,207 +102,209 @@ function OutputPreview({ nodeId }: { nodeId: string }) {
     const state = useAppStore((s) => s.workflowNodeStates[nodeId]);
     if (!state || state.status !== 'completed' || !state.output) return null;
     return (
-        <div className="mt-1 text-[10px] text-[var(--text-muted)] truncate max-w-[160px] font-mono">
+        <div className="mt-1 text-[10px] text-[#888] truncate max-w-[160px] font-mono">
             {state.output.slice(0, 80)}{state.output.length > 80 ? '...' : ''}
         </div>
     );
 }
 
-function useNodeExecBorder(nodeId: string): React.CSSProperties {
+function useExecClass(nodeId: string): string {
     const state = useAppStore((s) => s.workflowNodeStates[nodeId]);
-    if (!state || state.status === 'idle') return {};
-    const style = execStateStyles[state.status];
-    if (!style.border) return {};
-    const [width, borderStyle, color] = style.border.split(' ');
-    return {
-        borderWidth: width,
-        borderStyle: borderStyle,
-        borderColor: color,
-        boxShadow: state.status === 'running' ? `0 0 8px ${color}40` : undefined,
-    };
+    if (!state || state.status === 'idle') return '';
+    return `exec-${state.status}`;
 }
 
+// Muted Blender-inspired palette
 const nodeColors: Record<string, string> = {
-    input: '#22c55e',
-    output: '#f59e0b',
-    llm: '#6366f1',
-    tool: '#ec4899',
-    router: '#14b8a6',
-    approval: '#eab308',
-    transform: '#8b5cf6',
-    subworkflow: '#06b6d4',
+    input: '#2d5a27',
+    output: '#8a5a1e',
+    llm: '#3a3a8a',
+    tool: '#8a2a5a',
+    router: '#1a6a6a',
+    approval: '#8a7a1a',
+    transform: '#5a3a8a',
+    subworkflow: '#1a5a7a',
 };
 
-function InputNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
-    const execStyle = useNodeExecBorder(id);
+// Shared node wrapper with collapse support
+function NodeShell({ id, type, label, icon: Icon, selected, collapsed, onToggleCollapse, children }: {
+    id: string; type: string; label: string; icon: React.ElementType;
+    selected?: boolean; collapsed?: boolean; onToggleCollapse?: () => void;
+    children: React.ReactNode;
+}) {
+    const execClass = useExecClass(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.input, ...execStyle }}>
+        <div className={`custom-node ${selected ? 'selected' : ''} ${collapsed ? 'collapsed' : ''} ${execClass} relative`}>
             <ExecutionBadge nodeId={id} />
-            <div className="custom-node-header" style={{ background: nodeColors.input }}>
-                <FileInput size={14} /> INPUT
+            <div className="custom-node-header" style={{ background: nodeColors[type] }}
+                onClick={onToggleCollapse}>
+                <span className="collapse-chevron">
+                    {collapsed ? <ChevronRight size={8} /> : <ChevronDown size={8} />}
+                </span>
+                <Icon size={12} />
+                {label}
             </div>
             <div className="custom-node-body">
-                <div className="text-xs text-[var(--text-muted)]">Name</div>
-                <div className="text-sm font-medium">{(data.name as string) || 'untitled'}</div>
-                <div className="text-xs text-[var(--text-muted)] mt-1">Type: {(data.dataType as string) || 'text'}</div>
-                <OutputPreview nodeId={id} />
+                {children}
             </div>
-            <Handle type="source" position={Position.Right} className="custom-handle" />
         </div>
+    );
+}
+
+function InputNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+    return (
+        <NodeShell id={id} type="input" label="INPUT" icon={FileInput} selected={selected}
+            collapsed={data.collapsed as boolean}>
+            <div className="text-[11px] font-medium">{(data.name as string) || 'untitled'}</div>
+            <div className="text-[10px] text-[#888]">Type: {(data.dataType as string) || 'text'}</div>
+            <OutputPreview nodeId={id} />
+            <div className="handle-row output">
+                <span className="handle-label">value</span>
+                <Handle type="source" position={Position.Right} className="custom-handle handle-text" />
+            </div>
+        </NodeShell>
     );
 }
 
 function OutputNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
-    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.output, ...execStyle }}>
-            <ExecutionBadge nodeId={id} />
-            <div className="custom-node-header" style={{ background: nodeColors.output }}>
-                <FileOutput size={14} /> OUTPUT
+        <NodeShell id={id} type="output" label="OUTPUT" icon={FileOutput} selected={selected}
+            collapsed={data.collapsed as boolean}>
+            <div className="handle-row input">
+                <Handle type="target" position={Position.Left} className="custom-handle handle-text" />
+                <span className="handle-label">value</span>
             </div>
-            <div className="custom-node-body">
-                <div className="text-xs text-[var(--text-muted)]">Name</div>
-                <div className="text-sm font-medium">{(data.name as string) || 'result'}</div>
-                <div className="text-xs text-[var(--text-muted)] mt-1">Format: {(data.format as string) || 'text'}</div>
-                <OutputPreview nodeId={id} />
-            </div>
-            <Handle type="target" position={Position.Left} className="custom-handle" />
-        </div>
+            <div className="text-[11px] font-medium">{(data.name as string) || 'result'}</div>
+            <div className="text-[10px] text-[#888]">Format: {(data.format as string) || 'text'}</div>
+            <OutputPreview nodeId={id} />
+        </NodeShell>
     );
 }
 
 function LLMNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
-    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.llm, ...execStyle }}>
-            <ExecutionBadge nodeId={id} />
-            <div className="custom-node-header" style={{ background: nodeColors.llm }}>
-                <Cpu size={14} /> LLM
+        <NodeShell id={id} type="llm" label="LLM" icon={Cpu} selected={selected}
+            collapsed={data.collapsed as boolean}>
+            <div className="handle-row input">
+                <Handle type="target" position={Position.Left} id="prompt" className="custom-handle handle-text" />
+                <span className="handle-label">prompt</span>
             </div>
-            <div className="custom-node-body">
-                <div className="text-sm font-medium">{(data.model as string) || 'Select model'}</div>
-                <div className="text-xs text-[var(--text-muted)]">{(data.provider as string) || 'No provider'}</div>
-                {Boolean(data.systemPrompt) && (
-                    <div className="text-xs text-[var(--text-muted)] mt-1 truncate max-w-[160px]">
-                        {(data.systemPrompt as string).slice(0, 40)}...
-                    </div>
-                )}
-                <OutputPreview nodeId={id} />
+            <div className="text-[11px] font-medium">{(data.model as string) || 'Select model'}</div>
+            <div className="text-[10px] text-[#888]">{(data.provider as string) || 'No provider'}</div>
+            {Boolean(data.systemPrompt) && (
+                <div className="text-[10px] text-[#666] mt-0.5 truncate max-w-[160px]">
+                    {(data.systemPrompt as string).slice(0, 40)}...
+                </div>
+            )}
+            <OutputPreview nodeId={id} />
+            <div className="handle-row output">
+                <span className="handle-label">response</span>
+                <Handle type="source" position={Position.Right} id="response" className="custom-handle handle-text" />
             </div>
-            <Handle type="target" position={Position.Left} id="prompt" className="custom-handle" />
-            <Handle type="source" position={Position.Right} id="response" className="custom-handle" />
-        </div>
+        </NodeShell>
     );
 }
 
 function ToolNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
-    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.tool, ...execStyle }}>
-            <ExecutionBadge nodeId={id} />
-            <div className="custom-node-header" style={{ background: nodeColors.tool }}>
-                <Wrench size={14} /> TOOL
+        <NodeShell id={id} type="tool" label="TOOL" icon={Wrench} selected={selected}
+            collapsed={data.collapsed as boolean}>
+            <div className="handle-row input">
+                <Handle type="target" position={Position.Left} className="custom-handle handle-json" />
+                <span className="handle-label">input</span>
             </div>
-            <div className="custom-node-body">
-                <div className="text-sm font-medium">{(data.toolName as string) || 'Select tool'}</div>
-                {Boolean(data.serverName) && (
-                    <div className="text-xs text-[var(--text-muted)]">Server: {data.serverName as string}</div>
-                )}
-                <OutputPreview nodeId={id} />
+            <div className="text-[11px] font-medium">{(data.toolName as string) || 'Select tool'}</div>
+            {Boolean(data.serverName) && (
+                <div className="text-[10px] text-[#888]">Server: {data.serverName as string}</div>
+            )}
+            <OutputPreview nodeId={id} />
+            <div className="handle-row output">
+                <span className="handle-label">result</span>
+                <Handle type="source" position={Position.Right} id="result" className="custom-handle handle-json" />
             </div>
-            <Handle type="target" position={Position.Left} className="custom-handle" />
-            <Handle type="source" position={Position.Right} id="result" className="custom-handle" />
-        </div>
+        </NodeShell>
     );
 }
 
 function RouterNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
-    const execStyle = useNodeExecBorder(id);
     const branches = (data.branches as string[]) || ['true', 'false'];
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.router, ...execStyle }}>
-            <ExecutionBadge nodeId={id} />
-            <div className="custom-node-header" style={{ background: nodeColors.router }}>
-                <GitFork size={14} /> ROUTER
+        <NodeShell id={id} type="router" label="ROUTER" icon={GitFork} selected={selected}
+            collapsed={data.collapsed as boolean}>
+            <div className="handle-row input">
+                <Handle type="target" position={Position.Left} className="custom-handle handle-text" />
+                <span className="handle-label">input</span>
             </div>
-            <div className="custom-node-body">
-                <div className="text-xs text-[var(--text-muted)]">Mode: {(data.mode as string) || 'pattern'}</div>
-                <div className="text-xs mt-1">
-                    {branches.map((b, i) => (
-                        <span key={i} className="inline-block bg-[var(--bg-tertiary)] px-1.5 py-0.5 rounded mr-1 mb-1">{b}</span>
-                    ))}
+            <div className="text-[10px] text-[#888]">Mode: {(data.mode as string) || 'llm'}</div>
+            {branches.map((b, i) => (
+                <div key={i} className="handle-row output">
+                    <span className="handle-label">{b}</span>
+                    <Handle type="source" position={Position.Right} id={`branch-${i}`}
+                        className="custom-handle handle-bool" />
                 </div>
-            </div>
-            <Handle type="target" position={Position.Left} className="custom-handle" />
-            {branches.map((_, i) => (
-                <Handle
-                    key={i}
-                    type="source"
-                    position={Position.Right}
-                    id={`branch-${i}`}
-                    className="custom-handle"
-                    style={{ top: `${30 + (i * 20)}%` }}
-                />
             ))}
-        </div>
+        </NodeShell>
     );
 }
 
 function ApprovalNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
-    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.approval, ...execStyle }}>
-            <ExecutionBadge nodeId={id} />
-            <div className="custom-node-header" style={{ background: nodeColors.approval, color: '#000' }}>
-                <ShieldCheck size={14} /> APPROVAL
+        <NodeShell id={id} type="approval" label="APPROVAL" icon={ShieldCheck} selected={selected}
+            collapsed={data.collapsed as boolean}>
+            <div className="handle-row input">
+                <Handle type="target" position={Position.Left} className="custom-handle handle-any" />
+                <span className="handle-label">data</span>
             </div>
-            <div className="custom-node-body">
-                <div className="text-sm">{(data.message as string) || 'Approve?'}</div>
+            <div className="text-[11px]">{((data.message as string) || 'Approve?').slice(0, 40)}</div>
+            <div className="handle-row output">
+                <span className="handle-label">approved</span>
+                <Handle type="source" position={Position.Right} id="approved" className="custom-handle handle-bool" />
             </div>
-            <Handle type="target" position={Position.Left} className="custom-handle" />
-            <Handle type="source" position={Position.Right} id="approved" className="custom-handle" style={{ top: '35%' }} />
-            <Handle type="source" position={Position.Right} id="rejected" className="custom-handle" style={{ top: '65%' }} />
-        </div>
+            <div className="handle-row output">
+                <span className="handle-label">rejected</span>
+                <Handle type="source" position={Position.Right} id="rejected" className="custom-handle handle-bool" />
+            </div>
+        </NodeShell>
     );
 }
 
 function TransformNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
-    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.transform, ...execStyle }}>
-            <ExecutionBadge nodeId={id} />
-            <div className="custom-node-header" style={{ background: nodeColors.transform }}>
-                <Repeat size={14} /> TRANSFORM
+        <NodeShell id={id} type="transform" label="TRANSFORM" icon={Repeat} selected={selected}
+            collapsed={data.collapsed as boolean}>
+            <div className="handle-row input">
+                <Handle type="target" position={Position.Left} className="custom-handle handle-any" />
+                <span className="handle-label">input</span>
             </div>
-            <div className="custom-node-body">
-                <div className="text-xs text-[var(--text-muted)]">Mode: {(data.mode as string) || 'template'}</div>
-                {Boolean(data.template) && (
-                    <div className="text-xs mt-1 truncate max-w-[160px] font-mono">
-                        {(data.template as string).slice(0, 30)}
-                    </div>
-                )}
-                <OutputPreview nodeId={id} />
+            <div className="text-[10px] text-[#888]">Mode: {(data.mode as string) || 'template'}</div>
+            {Boolean(data.template) && (
+                <div className="text-[10px] mt-0.5 truncate max-w-[160px] font-mono text-[#777]">
+                    {(data.template as string).slice(0, 30)}
+                </div>
+            )}
+            <OutputPreview nodeId={id} />
+            <div className="handle-row output">
+                <span className="handle-label">output</span>
+                <Handle type="source" position={Position.Right} className="custom-handle handle-any" />
             </div>
-            <Handle type="target" position={Position.Left} className="custom-handle" />
-            <Handle type="source" position={Position.Right} className="custom-handle" />
-        </div>
+        </NodeShell>
     );
 }
 
 function SubworkflowNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
-    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.subworkflow, ...execStyle }}>
-            <ExecutionBadge nodeId={id} />
-            <div className="custom-node-header" style={{ background: nodeColors.subworkflow }}>
-                <MessageSquare size={14} /> SUBWORKFLOW
+        <NodeShell id={id} type="subworkflow" label="SUBWORKFLOW" icon={MessageSquare} selected={selected}
+            collapsed={data.collapsed as boolean}>
+            <div className="handle-row input">
+                <Handle type="target" position={Position.Left} className="custom-handle handle-any" />
+                <span className="handle-label">input</span>
             </div>
-            <div className="custom-node-body">
-                <div className="text-sm font-medium">{(data.workflowName as string) || 'Select workflow'}</div>
+            <div className="text-[11px] font-medium">{(data.workflowName as string) || 'Select workflow'}</div>
+            <div className="handle-row output">
+                <span className="handle-label">output</span>
+                <Handle type="source" position={Position.Right} className="custom-handle handle-any" />
             </div>
-            <Handle type="target" position={Position.Left} className="custom-handle" />
-            <Handle type="source" position={Position.Right} className="custom-handle" />
-        </div>
+        </NodeShell>
     );
 }
 
@@ -712,7 +714,7 @@ function WorkflowCanvas({ workflow, onBack }: {
     const [hasChanges, setHasChanges] = useState(false);
     const [showRunModal, setShowRunModal] = useState(false);
     const [runInputs, setRunInputs] = useState<Record<string, unknown>>({});
-    const [approvalRequest, setApprovalRequest] = useState<{ id: string; message: string; data?: string } | null>(null);
+    const [approvalRequest, setApprovalRequest] = useState<{ id: string; message: string; dataPreview?: string } | null>(null);
     const [lastRunDebug, setLastRunDebug] = useState<LastRunDebugInfo | null>(null);
     const [lastRunResult, setLastRunResult] = useState<LastRunResult | null>(null);
     const reactFlowRef = useRef<HTMLDivElement>(null);
@@ -1117,6 +1119,7 @@ function WorkflowCanvas({ workflow, onBack }: {
                         onDragOver={onDragOver}
                         onDrop={onDrop}
                         nodeTypes={customNodeTypes}
+                        defaultEdgeOptions={{ type: 'smoothstep', animated: false }}
                         defaultViewport={initialGraph.viewport}
                         fitView
                         deleteKeyCode={null}

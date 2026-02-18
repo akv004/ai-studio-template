@@ -765,7 +765,7 @@ function WorkflowCanvas({ workflow, onBack }: {
                 unlistenApproval = await listen<{
                     id: string;
                     message: string;
-                    data?: string;
+                    dataPreview?: string;
                 }>('workflow_approval_requested', (event) => {
                     setApprovalRequest(event.payload);
                 });
@@ -862,17 +862,13 @@ function WorkflowCanvas({ workflow, onBack }: {
 
     // Handle run workflow
     const handleRunClick = useCallback(() => {
-        // Build default inputs from Input nodes — include both node.id and name as keys
+        // Build default inputs from Input nodes — use logical name only
         const defaults: Record<string, unknown> = {};
         nodes.forEach((n) => {
             if (n.type === 'input') {
                 const name = (n.data.name as string) || 'input';
                 const defaultVal = n.data.default ?? '';
-                // Send both node ID key and name key so Rust can resolve either
-                defaults[n.id] = defaultVal;
-                if (name !== n.id) {
-                    defaults[name] = defaultVal;
-                }
+                defaults[name] = defaultVal;
             }
         });
         setRunInputs(defaults);
@@ -1220,9 +1216,9 @@ function WorkflowCanvas({ workflow, onBack }: {
                             <h2 className="text-lg font-semibold">Approval Required</h2>
                         </div>
                         <p className="text-sm mb-3">{approvalRequest.message}</p>
-                        {approvalRequest.data && (
+                        {approvalRequest.dataPreview && (
                             <pre className="text-xs bg-[var(--bg-tertiary)] p-3 rounded mb-4 overflow-auto max-h-[200px] font-mono">
-                                {approvalRequest.data}
+                                {approvalRequest.dataPreview}
                             </pre>
                         )}
                         <div className="flex justify-end gap-2">

@@ -33,6 +33,7 @@ dependencies = [
 name = "ai-studio"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "dirs 5.0.1",
  "futures-util",
@@ -45,6 +46,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-tungstenite",
  "uuid",

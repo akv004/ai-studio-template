@@ -5,9 +5,12 @@
 
 mod commands;
 mod db;
+mod error;
+pub mod events;
 mod routing;
 mod sidecar;
 mod system;
+mod workflow;
 
 use commands::*;
 use db::Database;
@@ -103,8 +106,8 @@ pub fn run() {
             delete_workflow,
             duplicate_workflow,
             // Workflow Execution (Phase 3B)
-            validate_workflow,
-            run_workflow,
+            workflow::validate_workflow,
+            workflow::run_workflow,
             // Workflow Templates (Phase 3C)
             list_templates,
             load_template,

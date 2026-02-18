@@ -28,6 +28,7 @@
 ## Current Phase: 3 (Ecosystem + Node Editor)
 
 **Goal**: Node editor (flagship Phase 3 feature), plugin system, templates, open-source launch prep.
+**Status**: ALL TASKS COMPLETE. Phase 3 is ready for launch.
 **Specs in scope**: `node-editor.md` (primary), `hybrid-intelligence.md`, `phase-plan.md` (3A-3C)
 
 | Task | Spec | Status |
@@ -45,7 +46,8 @@
 | Plugin subprocess lifecycle | `plugin-system.md` | DONE |
 | README update | — | DONE |
 | One-click installers | `phase-plan.md` | DONE |
-| Community templates | `phase-plan.md` | TODO (5 bundled done in 3C) |
+| Community templates | `phase-plan.md` | DONE (10 bundled + templates/README.md) |
+| Open-source launch prep | — | DONE (CHANGELOG, SECURITY, Show HN, CI, issue templates) |
 
 ---
 
@@ -59,8 +61,8 @@
 6. ~~README update~~ DONE
 7. ~~One-click installers~~ DONE (Tauri bundler config + MIT LICENSE)
 8. ~~Plugin subprocess lifecycle~~ DONE (enable→spawn→MCP connect, disable→disconnect, startup auto-connect)
-9. Community template gallery — GitHub-based, beyond the 5 bundled templates
-10. Open-source launch prep — Demo video, screenshots, Show HN assets
+9. ~~Community template gallery~~ DONE (10 templates + templates/README.md contributor guide)
+10. ~~Open-source launch prep~~ DONE (CHANGELOG.md, SECURITY.md, Show HN draft, CI, GitHub templates, package.json metadata)
 
 ---
 
@@ -72,7 +74,7 @@
 
 **Phase 2** (COMPLETE): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (5778124). Inspector improvements (0a5895c).
 
-**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d). **3B execution DONE**: DAG walker engine, 7 node executors, validation, live node states, approval dialog, run button + input form. **3C polish DONE**: Codex review fixes (H1/H2/M1-M4 — 2380b83, 280be8c), Blender-inspired node restyling + collapse (ba82190), context menu + keyboard shortcuts (74d97df), 5 bundled templates + export/import (bb37147). **Hybrid Intelligence DONE**: Schema v6 (routing_mode, routing_rules on agents), Smart Router in Rust (3 modes: single/auto/manual, 14 unit tests), budget tracking (monthly cost aggregation, threshold warnings), UI (agent routing config, Settings budget tab), Inspector integration (llm.routed + budget.warning events, routing stats, savings tracking). **Rust refactoring** (6e338c9): monolithic commands.rs → 13 domain modules + workflow/. **Budget enforcement** (5117302): BudgetExhausted error, enforcement in chat + workflow before sidecar calls. **Plugin system** (750b4f6): Spec, schema v7, CRUD commands, scanner, Settings UI. **Plugin lifecycle** (0823cc8): Subprocess spawning via MCP connect, tool discovery, auto-connect on startup. **README** (9a630e8): Full update reflecting Phase 3 features. **Installers** (425f85c): Tauri bundler config + MIT LICENSE.
+**Phase 3** (COMPLETE): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d). **3B execution DONE**: DAG walker engine, 7 node executors, validation, live node states, approval dialog, run button + input form. **3C polish DONE**: Codex review fixes (H1/H2/M1-M4 — 2380b83, 280be8c), Blender-inspired node restyling + collapse (ba82190), context menu + keyboard shortcuts (74d97df), 5 bundled templates + export/import (bb37147). **Hybrid Intelligence DONE**: Schema v6 (routing_mode, routing_rules on agents), Smart Router in Rust (3 modes: single/auto/manual, 14 unit tests), budget tracking (monthly cost aggregation, threshold warnings), UI (agent routing config, Settings budget tab), Inspector integration (llm.routed + budget.warning events, routing stats, savings tracking). **Rust refactoring** (6e338c9): monolithic commands.rs → 13 domain modules + workflow/. **Budget enforcement** (5117302): BudgetExhausted error, enforcement in chat + workflow before sidecar calls. **Plugin system** (750b4f6): Spec, schema v7, CRUD commands, scanner, Settings UI. **Plugin lifecycle** (0823cc8): Subprocess spawning via MCP connect, tool discovery, auto-connect on startup. **README** (9a630e8): Full update reflecting Phase 3 features. **Installers** (425f85c): Tauri bundler config + MIT LICENSE. **Template gallery** (c665ac6): 10 bundled templates + contributor guide. **Launch prep** (803724a): CHANGELOG, SECURITY, Show HN draft, package.json metadata.
 
 Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav/grouping/actions), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling, onboarding wizard, session branching, peer review workflow.
 
@@ -109,17 +111,20 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-18 (session 19)
+**Date**: 2026-02-18 (session 20)
 **What happened**:
-- **One-click installers** (425f85c): Enhanced tauri.conf.json with bundle metadata (category, descriptions, copyright, license, platform configs). Created MIT LICENSE file.
-- **Plugin subprocess lifecycle** (0823cc8): Full MCP integration — enable_plugin now spawns subprocess via /mcp/connect, discovers tools, registers in tool registry. disable_plugin disconnects. remove_plugin disconnects if enabled. New connect_enabled_plugins command for startup auto-connect. UI shows connection status, loading spinners, "Reconnect All" button, tool count toasts.
+- **Docker cleanup** (f702d14): Removed stale Telegram service, added Google AI key env var
+- **Template gallery** (c665ac6): 5 new templates (Email Classifier, Content Moderator, Translation Pipeline, Meeting Notes, RAG Search) bringing total to 10. Added templates/README.md with format docs and contribution guide.
+- **Launch prep** (803724a): CHANGELOG.md (full Phase 0-3 history), SECURITY.md (architecture security + disclosure policy), Show HN draft, package.json metadata (keywords, homepage, bugs).
 - All 31 Rust tests pass, TypeScript clean
+- **Phase 3 backlog is now fully complete.**
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
 - Session 18: Rust refactoring, budget enforcement, plugin foundation, README update
+- Session 19: One-click installers, plugin subprocess lifecycle, open-source infra (CI, GitHub templates, CONTRIBUTING)
 
 **Next session should**:
-1. Community template gallery (GitHub-based, beyond 5 bundled)
-2. Open-source launch prep (demo video, screenshots, Show HN assets)
-3. Consider Phase 4 planning (universal automation canvas)
+1. Phase 4 planning (universal automation canvas — custom node types, loop/merge, plugin marketplace)
+2. Take fresh screenshots with running app for README
+3. Consider GitHub Releases / v0.1.0 tag

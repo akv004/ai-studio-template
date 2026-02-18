@@ -111,7 +111,10 @@ type NodeType =
   | 'iot_sensor'     // Read from IoT devices
   | 'iot_command'    // Send commands to IoT devices
   | 'cron_trigger'   // Scheduled execution
+  | 'shell_input'    // Run shell command, capture stdout as data
+  | 'stdin_pipe'     // Read from stdin or named pipe (streaming)
   | 'notification'   // Email, Slack, Discord, SMS
+  | 'shell_exec'     // Execute commands with privilege controls (run_as, sandbox)
   | 'display'        // Rich visual output (charts, tables)
   | 'code'           // Python/JS sandboxed execution
   | 'validator'      // JSON Schema / data quality checks
@@ -900,6 +903,8 @@ The current 8 node types handle AI workflows. Phase 4 adds connector and process
 | `queue_consume` | Read from Kafka, RabbitMQ, Redis Streams, MQTT | Process message queue → LLM classifies → Router → different queues |
 | `iot_sensor` | Read from IoT devices via MQTT, serial, GPIO | Temperature sensor → LLM anomaly detection → notification |
 | `cron_trigger` | Time-based scheduled execution | Every hour: query DB → LLM generates report → email |
+| `shell_input` | Run a shell command, capture stdout/stderr as data | `grep -r "ERROR" /var/log/` → LLM classifies errors → notification |
+| `stdin_pipe` | Read from stdin or named pipe (streaming) | Tail a log file → LLM detects anomalies in real-time |
 
 #### Data Destination Nodes (Outputs)
 
@@ -912,6 +917,7 @@ The current 8 node types handle AI workflows. Phase 4 adds connector and process
 | `iot_command` | Send commands to IoT devices | LLM decides action → iot_command turns on/off device |
 | `notification` | Email, Slack, Discord, Teams, SMS, push notification | Any workflow → notification on completion/error |
 | `display` | Rich visual output (charts, tables, formatted reports) | Data pipeline → display as chart in UI |
+| `shell_exec` | Execute a shell command with configurable privileges | LLM generates migration script → shell_exec runs as `postgres` user |
 
 #### Processing Nodes
 
@@ -924,6 +930,61 @@ The current 8 node types handle AI workflows. Phase 4 adds connector and process
 | `cache` | Memoize expensive operations by input hash | Cache LLM responses for identical prompts (save cost) |
 | `rate_limiter` | Throttle execution rate | API with 100 req/min limit → rate_limiter before http_post |
 | `error_handler` | Catch errors from upstream, provide fallback | LLM fails → error_handler retries with different model |
+
+### Shell Nodes: The Unix Philosophy Applied
+
+The `shell_input` and `shell_exec` nodes deserve special attention because they turn every Unix tool into a node. The Unix philosophy — small tools that do one thing well, connected via pipes — maps directly to the node editor canvas.
+
+**`shell_input`** — Any command's output becomes pipeline data:
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  shell   │    │   LLM    │    │  Router  │    │  Slack   │
+│  _input  │───▶│  Claude  │───▶│ severity │───▶│  notify  │
+│          │    │ (classify│    │          │    │ (#alerts)│
+│ grep -r  │    │  errors) │    │          │    │          │
+│ "ERROR"  │    └──────────┘    └──────────┘    └──────────┘
+│ /var/log │                         │
+└──────────┘                    ┌────▼─────┐
+                                │  file    │
+                                │  _write  │
+                                │(report)  │
+                                └──────────┘
+```
+
+Config: `command`, `working_dir`, `timeout`, `env_vars`, `shell` (bash/zsh/sh).
+Outputs: `stdout` (text), `stderr` (text), `exit_code` (number).
+
+**`shell_exec`** — LLM output becomes executable commands with privilege controls:
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  Input   │    │   LLM    │    │ Approval │    │  shell   │    │  Output  │
+│  (task)  │───▶│  (plan   │───▶│  Gate    │───▶│  _exec   │───▶│ (result) │
+│          │    │ command) │    │ (review) │    │          │    │          │
+└──────────┘    └──────────┘    └──────────┘    │ run_as:  │    └──────────┘
+                                                │  deploy  │
+                                                │ sandbox: │
+                                                │  true    │
+                                                └──────────┘
+```
+
+Config fields for `shell_exec`:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `run_as` | string? | Unix user to execute as (via `sudo -u`). Null = current user. |
+| `sandbox` | boolean | Run in restricted sandbox (no network, limited fs) |
+| `allowed_commands` | string[]? | Whitelist of allowed executables. Null = any. |
+| `blocked_commands` | string[]? | Blacklist (e.g., `["rm -rf", "mkfs", "dd"]`) |
+| `working_dir` | string? | Working directory for execution |
+| `timeout` | number | Max execution time in seconds |
+| `env_vars` | Record<string, string> | Environment variables to set |
+| `capabilities` | string[]? | Linux capabilities to grant/restrict |
+
+**Security model**: Shell exec nodes always default to `sandbox: true` and `approval: "ask"`. The approval gate shows the exact command that will run, the user ID, and the sandbox restrictions. This is the Safe Executor template pattern — but generalized to any command with fine-grained privilege control.
+
+**Why this matters**: This makes AI Studio the glue between AI and existing infrastructure. Any cron job, deploy script, monitoring command, or DevOps task becomes a visual node with approval gates, cost tracking, and full audit trail. "Terraform plan → LLM reviews → approval gate → terraform apply" is a 4-node workflow.
 
 ### Example: Full-Stack Automation Pipeline
 
@@ -942,6 +1003,22 @@ The current 8 node types handle AI workflows. Phase 4 adds connector and process
 ```
 
 This pipeline: reads orders from a database → LLM analyzes patterns → validates the output → writes structured results back to DB → notifies Slack → also exports as CSV. Every node shows its data, cost, and latency. The Inspector replays the entire flow.
+
+### Example: DevOps with Shell Nodes
+
+```
+┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐
+│  shell   │    │   LLM    │    │ Approval │    │  shell   │    │  Slack   │
+│  _input  │───▶│  Claude  │───▶│  Gate    │───▶│  _exec   │───▶│  notify  │
+│          │    │          │    │          │    │          │    │          │
+│ terraform│    │ "Review  │    │ "Apply   │    │ terraform│    │ #deploys │
+│ plan     │    │  this    │    │  these   │    │ apply    │    │          │
+│ -no-color│    │  plan"   │    │  changes │    │ run_as:  │    │          │
+│          │    │          │    │  ?"      │    │  deploy  │    │          │
+└──────────┘    └──────────┘    └──────────┘    └──────────┘    └──────────┘
+```
+
+`terraform plan` output → LLM reviews for risks → human approves → `terraform apply` runs as `deploy` user → Slack notification. Full audit trail in Inspector.
 
 ### Architecture: How New Node Types Plug In
 

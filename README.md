@@ -138,13 +138,16 @@ Extend AI Studio with third-party capabilities:
 git clone https://github.com/akv004/ai-studio-template.git
 cd ai-studio-template
 
-# 2. Install dependencies
+# 2. Install Tauri CLI (first time only)
+cargo install tauri-cli
+
+# 3. Install dependencies
 npm install
 
-# 3. Install Python dependencies
+# 4. Install Python dependencies
 pip install -r apps/sidecar/requirements.txt
 
-# 4. Run (full desktop app)
+# 5. Run (full desktop app)
 npm run tauri:dev
 ```
 

@@ -1161,3 +1161,64 @@ textarea.config-input {
   background: #2a2a2a;
   margin: 4px 0;
 }
+
+/* ========================================
+   REACT FLOW CUSTOMIZATION
+   ======================================== */
+
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: var(--text-muted);
+  border: 1px solid var(--bg-primary); 
+  transition: all var(--transition-fast);
+}
+
+.react-flow__handle:hover {
+  background: var(--text-primary);
+  transform: scale(1.2);
+}
+
+/* Typed Handles - Unreal Style */
+.handle-text {
+  background: #E879F9 !important; /* Magenta */
+  border-radius: 50%;
+}
+
+.handle-json {
+  background: #F59E0B !important; /* Orange */
+  border-radius: 2px; /* Square-ish for complex data */
+}
+
+.handle-bool {
+  background: #EF4444 !important; /* Red */
+  border-radius: 50%;
+}
+
+.handle-any {
+  background: #9CA3AF !important; /* Gray */
+  border-radius: 50%; /* Diamond shape via clip-path in future? */
+}
+
+.handle-float {
+  background: #10B981 !important; /* Green */
+  border-radius: 50%;
+}
+
+.handle-exec {
+  background: #FFFFFF !important; /* White */
+  border-radius: 0 50% 50% 0; /* Arrow shape */
+  width: 12px;
+  height: 12px;
+}
+
+/* Connection Lines */
+.react-flow__edge-path {
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent-primary);
+  stroke-width: 3;
+}

@@ -182,24 +182,51 @@ function OutputNode({ id, data, selected }: { id: string; data: Record<string, u
 }
 
 function LLMNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+
+
     return (
         <NodeShell id={id} type="llm" label="LLM" icon={Cpu} selected={selected}
             collapsed={data.collapsed as boolean}>
-            <div className="handle-row input">
-                <Handle type="target" position={Position.Left} id="prompt" className="custom-handle handle-text" />
-                <span className="handle-label">prompt</span>
-            </div>
-            <div className="text-[11px] font-medium">{(data.model as string) || 'Select model'}</div>
-            <div className="text-[10px] text-[#888]">{(data.provider as string) || 'No provider'}</div>
-            {Boolean(data.systemPrompt) && (
-                <div className="text-[10px] text-[#666] mt-0.5 truncate max-w-[160px]">
-                    {(data.systemPrompt as string).slice(0, 40)}...
+            <div className="flex flex-col gap-1">
+                {/* Inputs */}
+                <div className="handle-row input">
+                    <Handle type="target" position={Position.Left} id="system" className="custom-handle handle-text" />
+                    <span className="handle-label text-[10px] text-[#666]">system (opt)</span>
                 </div>
-            )}
-            <OutputPreview nodeId={id} />
-            <div className="handle-row output">
-                <span className="handle-label">response</span>
-                <Handle type="source" position={Position.Right} id="response" className="custom-handle handle-text" />
+                <div className="handle-row input">
+                    <Handle type="target" position={Position.Left} id="context" className="custom-handle handle-json" />
+                    <span className="handle-label text-[10px] text-[#666]">context (opt)</span>
+                </div>
+                <div className="handle-row input">
+                    <Handle type="target" position={Position.Left} id="prompt" className="custom-handle handle-text" />
+                    <span className="handle-label font-bold">prompt</span>
+                </div>
+
+                {/* Body Content */}
+                <div className="py-2 border-t border-b border-[#333] my-1 flex flex-col gap-1">
+                    <div className="text-[11px] font-medium text-[var(--accent-secondary)]">{(data.model as string) || 'Select model'}</div>
+                    <div className="text-[10px] text-[#888]">{(data.provider as string) || 'No provider'}</div>
+                    {Boolean(data.systemPrompt) && (
+                        <div className="text-[10px] text-[#666] mt-0.5 truncate max-w-[160px] italic">
+                            System: {(data.systemPrompt as string).slice(0, 30)}...
+                        </div>
+                    )}
+                </div>
+
+                {/* Outputs */}
+                <OutputPreview nodeId={id} />
+                <div className="handle-row output justify-end">
+                    <span className="handle-label font-bold">response</span>
+                    <Handle type="source" position={Position.Right} id="response" className="custom-handle handle-text" />
+                </div>
+                <div className="handle-row output justify-end">
+                    <span className="handle-label text-[10px] text-[#666]">usage</span>
+                    <Handle type="source" position={Position.Right} id="usage" className="custom-handle handle-json" />
+                </div>
+                <div className="handle-row output justify-end">
+                    <span className="handle-label text-[10px] text-[#666]">cost</span>
+                    <Handle type="source" position={Position.Right} id="cost" className="custom-handle handle-float" />
+                </div>
             </div>
         </NodeShell>
     );
@@ -268,15 +295,23 @@ function ApprovalNode({ id, data, selected }: { id: string; data: Record<string,
     );
 }
 
+// [Modified] TransformNode to support dynamic inputs
 function TransformNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+    // Default to strict single input if not specified (backward compat)
+    // But for new nodes, we want dynamic inputs.
+    // If 'inputs' is present, use it. Otherwise default to single 'input'.
+    const inputs = (data.inputs as string[]) || ['input'];
+
     return (
         <NodeShell id={id} type="transform" label="TRANSFORM" icon={Repeat} selected={selected}
             collapsed={data.collapsed as boolean}>
-            <div className="handle-row input">
-                <Handle type="target" position={Position.Left} className="custom-handle handle-any" />
-                <span className="handle-label">input</span>
-            </div>
-            <div className="text-[10px] text-[#888]">Mode: {(data.mode as string) || 'template'}</div>
+            {inputs.map((inputName) => (
+                <div key={inputName} className="handle-row input">
+                    <Handle type="target" position={Position.Left} id={inputName} className="custom-handle handle-any" />
+                    <span className="handle-label">{inputName}</span>
+                </div>
+            ))}
+            <div className="text-[10px] text-[#888] mt-1">Mode: {(data.mode as string) || 'template'}</div>
             {Boolean(data.template) && (
                 <div className="text-[10px] mt-0.5 truncate max-w-[160px] font-mono text-[#777]">
                     {(data.template as string).slice(0, 30)}
@@ -331,7 +366,7 @@ function defaultDataForType(type: string): Record<string, unknown> {
         case 'tool': return { toolName: '', serverName: '', approval: 'auto' };
         case 'router': return { mode: 'pattern', branches: ['true', 'false'] };
         case 'approval': return { message: 'Review before continuing', showData: true, timeout: null };
-        case 'transform': return { mode: 'template', template: '{{input}}' };
+        case 'transform': return { mode: 'template', template: '{{input}}', inputs: ['input'] };
         case 'subworkflow': return { workflowId: '', workflowName: '' };
         default: return {};
     }
@@ -511,6 +546,41 @@ function NodeConfigPanel({ node, onChange, onDelete }: {
                             <option value="script">Script</option>
                         </select>
                     </label>
+
+                    <div className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Inputs</span>
+                        <div className="space-y-2 mt-1">
+                            {((data.inputs as string[]) || ['input']).map((input, idx) => (
+                                <div key={idx} className="flex gap-2">
+                                    <input className="config-input text-xs py-1"
+                                        value={input}
+                                        onChange={(e) => {
+                                            const newInputs = [...((data.inputs as string[]) || ['input'])];
+                                            newInputs[idx] = e.target.value;
+                                            update('inputs', newInputs);
+                                        }}
+                                    />
+                                    <button className="btn-icon text-[var(--text-muted)] hover:text-red-400"
+                                        onClick={() => {
+                                            const newInputs = [...((data.inputs as string[]) || ['input'])];
+                                            newInputs.splice(idx, 1);
+                                            update('inputs', newInputs);
+                                        }}>
+                                        <X size={12} />
+                                    </button>
+                                </div>
+                            ))}
+                            <button className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                onClick={() => {
+                                    const newInputs = [...((data.inputs as string[]) || ['input'])];
+                                    newInputs.push(`input_${newInputs.length + 1}`);
+                                    update('inputs', newInputs);
+                                }}>
+                                <Plus size={10} /> Add Input
+                            </button>
+                        </div>
+                    </div>
+
                     <label className="block">
                         <span className="text-xs text-[var(--text-muted)]">Template / Expression</span>
                         <textarea className="config-input min-h-[60px] font-mono text-xs"
@@ -870,6 +940,40 @@ function WorkflowCanvas({ workflow, onBack }: {
             unlistenApproval?.();
         };
     }, [setNodeState]);
+
+    // Handle type compatibility for connection validation
+    // Extract handle type from its CSS class (handle-text, handle-json, etc.)
+    const getHandleType = useCallback((nodeId: string, handleId: string | null, isSource: boolean): string => {
+        const el = document.querySelector(
+            `[data-nodeid="${nodeId}"] .react-flow__handle[data-handleid="${handleId || ''}"]`
+            + (isSource ? '.source' : '.target')
+        ) || document.querySelector(
+            `[data-nodeid="${nodeId}"] .react-flow__handle[data-handleid="${handleId || ''}"]`
+        );
+        if (!el) return 'any';
+        const classes = el.className;
+        if (classes.includes('handle-text')) return 'text';
+        if (classes.includes('handle-json')) return 'json';
+        if (classes.includes('handle-bool')) return 'bool';
+        if (classes.includes('handle-float')) return 'float';
+        return 'any';
+    }, []);
+
+    const isValidConnection = useCallback((connection: Edge | Connection): boolean => {
+        // Prevent self-connections
+        if (connection.source === connection.target) return false;
+        const sourceType = getHandleType(connection.source, connection.sourceHandle ?? null, true);
+        const targetType = getHandleType(connection.target, connection.targetHandle ?? null, false);
+        // 'any' connects to everything
+        if (sourceType === 'any' || targetType === 'any') return true;
+        // Same type always valid
+        if (sourceType === targetType) return true;
+        // text <-> json coercion (common in LLM workflows)
+        if ((sourceType === 'text' && targetType === 'json') || (sourceType === 'json' && targetType === 'text')) return true;
+        // text/json -> float allowed (Transform can produce numeric strings)
+        if (targetType === 'float' && (sourceType === 'text' || sourceType === 'json')) return true;
+        return false;
+    }, [getHandleType]);
 
     // Handle new connections
     const onConnect: OnConnect = useCallback(
@@ -1301,6 +1405,7 @@ function WorkflowCanvas({ workflow, onBack }: {
                         onNodesChange={onNodesChange}
                         onEdgesChange={onEdgesChange}
                         onConnect={onConnect}
+                        isValidConnection={isValidConnection}
                         onNodeClick={onNodeClick}
                         onPaneClick={onPaneClick}
                         onNodeContextMenu={(e, node) => {

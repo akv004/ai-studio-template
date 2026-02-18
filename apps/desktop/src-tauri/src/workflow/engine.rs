@@ -56,12 +56,28 @@ pub fn resolve_template(
                     None => val.to_string(),
                 };
             }
-            if (key == "input" || key == "inputs") && !inputs.is_empty() {
-                let val = inputs.values().next().unwrap();
+            // Check direct input match (e.g. {{topic}})
+            if let Some(val) = inputs.get(key) {
                 return match val.as_str() {
                     Some(s) => s.to_string(),
                     None => val.to_string(),
                 };
+            }
+            if key == "input" || key == "inputs" {
+                // Return entire object if it's an object, or the first value
+                if let Some(val) = inputs.get("input") {
+                     return match val.as_str() {
+                        Some(s) => s.to_string(),
+                        None => val.to_string(),
+                    };
+                }
+                if !inputs.is_empty() {
+                     let val = inputs.values().next().unwrap();
+                     return match val.as_str() {
+                        Some(s) => s.to_string(),
+                        None => val.to_string(),
+                    };
+                }
             }
         }
         eprintln!("[workflow] WARN: Unresolved template var '{}' (node_outputs={:?}, inputs={:?})",
@@ -210,7 +226,9 @@ pub async fn execute_workflow(
 
         // Resolve input from incoming edges
         let incoming_value = if let Some(inc) = incoming_edges.get(node_id) {
-            if inc.len() == 1 {
+            // Optimization: If only 1 input and it's the default 'input' handle, flatten it.
+            // Otherwise (multiple inputs OR 1 input with specific name), return as object.
+            if inc.len() == 1 && inc[0].2 == "input" {
                 node_outputs.get(&inc[0].0).cloned()
             } else {
                 let mut obj = serde_json::Map::new();

@@ -18,23 +18,57 @@ impl NodeExecutor for LlmExecutor {
         let provider_name = node_data.get("provider").and_then(|v| v.as_str()).unwrap_or("ollama");
         let model = node_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
         let temperature = node_data.get("temperature").and_then(|v| v.as_f64()).unwrap_or(0.7);
-        let system_prompt = node_data.get("systemPrompt").and_then(|v| v.as_str()).unwrap_or("");
-        eprintln!("[workflow] LLM node '{}': provider={}, model={}", node_id, provider_name, model);
+        
+        // Handle Inputs (System, Context, Prompt)
+        // 1. System Prompt: Check incoming "system" -> config "systemPrompt" -> default
+        let mut system_prompt = incoming.as_ref()
+            .and_then(|inc| inc.get("system"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        
+        if system_prompt.is_empty() {
+             system_prompt = node_data.get("systemPrompt").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        }
 
+        // 2. Context: Check incoming "context" -> injected into prompt or system
+        let context_str = incoming.as_ref()
+            .and_then(|inc| inc.get("context"))
+            .map(|v| if let Some(s) = v.as_str() { s.to_string() } else { serde_json::to_string_pretty(v).unwrap_or_default() })
+            .unwrap_or_default();
+
+        // 3. Prompt: Check incoming "prompt" -> config "prompt" -> default template
+        // Note: Engine passes flattened input (single edge) or object (multiple edges).
+        // If single edge to NOT "prompt", it might be mapped via handle name logic in engine.
+        // Assuming engine handles mapping correctly if multiple inputs exist.
+        
         let prompt_template = node_data.get("prompt").and_then(|v| v.as_str()).unwrap_or("{{input}}");
-        let prompt = if prompt_template.contains("{{") {
-            resolve_template(prompt_template, ctx.node_outputs, ctx.inputs)
-        } else if let Some(inc) = incoming {
-            let inc_str = match inc.as_str() {
-                Some(s) => s.to_string(),
-                None => serde_json::to_string(inc).unwrap_or_default(),
-            };
-            format!("{}\n\n{}", prompt_template, inc_str)
+        
+        // Construct final prompt
+        let mut prompt = if prompt_template.contains("{{") {
+             resolve_template(prompt_template, ctx.node_outputs, ctx.inputs)
         } else {
-            prompt_template.to_string()
+             prompt_template.to_string()
         };
-        eprintln!("[workflow] LLM node '{}': prompt='{}' (template='{}')", node_id,
-            &prompt[..prompt.len().min(200)], prompt_template);
+
+        // If specific "prompt" input exists (overriding template logic slightly if simple)
+        if let Some(inc) = incoming {
+            if let Some(p) = inc.get("prompt").and_then(|v| v.as_str()) {
+                prompt = p.to_string();
+            } else if !context_str.is_empty() {
+                 if !prompt.contains(&context_str) {
+                      prompt = format!("Context:\n{}\n\nQuestion:\n{}", context_str, prompt);
+                 }
+            } else if inc.is_string() {
+                 // Fallback for single string input not named "prompt" but treating as such
+                 // prompt is already resolved from template, maybe we append?
+                 // Let's stick to template resolution for main flow.
+            }
+        }
+        
+        eprintln!("[workflow] LLM node '{}': provider={}, model={}", node_id, provider_name, model);
+        eprintln!("[workflow] LLM node '{}': prompt='{}' system='{}'", node_id, 
+            &prompt[..prompt.len().min(50)], &system_prompt[..system_prompt.len().min(50)]);
 
         let prefix = format!("provider.{}.", provider_name);
         let mut api_key = String::new();
@@ -50,9 +84,6 @@ impl NodeExecutor for LlmExecutor {
                 }
             }
         }
-
-        eprintln!("[workflow] LLM node '{}': calling /chat/direct (api_key={}, base_url={})",
-            node_id, if api_key.is_empty() { "none" } else { "set" }, if base_url.is_empty() { "none" } else { &base_url });
 
         let mut body = serde_json::json!({
             "messages": [{ "role": "user", "content": prompt }],
@@ -83,7 +114,6 @@ impl NodeExecutor for LlmExecutor {
             })?;
 
         let content = resp.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        eprintln!("[workflow] LLM node '{}': response OK, content_len={}", node_id, content.len());
         let usage = resp.get("usage");
         let input_tokens = usage.and_then(|u| u.get("prompt_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
         let output_tokens = usage.and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
@@ -95,13 +125,24 @@ impl NodeExecutor for LlmExecutor {
                 "input_tokens": input_tokens, "output_tokens": output_tokens,
             }));
 
+        // Cost estimation (approximate generic logic, ideally from sidecar)
+        // This is a placeholder. Real cost should come from a pricing table.
+        let cost_usd = (input_tokens as f64 * 0.00000015) + (output_tokens as f64 * 0.0000006); 
+
         Ok(NodeOutput::value(serde_json::json!({
-            "content": content,
-            "__usage": {
+            "response": content,       // Main text output
+            "content": content,        // Backward compat alias
+            "usage": {                 // JSON output
                 "total_tokens": input_tokens + output_tokens,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
-                "cost_usd": 0.0,
+            },
+            "cost": format!("${:.6}", cost_usd), // String output (Float in future)
+            "__usage": {               // Internal usage for graph stats
+                "total_tokens": input_tokens + output_tokens,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "cost_usd": cost_usd,
             }
         })))
     }

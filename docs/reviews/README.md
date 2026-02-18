@@ -40,7 +40,7 @@ Tell Claude Code where the review response is. It will:
 | Type | Pattern | Example |
 |------|---------|---------|
 | Review prompt | `{topic}-review-prompt-{date}.md` | `phase-2-review-prompt-2026-02-15.md` |
-| Review response | `{topic}-review-{date}.md` | `phase-2-review-detailed.md` |
+| Review response | `{topic}-review-{date}.md` | `phase-2-review-2026-02-15.md` |
 | Closed review | Same file, status updated at top | `**Status**: RESOLVED` |
 
 ## Item Lifecycle
@@ -70,7 +70,7 @@ Tell Claude Code where the review response is. It will:
 
 ## Cross-Project Review Standard
 
-This workflow follows the global multi-model review pattern defined in `claude-config/rules/design-reviews.md`. The same process applies across all projects (AI Studio, GhostStag, SnowOwl, WorkMind):
+This workflow follows a standard multi-model review pattern used across projects:
 
 1. **Collect** — Reviews go in `docs/reviews/` with naming `design-review-YYYY-MM-DD.md`. Include reviewer name/tool, date, and status (Draft/Triaged/Closed). Each item is a checkbox `- [ ]`.
 2. **Triage critically** — Not all feedback is correct. For each item: **Accept** (add to backlog), **Reject** (explain why with evidence), or **Already Planned** (reference existing spec/task).

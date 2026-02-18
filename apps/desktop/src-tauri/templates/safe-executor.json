@@ -1,0 +1,16 @@
+{
+  "nodes": [
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 150 }, "data": { "name": "task", "dataType": "text", "default": "" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 350, "y": 100 }, "data": { "provider": "", "model": "", "systemPrompt": "You are a task planner. Given a task description, output a shell command that would accomplish it. Output ONLY the command, nothing else. Be safe and conservative.", "temperature": 0.1, "maxTokens": 512 } },
+    { "id": "approval_1", "type": "approval", "position": { "x": 650, "y": 100 }, "data": { "message": "Review the planned command before execution", "showData": true, "timeout": null } },
+    { "id": "tool_1", "type": "tool", "position": { "x": 950, "y": 100 }, "data": { "toolName": "builtin__shell", "serverName": "", "approval": "auto" } },
+    { "id": "output_1", "type": "output", "position": { "x": 1250, "y": 150 }, "data": { "name": "result", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-llm_1-approval_1", "source": "llm_1", "target": "approval_1", "sourceHandle": "response", "targetHandle": "data" },
+    { "id": "e-approval_1-tool_1", "source": "approval_1", "target": "tool_1", "sourceHandle": "approved", "targetHandle": "input" },
+    { "id": "e-tool_1-output_1", "source": "tool_1", "target": "output_1", "sourceHandle": "result", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

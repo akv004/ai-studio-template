@@ -1,0 +1,16 @@
+{
+  "nodes": [
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 150 }, "data": { "name": "pr_description", "dataType": "text", "default": "" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 350, "y": 100 }, "data": { "provider": "", "model": "", "systemPrompt": "You are a senior code reviewer. Analyze the PR description and provide a structured review with: 1) Summary, 2) Issues found (bugs, style, security), 3) Suggestions for improvement. Be constructive and specific.", "temperature": 0.3, "maxTokens": 4096 } },
+    { "id": "router_1", "type": "router", "position": { "x": 700, "y": 100 }, "data": { "mode": "llm", "provider": "", "model": "", "branches": ["critical", "minor", "approved"] } },
+    { "id": "output_1", "type": "output", "position": { "x": 1050, "y": 150 }, "data": { "name": "review_result", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-llm_1-router_1", "source": "llm_1", "target": "router_1", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-router_1-output_1-0", "source": "router_1", "target": "output_1", "sourceHandle": "branch-0", "targetHandle": "value" },
+    { "id": "e-router_1-output_1-1", "source": "router_1", "target": "output_1", "sourceHandle": "branch-1", "targetHandle": "value" },
+    { "id": "e-router_1-output_1-2", "source": "router_1", "target": "output_1", "sourceHandle": "branch-2", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

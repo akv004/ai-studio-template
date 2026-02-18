@@ -1,0 +1,14 @@
+{
+  "nodes": [
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 150 }, "data": { "name": "raw_data", "dataType": "text", "default": "" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 350, "y": 100 }, "data": { "provider": "", "model": "", "systemPrompt": "Extract structured data from the input. Output valid JSON with the key fields identified. Be precise and consistent.", "temperature": 0.1, "maxTokens": 4096 } },
+    { "id": "transform_1", "type": "transform", "position": { "x": 700, "y": 100 }, "data": { "mode": "template", "template": "{{llm_1.response}}" } },
+    { "id": "output_1", "type": "output", "position": { "x": 1000, "y": 150 }, "data": { "name": "structured_data", "format": "json" } }
+  ],
+  "edges": [
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-llm_1-transform_1", "source": "llm_1", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-transform_1-output_1", "source": "transform_1", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

@@ -101,6 +101,9 @@ pub fn run() {
             // Workflow Execution (Phase 3B)
             validate_workflow,
             run_workflow,
+            // Workflow Templates (Phase 3C)
+            list_templates,
+            load_template,
             // Sidecar
             sidecar_start,
             sidecar_stop,

@@ -21,7 +21,7 @@ import {
     Plus, Save, Play, Trash2, Copy, ChevronLeft, ChevronDown, ChevronRight,
     Loader2, RefreshCw, MessageSquare, Wrench, GitFork,
     ShieldCheck, Repeat, FileInput, FileOutput, Cpu,
-    Check, X, Clock,
+    Check, X, Clock, Download, Upload, LayoutTemplate,
 } from 'lucide-react';
 import { useAppStore } from '../../state/store';
 import type { Workflow, CreateWorkflowRequest, NodeExecutionStatus } from '@ai-studio/shared';
@@ -563,15 +563,62 @@ function NodeConfigPanel({ node, onChange, onDelete }: {
 // WORKFLOW LIST VIEW
 // ============================================
 
-function WorkflowList({ onSelect, onCreate }: {
+interface TemplateSummary {
+    id: string;
+    name: string;
+    description: string;
+    nodeCount: number;
+}
+
+function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
     onSelect: (id: string) => void;
     onCreate: () => void;
+    onCreateFromTemplate: (templateId: string) => void;
 }) {
-    const { workflows, workflowsLoading, fetchWorkflows, deleteWorkflow, duplicateWorkflow } = useAppStore();
+    const { workflows, workflowsLoading, fetchWorkflows, deleteWorkflow, duplicateWorkflow, createWorkflow, addToast } = useAppStore();
+    const [templates, setTemplates] = useState<TemplateSummary[]>([]);
+    const [showTemplates, setShowTemplates] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         fetchWorkflows();
+        // Load templates
+        (async () => {
+            try {
+                const { invoke } = await import('@tauri-apps/api/core');
+                const list = await invoke<TemplateSummary[]>('list_templates');
+                setTemplates(list);
+            } catch {
+                // Templates not available (browser dev mode)
+            }
+        })();
     }, [fetchWorkflows]);
+
+    const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        try {
+            const text = await file.text();
+            const graph = JSON.parse(text);
+            // Validate basic structure
+            if (!graph.nodes || !graph.edges) {
+                addToast('Invalid workflow file: missing nodes or edges', 'error');
+                return;
+            }
+            const name = file.name.replace(/\.json$/i, '');
+            const workflow = await createWorkflow({
+                name,
+                description: 'Imported workflow',
+                graphJson: JSON.stringify(graph),
+            });
+            onSelect(workflow.id);
+            addToast('Workflow imported', 'success');
+        } catch {
+            addToast('Failed to import workflow', 'error');
+        }
+        // Reset file input
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    }, [createWorkflow, onSelect, addToast]);
 
     return (
         <div className="page-content">
@@ -581,6 +628,39 @@ function WorkflowList({ onSelect, onCreate }: {
                     <button className="btn-secondary" onClick={() => fetchWorkflows()}>
                         <RefreshCw size={16} />
                     </button>
+                    <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} title="Import workflow JSON">
+                        <Upload size={16} />
+                    </button>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".json"
+                        className="hidden"
+                        onChange={handleImport}
+                    />
+                    <div className="relative">
+                        <button className="btn-secondary" onClick={() => setShowTemplates(!showTemplates)}>
+                            <LayoutTemplate size={16} /> Templates
+                        </button>
+                        {showTemplates && templates.length > 0 && (
+                            <div className="absolute right-0 top-full mt-1 w-72 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-xl z-50">
+                                {templates.map((t) => (
+                                    <button
+                                        key={t.id}
+                                        className="w-full text-left px-3 py-2 hover:bg-[var(--bg-tertiary)] first:rounded-t-lg last:rounded-b-lg"
+                                        onClick={() => {
+                                            setShowTemplates(false);
+                                            onCreateFromTemplate(t.id);
+                                        }}
+                                    >
+                                        <div className="text-sm font-medium">{t.name}</div>
+                                        <div className="text-xs text-[var(--text-muted)]">{t.description}</div>
+                                        <div className="text-xs text-[var(--text-muted)] mt-0.5">{t.nodeCount} nodes</div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                     <button className="btn-primary" onClick={onCreate}>
                         <Plus size={16} /> New Workflow
                     </button>
@@ -596,9 +676,16 @@ function WorkflowList({ onSelect, onCreate }: {
                     <GitFork size={48} className="text-[var(--text-muted)]" />
                     <h2>No workflows yet</h2>
                     <p>Create your first workflow to build AI pipelines visually.</p>
-                    <button className="btn-primary mt-4" onClick={onCreate}>
-                        <Plus size={16} /> New Workflow
-                    </button>
+                    <div className="flex gap-3 mt-4">
+                        <button className="btn-primary" onClick={onCreate}>
+                            <Plus size={16} /> New Workflow
+                        </button>
+                        {templates.length > 0 && (
+                            <button className="btn-secondary" onClick={() => setShowTemplates(true)}>
+                                <LayoutTemplate size={16} /> From Template
+                            </button>
+                        )}
+                    </div>
                 </div>
             ) : (
                 <div className="grid gap-3">
@@ -1091,6 +1178,18 @@ function WorkflowCanvas({ workflow, onBack }: {
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                         Save
                     </button>
+                    <button className="btn-secondary" title="Export workflow as JSON" onClick={() => {
+                        const graph = JSON.stringify({ nodes, edges, viewport: { x: 0, y: 0, zoom: 1 } }, null, 2);
+                        const blob = new Blob([graph], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${workflow.name.replace(/\s+/g, '-').toLowerCase()}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }}>
+                        <Download size={14} />
+                    </button>
                     <button
                         className="btn-primary"
                         disabled={workflowRunning || nodes.length === 0}
@@ -1384,7 +1483,7 @@ function WorkflowCanvas({ workflow, onBack }: {
 // ============================================
 
 export function NodeEditorPage() {
-    const { fetchWorkflow, createWorkflow, selectedWorkflow, setSelectedWorkflow } = useAppStore();
+    const { fetchWorkflow, createWorkflow, selectedWorkflow, setSelectedWorkflow, addToast } = useAppStore();
     const handleSelectWorkflow = async (id: string) => {
         await fetchWorkflow(id);
     };
@@ -1398,6 +1497,24 @@ export function NodeEditorPage() {
         setSelectedWorkflow(workflow);
     };
 
+    const handleCreateFromTemplate = async (templateId: string) => {
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const graphJson = await invoke<string>('load_template', { templateId });
+            const parsed = JSON.parse(graphJson);
+            const nodeCount = parsed.nodes?.length ?? 0;
+            const workflow = await createWorkflow({
+                name: `${templateId.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`,
+                description: `Created from template (${nodeCount} nodes)`,
+                graphJson,
+            });
+            setSelectedWorkflow(workflow);
+            addToast('Workflow created from template', 'success');
+        } catch {
+            addToast('Failed to load template', 'error');
+        }
+    };
+
     const handleBack = () => {
         setSelectedWorkflow(null);
     };
@@ -1406,5 +1523,5 @@ export function NodeEditorPage() {
         return <WorkflowCanvas workflow={selectedWorkflow} onBack={handleBack} />;
     }
 
-    return <WorkflowList onSelect={handleSelectWorkflow} onCreate={handleCreate} />;
+    return <WorkflowList onSelect={handleSelectWorkflow} onCreate={handleCreate} onCreateFromTemplate={handleCreateFromTemplate} />;
 }

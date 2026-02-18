@@ -83,11 +83,13 @@ This workflow follows the global multi-model review pattern defined in `claude-c
 - Cross-reference review items with STATUS.md backlog to avoid duplicates
 - Reviews from any AI model or human follow the same process
 
-## Past Reviews
+## Past Reviews (Archived)
 
-| Date | Topic | Reviewer | Status | File |
-|------|-------|----------|--------|------|
-| 2026-02-09 | Phase 1 design | Gemini 3 Pro | Closed | `design-review-2026-02-09.md` |
-| 2026-02-15 | Phase 2 branching | Gemini 3 Pro | Resolved | `phase-2-review-detailed.md` |
-| 2026-02-15 | Node editor architecture | Gemini 3 Pro | Resolved | `node-editor-review-2026-02-15.md` |
-| 2026-02-18 | Runtime safety and correctness | Codex (GPT-5) | Resolved | `runtime-review-2026-02-18.md` |
+All resolved reviews have been deleted. Summary of completed reviews:
+
+| Date | Topic | Reviewer | Outcome |
+|------|-------|----------|---------|
+| 2026-02-09 | Phase 1 design | Gemini 3 Pro | 5 items — all fixed |
+| 2026-02-15 | Phase 2 branching | Gemini 3 Pro | 6 items — context loss + transaction safety fixed |
+| 2026-02-15 | Node editor architecture | Gemini 3 Pro | 5 items — /chat/direct + parallelism fixed |
+| 2026-02-18 | Runtime safety | Codex (GPT-5) | 8 items — 4 fixed, 4 deferred to 3C |

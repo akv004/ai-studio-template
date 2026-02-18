@@ -111,6 +111,22 @@ pub async fn run_workflow(
     };
     eprintln!("[workflow] Loaded {} settings", all_settings.len());
 
+    // 4b. Budget enforcement — block workflow if budget exhausted
+    let budget_pct = crate::commands::budget::get_budget_remaining_pct(db.inner(), &all_settings);
+    if budget_pct <= 0.0 {
+        let exhausted_behavior = all_settings
+            .get("budget.exhausted_behavior")
+            .map(|v| v.trim_matches('"').to_string())
+            .unwrap_or_else(|| "none".to_string());
+        if exhausted_behavior == "ask" {
+            return Err(AppError::BudgetExhausted(
+                "Monthly budget exhausted. Cannot run workflow.".into(),
+            ));
+        }
+        // local_only and cheapest_cloud: individual LLM nodes will be routed by the engine
+        // none: proceed without enforcement
+    }
+
     // 5. Execute workflow
     let db_clone = db.inner().clone();
     let sidecar_clone = sidecar.inner().clone();

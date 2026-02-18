@@ -86,6 +86,43 @@ pub async fn send_message(
     provider = routing_decision.provider.clone();
     model = routing_decision.model.clone();
 
+    // 1c. Budget enforcement — block or override BEFORE calling sidecar
+    if budget_remaining_pct <= 0.0 {
+        let exhausted_behavior = all_settings
+            .get("budget.exhausted_behavior")
+            .map(|v| v.trim_matches('"').to_string())
+            .unwrap_or_else(|| "none".to_string());
+
+        match exhausted_behavior.as_str() {
+            "local_only" => {
+                if available_providers.iter().any(|p| p == "ollama") {
+                    provider = "ollama".to_string();
+                    model = "llama3.2".to_string();
+                } else {
+                    return Err(AppError::BudgetExhausted(
+                        "Monthly budget exhausted. Local model (Ollama) not available.".into(),
+                    ));
+                }
+            }
+            "cheapest_cloud" => {
+                if available_providers.iter().any(|p| p == "google") {
+                    provider = "google".to_string();
+                    model = "gemini-2.0-flash".to_string();
+                } else if available_providers.iter().any(|p| p == "ollama") {
+                    provider = "ollama".to_string();
+                    model = "llama3.2".to_string();
+                }
+                // else: proceed with whatever the router picked
+            }
+            "ask" => {
+                return Err(AppError::BudgetExhausted(
+                    "Monthly budget exhausted. Please increase your budget limit or switch to a local model.".into(),
+                ));
+            }
+            _ => {} // "none" — no enforcement, proceed normally
+        }
+    }
+
     let provider_config = {
         let prefix = format!("provider.{}.", provider);
         let mut config = serde_json::Map::new();

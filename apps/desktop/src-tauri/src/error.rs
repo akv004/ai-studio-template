@@ -14,6 +14,8 @@ pub enum AppError {
     Validation(String),
     #[error("Workflow error: {0}")]
     Workflow(String),
+    #[error("Budget exhausted: {0}")]
+    BudgetExhausted(String),
     #[error("{0}")]
     Internal(String),
 }

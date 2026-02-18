@@ -122,7 +122,7 @@ function eventSummary(event: StudioEvent): string {
         case 'tool.requested':
         case 'tool.approved':
         case 'tool.completed':
-            return (p.tool as string) || (p.command as string) || '';
+            return (p.tool_name as string) || (p.tool as string) || (p.command as string) || '';
         default:
             return Object.keys(p).slice(0, 3).join(', ') || '—';
     }
@@ -148,12 +148,12 @@ function groupEvents(events: StudioEvent[]): EventGroup[] {
 
         // Tool group: consecutive tool.* events with the same tool name
         if (ev.type.startsWith('tool.')) {
-            const toolName = String(ev.payload.tool || ev.payload.command || 'tool');
+            const toolName = String(ev.payload.tool_name || ev.payload.tool || ev.payload.command || 'tool');
             const batch = [ev];
             let j = i + 1;
             while (j < events.length && events[j].type.startsWith('tool.')) {
                 const next = events[j];
-                const nextTool = String(next.payload.tool || next.payload.command || 'tool');
+                const nextTool = String(next.payload.tool_name || next.payload.tool || next.payload.command || 'tool');
                 if (nextTool === toolName) {
                     batch.push(next);
                     j++;
@@ -409,10 +409,13 @@ function ErrorDetail({ payload }: { payload: Record<string, unknown> }) {
 }
 
 function ToolDetail({ payload, type }: { payload: Record<string, unknown>; type: string }) {
+    const toolName = payload.tool_name ?? payload.tool;
+    const toolInput = payload.tool_input ?? payload.input;
+    const toolOutput = payload.tool_output ?? payload.output;
     return (
         <div className="space-y-3">
-            {payload.tool != null && (
-                <MetricCard label="Tool" value={String(payload.tool)} />
+            {toolName != null && (
+                <MetricCard label="Tool" value={String(toolName)} />
             )}
             {payload.command != null && (
                 <div>
@@ -422,17 +425,17 @@ function ToolDetail({ payload, type }: { payload: Record<string, unknown>; type:
                     </pre>
                 </div>
             )}
-            {payload.input != null && (
+            {toolInput != null && (
                 <CollapsibleSection title="Input">
                     <pre className="text-xs font-mono whitespace-pre-wrap">
-                        {typeof payload.input === 'string' ? payload.input : JSON.stringify(payload.input, null, 2)}
+                        {typeof toolInput === 'string' ? toolInput : JSON.stringify(toolInput, null, 2)}
                     </pre>
                 </CollapsibleSection>
             )}
-            {payload.output != null && (
+            {toolOutput != null && (
                 <CollapsibleSection title="Output">
                     <pre className="text-xs font-mono whitespace-pre-wrap">
-                        {typeof payload.output === 'string' ? payload.output : JSON.stringify(payload.output, null, 2)}
+                        {typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput, null, 2)}
                     </pre>
                 </CollapsibleSection>
             )}
@@ -679,14 +682,17 @@ export function InspectorPage() {
                     lines.push(`**Assistant**: ${p.content || ''}`, '');
                     break;
                 case 'tool.requested':
-                    lines.push(`> Tool requested: \`${p.tool || p.command || '?'}\``);
-                    if (p.input) lines.push(`> Input: \`${typeof p.input === 'string' ? p.input : JSON.stringify(p.input)}\``);
+                    lines.push(`> Tool requested: \`${p.tool_name || p.tool || p.command || '?'}\``);
+                    if (p.tool_input || p.input) {
+                        const inp = p.tool_input || p.input;
+                        lines.push(`> Input: \`${typeof inp === 'string' ? inp : JSON.stringify(inp)}\``);
+                    }
                     lines.push('');
                     break;
                 case 'tool.completed':
-                    lines.push(`> Tool completed: \`${p.tool || p.command || '?'}\``);
-                    if (p.output) {
-                        const out = typeof p.output === 'string' ? p.output : JSON.stringify(p.output);
+                    lines.push(`> Tool completed: \`${p.tool_name || p.tool || p.command || '?'}\``);
+                    if (p.tool_output || p.output) {
+                        const out = typeof (p.tool_output || p.output) === 'string' ? (p.tool_output || p.output) as string : JSON.stringify(p.tool_output || p.output);
                         lines.push(`> Output: ${out.length > 200 ? out.slice(0, 200) + '...' : out}`);
                     }
                     if (p.duration_ms) lines.push(`> Duration: ${formatDuration(p.duration_ms as number)}`);

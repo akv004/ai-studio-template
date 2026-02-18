@@ -301,8 +301,8 @@ async def chat(request: ChatRequest):
         # Generate conversation ID if not provided
         conversation_id = request.conversation_id or f"conv_{uuid.uuid4().hex[:8]}"
 
-        # If per-request API key provided, create and register provider on-the-fly
-        if request.api_key and request.provider:
+        # If per-request provider config provided, create and register provider on-the-fly
+        if request.provider and (request.api_key or request.base_url or request.extra_config):
             provider = create_provider_for_request(
                 name=request.provider,
                 api_key=request.api_key,
@@ -325,9 +325,13 @@ async def chat(request: ChatRequest):
                 conversation_id, provider_name=request.provider,
                 system_prompt=request.system_prompt,
             )
-            # Build messages: keep system prompt if present, replace the rest
+            # Build messages: keep system prompt if present, replace the rest.
+            # Strip the last user message from history — chat()/chat_with_tools()
+            # will re-append it from request.message, avoiding duplication (R1 fix).
             system_msgs = [m for m in conv.messages if m.role == "system"]
             history_msgs = [Message(role=m["role"], content=m["content"]) for m in request.history]
+            if history_msgs and history_msgs[-1].role == "user":
+                history_msgs = history_msgs[:-1]
             conv.messages = system_msgs + history_msgs
 
         # Get tool definitions for the provider

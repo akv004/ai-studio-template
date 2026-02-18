@@ -1024,7 +1024,8 @@ async fn execute_run(
             if let Ok(conn) = db.conn.lock() {
                 let _ = conn.execute(
                     "UPDATE runs SET status = 'completed', output = ?1, total_tokens = ?2,
-                     duration_ms = ?3, completed_at = ?4 WHERE id = ?5",
+                     duration_ms = ?3, completed_at = ?4
+                     WHERE id = ?5 AND status = 'running'",
                     params![content, total_tokens, duration_ms, completed_at, run_id],
                 );
             }
@@ -1037,7 +1038,8 @@ async fn execute_run(
             if let Ok(conn) = db.conn.lock() {
                 let _ = conn.execute(
                     "UPDATE runs SET status = 'failed', error = ?1, duration_ms = ?2,
-                     completed_at = ?3 WHERE id = ?4",
+                     completed_at = ?3
+                     WHERE id = ?4 AND status = 'running'",
                     params![e.to_string(), duration_ms, completed_at, run_id],
                 );
             }

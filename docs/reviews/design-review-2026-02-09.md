@@ -27,7 +27,7 @@ However, there are discrepancies between the `data-model.md` specification and t
 - [x] **Event Bridge**: Retry logic with backoff is properly implemented.
 - [x] **Tool Approval**: Implemented via `tool_approval_requested` event.
 
-## 3. Productization Recommendations
+## 3. Productization Recommendations-dangerously-skip-permissions 
 
 ### High Priority (Stability & Data Integrity)
 1.  **Align DB Schema**: Update `db.rs` to match `data-model.md`. specifically splitting the `agents.tools` column into `mcp_servers` and `approval_rules`. (Closed 2026-02-13, commit 8d370f0)

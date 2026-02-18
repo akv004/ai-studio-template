@@ -717,6 +717,8 @@ function WorkflowCanvas({ workflow, onBack }: {
     const [approvalRequest, setApprovalRequest] = useState<{ id: string; message: string; dataPreview?: string } | null>(null);
     const [lastRunDebug, setLastRunDebug] = useState<LastRunDebugInfo | null>(null);
     const [lastRunResult, setLastRunResult] = useState<LastRunResult | null>(null);
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null);
+    const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
     const reactFlowRef = useRef<HTMLDivElement>(null);
 
     // Track changes
@@ -797,6 +799,7 @@ function WorkflowCanvas({ workflow, onBack }: {
 
     const onPaneClick = useCallback(() => {
         setSelectedNode(null);
+        setContextMenu(null);
     }, []);
 
     // Drag and drop from palette
@@ -946,24 +949,109 @@ function WorkflowCanvas({ workflow, onBack }: {
         }
     }, [lastRunDebug, workflowNodeStates, addToast]);
 
+    // Duplicate node helper
+    const duplicateNode = useCallback((nodeId: string) => {
+        const node = nodes.find((n) => n.id === nodeId);
+        if (!node) return;
+        const newNode: Node = {
+            ...node,
+            id: generateNodeId(node.type || 'node'),
+            position: { x: node.position.x + 50, y: node.position.y + 50 },
+            data: { ...node.data },
+            selected: false,
+        };
+        setNodes((nds) => [...nds, newNode]);
+    }, [nodes, setNodes]);
+
+    // Disconnect all edges from a node
+    const disconnectNode = useCallback((nodeId: string) => {
+        setEdges((eds) => eds.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    }, [setEdges]);
+
     // Keyboard shortcuts
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
+            const inInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+
+            // Ctrl+S: Save
             if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                 e.preventDefault();
                 handleSave();
+                return;
             }
+
+            // Escape: Close context menu
+            if (e.key === 'Escape') {
+                setContextMenu(null);
+                return;
+            }
+
+            if (inInput) return;
+
+            // Delete/Backspace: Delete selected
             if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (selectedNode && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+                if (selectedNode) {
                     setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
                     setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
                     setSelectedNode(null);
                 }
+                return;
+            }
+
+            // Ctrl+D: Duplicate selected
+            if ((e.metaKey || e.ctrlKey) && e.key === 'd') {
+                e.preventDefault();
+                if (selectedNode) duplicateNode(selectedNode.id);
+                return;
+            }
+
+            // Ctrl+A: Select all
+            if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+                e.preventDefault();
+                setNodes((nds) => nds.map((n) => ({ ...n, selected: true })));
+                return;
+            }
+
+            // Ctrl+C: Copy selected nodes
+            if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+                const selected = nodes.filter((n) => n.selected || n.id === selectedNode?.id);
+                if (selected.length === 0) return;
+                const selectedIds = new Set(selected.map((n) => n.id));
+                const connectedEdges = edges.filter((e) => selectedIds.has(e.source) && selectedIds.has(e.target));
+                clipboardRef.current = { nodes: selected, edges: connectedEdges };
+                return;
+            }
+
+            // Ctrl+V: Paste copied nodes
+            if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
+                if (!clipboardRef.current) return;
+                const { nodes: copiedNodes, edges: copiedEdges } = clipboardRef.current;
+                const idMap = new Map<string, string>();
+                const newNodes = copiedNodes.map((n) => {
+                    const newId = generateNodeId(n.type || 'node');
+                    idMap.set(n.id, newId);
+                    return {
+                        ...n,
+                        id: newId,
+                        position: { x: n.position.x + 60, y: n.position.y + 60 },
+                        data: { ...n.data },
+                        selected: true,
+                    };
+                });
+                const newEdges = copiedEdges.map((edge) => ({
+                    ...edge,
+                    id: `e-${idMap.get(edge.source)}-${idMap.get(edge.target)}`,
+                    source: idMap.get(edge.source) || edge.source,
+                    target: idMap.get(edge.target) || edge.target,
+                }));
+                setNodes((nds) => [...nds.map((n) => ({ ...n, selected: false })), ...newNodes]);
+                setEdges((eds) => [...eds, ...newEdges]);
+                return;
             }
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [handleSave, selectedNode, setNodes, setEdges]);
+    }, [handleSave, selectedNode, nodes, edges, setNodes, setEdges, duplicateNode]);
 
     // Update node data from config panel
     const handleNodeDataChange = useCallback((newData: Record<string, unknown>) => {
@@ -1116,6 +1204,15 @@ function WorkflowCanvas({ workflow, onBack }: {
                         onConnect={onConnect}
                         onNodeClick={onNodeClick}
                         onPaneClick={onPaneClick}
+                        onNodeContextMenu={(e, node) => {
+                            e.preventDefault();
+                            setSelectedNode(node);
+                            setContextMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
+                        }}
+                        onPaneContextMenu={(e) => {
+                            e.preventDefault();
+                            setContextMenu({ x: e.clientX, y: e.clientY });
+                        }}
                         onDragOver={onDragOver}
                         onDrop={onDrop}
                         nodeTypes={customNodeTypes}
@@ -1140,6 +1237,49 @@ function WorkflowCanvas({ workflow, onBack }: {
                             </Panel>
                         )}
                     </ReactFlow>
+
+                    {/* Context Menu */}
+                    {contextMenu && (
+                        <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}
+                            onClick={() => setContextMenu(null)}>
+                            {contextMenu.nodeId ? (
+                                <>
+                                    <div className="context-menu-item" onClick={() => { if (contextMenu.nodeId) duplicateNode(contextMenu.nodeId); }}>
+                                        Duplicate <span className="shortcut">Ctrl+D</span>
+                                    </div>
+                                    <div className="context-menu-item" onClick={() => { if (contextMenu.nodeId) disconnectNode(contextMenu.nodeId); }}>
+                                        Disconnect All
+                                    </div>
+                                    <div className="context-menu-divider" />
+                                    <div className="context-menu-item" onClick={handleDeleteNode}>
+                                        Delete <span className="shortcut">Del</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {NODE_CATEGORIES.flatMap((cat) => cat.types).map((t) => (
+                                        <div key={t.type} className="context-menu-item" onClick={() => {
+                                            const bounds = reactFlowRef.current?.getBoundingClientRect();
+                                            if (!bounds) return;
+                                            const newNode: Node = {
+                                                id: generateNodeId(t.type),
+                                                type: t.type,
+                                                position: { x: contextMenu.x - bounds.left - 80, y: contextMenu.y - bounds.top - 20 },
+                                                data: defaultDataForType(t.type),
+                                            };
+                                            setNodes((nds) => [...nds, newNode]);
+                                        }}>
+                                            Add {t.label}
+                                        </div>
+                                    ))}
+                                    <div className="context-menu-divider" />
+                                    <div className="context-menu-item" onClick={() => setNodes((nds) => nds.map((n) => ({ ...n, selected: true })))}>
+                                        Select All <span className="shortcut">Ctrl+A</span>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Config Panel (right sidebar) */}

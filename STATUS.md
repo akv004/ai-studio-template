@@ -25,7 +25,25 @@
 
 ---
 
-## Current Phase: 3 (Ecosystem + Node Editor)
+## Current Phase: 4 (Universal Automation Canvas)
+
+**Goal**: Graduate node editor from AI workflow builder to universal automation platform. Data I/O nodes, control flow, engine refactoring, canvas UX.
+**Status**: SPEC WRITTEN — AWAITING EXTERNAL REVIEW
+**Specs in scope**: `phase4-automation-canvas.md` (primary), `node-editor.md` (reference)
+
+### Phase 4 Review Cycle (CURRENT)
+| Step | Status | Description |
+|------|--------|-------------|
+| Spec v1.1 written | DONE | `docs/specs/phase4-automation-canvas.md` — 10 node types, container model, EIP patterns, canvas UX |
+| Architecture review (Gemini) | PENDING | Container/scope model, EIP mapping, engine refactoring risks |
+| Implementation review (Codex) | PENDING | Rust executor details, security model, edge cases |
+| UX review | PENDING | Comment boxes, containers, palette organization |
+| Iterate on feedback | PENDING | Address review items, update spec |
+| Begin implementation | BLOCKED | Waiting on reviews |
+
+---
+
+## Phase 3 (COMPLETE)
 
 **Goal**: Node editor (flagship Phase 3 feature), plugin system, templates, open-source launch prep.
 **Status**: ALL TASKS COMPLETE. Phase 3 is ready for launch.
@@ -111,20 +129,25 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-18 (session 20)
+**Date**: 2026-02-18 (session 21)
 **What happened**:
-- **Docker cleanup** (f702d14): Removed stale Telegram service, added Google AI key env var
-- **Template gallery** (c665ac6): 5 new templates (Email Classifier, Content Moderator, Translation Pipeline, Meeting Notes, RAG Search) bringing total to 10. Added templates/README.md with format docs and contribution guide.
-- **Launch prep** (803724a): CHANGELOG.md (full Phase 0-3 history), SECURITY.md (architecture security + disclosure policy), Show HN draft, package.json metadata (keywords, homepage, bugs).
-- All 31 Rust tests pass, TypeScript clean
-- **Phase 3 backlog is now fully complete.**
+- **Phase 4 spec written**: `docs/specs/phase4-automation-canvas.md` v1.1
+  - 10+ new node types fully specified with configs, inputs, outputs, executor details
+  - EIP pattern research (Apache Camel / MuleSoft) — 15+ patterns mapped
+  - Unreal Blueprint architecture study — dual-wire system, containers, organization
+  - Key decision: Loop + Error Handler use container/scope model (MuleSoft pattern)
+  - Canvas UX features: comment boxes, reroute nodes, graph search, collapsed graphs
+  - 3 new handle types, engine refactoring plan, 6 templates, review plan
+- **Implementation BLOCKED on external reviews**
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
 - Session 18: Rust refactoring, budget enforcement, plugin foundation, README update
-- Session 19: One-click installers, plugin subprocess lifecycle, open-source infra (CI, GitHub templates, CONTRIBUTING)
+- Session 19: One-click installers, plugin subprocess lifecycle, open-source infra
+- Session 20: Docker cleanup, template gallery (10 total), launch prep
 
 **Next session should**:
-1. Phase 4 planning (universal automation canvas — custom node types, loop/merge, plugin marketplace)
-2. Take fresh screenshots with running app for README
-3. Consider GitHub Releases / v0.1.0 tag
+1. Generate review prompts (Gemini for architecture, Codex for implementation)
+2. Run reviews, triage feedback, iterate on spec
+3. Only AFTER reviews: begin 4A.1 (UI refactoring)
+4. Consider v0.1.0 tag for Phase 3 before starting Phase 4 code

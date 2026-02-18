@@ -1,7 +1,7 @@
 # AI Studio — Node Editor Specification
 
 > **Version**: 2.0 (expanded to universal automation canvas vision)
-> **Status**: Phase 3 DONE — Phase 4 vision documented
+> **Status**: Phase 3 DONE — Phase 4 detailed spec in `phase4-automation-canvas.md`
 > **Phase**: 3 (built), 4 (planned)
 > **Depends on**: architecture.md, event-system.md, data-model.md, mcp-integration.md, hybrid-intelligence.md
 > **Library**: React Flow (@xyflow/react)

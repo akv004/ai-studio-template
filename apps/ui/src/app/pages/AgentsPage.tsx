@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Bot, Trash2, Loader2, Shield, Server } from 'lucide-react';
+import { Plus, RefreshCw, Bot, Trash2, Loader2, Shield, Server, Zap } from 'lucide-react';
 import { useAppStore } from '../../state/store';
-import type { ToolsMode } from '@ai-studio/shared';
+import type { ToolsMode, RoutingMode } from '@ai-studio/shared';
 
 const MODELS_BY_PROVIDER: Record<string, string[]> = {
     anthropic: ['claude-sonnet-4-20250514', 'claude-opus-4-20250514', 'claude-haiku-4-5-20251001'],
@@ -32,6 +32,7 @@ export function AgentsPage() {
     const [customModel, setCustomModel] = useState(false);
     const [systemPrompt, setSystemPrompt] = useState('');
     const [toolsMode, setToolsMode] = useState<ToolsMode>('restricted');
+    const [routingMode, setRoutingMode] = useState<RoutingMode>('single');
     const [selectedMcpServers, setSelectedMcpServers] = useState<string[]>([]);
 
     const availableModels = MODELS_BY_PROVIDER[provider] || [];
@@ -62,6 +63,7 @@ export function AgentsPage() {
         try {
             const agent = await createAgent({
                 name, provider, model, systemPrompt, toolsMode,
+                routingMode,
                 mcpServers: selectedMcpServers,
             });
             setSelectedAgentId(agent.id);
@@ -69,6 +71,7 @@ export function AgentsPage() {
             setName('');
             setSystemPrompt('');
             setToolsMode('restricted');
+            setRoutingMode('single');
             setSelectedMcpServers([]);
         } catch { /* error handled by store */ }
         setCreating(false);
@@ -233,6 +236,38 @@ export function AgentsPage() {
                                         <option value="full">Full — all available tools</option>
                                     </select>
                                 </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Routing Mode</label>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {([
+                                            { value: 'single' as const, label: 'Single', desc: 'One model for everything' },
+                                            { value: 'hybrid_auto' as const, label: 'Auto', desc: 'Smart model routing' },
+                                            { value: 'hybrid_manual' as const, label: 'Manual', desc: 'Custom rules' },
+                                        ]).map(opt => (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                className={`p-2 rounded-lg border text-left transition-all ${
+                                                    routingMode === opt.value
+                                                        ? 'border-[var(--accent-primary)] bg-[var(--accent-glow)]'
+                                                        : 'border-[var(--border-primary)] bg-[var(--bg-tertiary)] hover:bg-[var(--bg-hover)]'
+                                                }`}
+                                                onClick={() => setRoutingMode(opt.value)}
+                                            >
+                                                <div className="text-xs font-medium">{opt.label}</div>
+                                                <div className="text-[10px] text-[var(--text-muted)]">{opt.desc}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                    {routingMode !== 'single' && (
+                                        <div className="mt-2 p-2 rounded bg-[var(--bg-tertiary)] text-xs text-[var(--text-muted)]">
+                                            <Zap className="w-3 h-3 inline mr-1 text-amber-400" />
+                                            {routingMode === 'hybrid_auto'
+                                                ? 'AI Studio will automatically pick the best model for each message based on task type, budget, and available providers.'
+                                                : 'Define custom rules in agent settings after creation. Rules match conditions (vision, code, budget) to specific models.'}
+                                        </div>
+                                    )}
+                                </div>
                                 {mcpServers.length > 0 && (
                                     <div>
                                         <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">MCP Servers</label>
@@ -297,6 +332,18 @@ export function AgentsPage() {
                                     }`}>
                                         <Shield className="w-3 h-3" />
                                         {selectedAgent.toolsMode}
+                                    </span>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Routing Mode</label>
+                                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-full font-medium ${
+                                        selectedAgent.routingMode === 'hybrid_auto' ? 'bg-amber-500/15 text-amber-400' :
+                                        selectedAgent.routingMode === 'hybrid_manual' ? 'bg-purple-500/15 text-purple-400' :
+                                        'bg-[var(--bg-tertiary)] text-[var(--text-muted)]'
+                                    }`}>
+                                        <Zap className="w-3 h-3" />
+                                        {selectedAgent.routingMode === 'hybrid_auto' ? 'Hybrid Auto' :
+                                         selectedAgent.routingMode === 'hybrid_manual' ? 'Hybrid Manual' : 'Single Model'}
                                     </span>
                                 </div>
                                 {selectedAgent.mcpServers.length > 0 && (

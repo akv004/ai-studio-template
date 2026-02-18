@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff, Save, Plug, Plus, Trash2, Power, PowerOff, AlertTriangle } from 'lucide-react';
+import { Cpu, Keyboard, Palette, FolderOpen, Zap, Cloud, Check, AlertCircle, Loader2, Eye, EyeOff, Save, Plug, Plus, Trash2, Power, PowerOff, AlertTriangle, DollarSign } from 'lucide-react';
 import { useAppStore } from '../../state/store';
 import { fetchApi } from '../../services/api';
+import type { BudgetExhaustedBehavior } from '@ai-studio/shared';
 
-type SettingsTab = 'providers' | 'mcp' | 'models' | 'paths' | 'performance' | 'hotkeys' | 'appearance';
+type SettingsTab = 'providers' | 'mcp' | 'budget' | 'models' | 'paths' | 'performance' | 'hotkeys' | 'appearance';
 
 interface HotkeyConfig {
     action: string;
@@ -39,7 +40,7 @@ interface ProviderConfig {
  * - Hotkeys customization
  */
 export function SettingsPage() {
-    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer, wipeDatabase, addToast } = useAppStore();
+    const { settings, fetchSettings, saveSetting, mcpServers, mcpServersLoading, fetchMcpServers, addMcpServer, updateMcpServer, removeMcpServer, wipeDatabase, addToast, budgetStatus, fetchBudgetStatus, setBudget } = useAppStore();
     const [activeTab, setActiveTab] = useState<SettingsTab>('providers');
     const [providerStatus, setProviderStatus] = useState<Record<string, 'idle' | 'testing' | 'success' | 'error'>>({});
     const [showApiKeys, setShowApiKeys] = useState<Record<string, boolean>>({});
@@ -50,13 +51,24 @@ export function SettingsPage() {
     const [mcpAdding, setMcpAdding] = useState(false);
     const [wipeConfirm, setWipeConfirm] = useState(false);
     const [wiping, setWiping] = useState(false);
+    // Budget form state
+    const [budgetLimit, setBudgetLimit] = useState('');
+    const [budgetBehavior, setBudgetBehavior] = useState<BudgetExhaustedBehavior>('none');
     // Provider form state — keyed by "provider_id.field_key"
     const [formValues, setFormValues] = useState<Record<string, string>>({});
     const [saving, setSaving] = useState(false);
     const [saveSuccess, setSaveSuccess] = useState(false);
 
-    // Load settings + MCP servers from SQLite on mount
-    useEffect(() => { fetchSettings(); fetchMcpServers(); }, [fetchSettings, fetchMcpServers]);
+    // Load settings + MCP servers + budget from SQLite on mount
+    useEffect(() => { fetchSettings(); fetchMcpServers(); fetchBudgetStatus(); }, [fetchSettings, fetchMcpServers, fetchBudgetStatus]);
+
+    // Sync budget status → form state
+    useEffect(() => {
+        if (budgetStatus) {
+            setBudgetLimit(budgetStatus.monthlyLimit != null ? String(budgetStatus.monthlyLimit) : '');
+            setBudgetBehavior((budgetStatus.exhaustedBehavior || 'none') as BudgetExhaustedBehavior);
+        }
+    }, [budgetStatus]);
 
     // Sync stored settings → form state (only when settings load)
     useEffect(() => {
@@ -104,6 +116,7 @@ export function SettingsPage() {
     const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
         { id: 'providers', label: 'AI Providers', icon: Cloud },
         { id: 'mcp', label: 'MCP Servers', icon: Plug },
+        { id: 'budget', label: 'Budget', icon: DollarSign },
         { id: 'models', label: 'Local Models', icon: Cpu },
         { id: 'paths', label: 'Paths', icon: FolderOpen },
         { id: 'performance', label: 'Performance', icon: Zap },
@@ -564,6 +577,115 @@ export function SettingsPage() {
                                     <div className="text-xs text-[var(--text-muted)]">
                                         <strong>Built-in tools:</strong> shell, read_file, write_file, list_directory are always available when tool calling is enabled.
                                         External MCP servers provide additional capabilities.
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'budget' && (
+                            <div className="space-y-6">
+                                <p className="text-sm text-[var(--text-secondary)]">
+                                    Set a monthly AI spending budget. Hybrid Intelligence uses this to route to cheaper models when budget is low.
+                                </p>
+
+                                {/* Current usage */}
+                                {budgetStatus && (
+                                    <div className="p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <div className="font-medium text-sm">Current Month Usage</div>
+                                            <span className="text-sm font-mono">
+                                                ${budgetStatus.used.toFixed(2)}
+                                                {budgetStatus.monthlyLimit != null && ` / $${budgetStatus.monthlyLimit.toFixed(2)}`}
+                                            </span>
+                                        </div>
+
+                                        {budgetStatus.monthlyLimit != null && budgetStatus.monthlyLimit > 0 && (
+                                            <div className="mb-3">
+                                                <div className="w-full h-3 rounded-full bg-[var(--bg-elevated)] overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all ${
+                                                            budgetStatus.percentage >= 90 ? 'bg-red-500' :
+                                                            budgetStatus.percentage >= 70 ? 'bg-amber-500' :
+                                                            'bg-green-500'
+                                                        }`}
+                                                        style={{ width: `${Math.min(budgetStatus.percentage, 100)}%` }}
+                                                    />
+                                                </div>
+                                                <div className="flex justify-between text-xs text-[var(--text-muted)] mt-1">
+                                                    <span>{budgetStatus.percentage.toFixed(0)}% used</span>
+                                                    <span>${budgetStatus.remaining.toFixed(2)} remaining</span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Provider breakdown */}
+                                        {budgetStatus.breakdown.length > 0 && (
+                                            <div className="space-y-1.5">
+                                                <div className="text-xs font-medium text-[var(--text-muted)]">Breakdown</div>
+                                                {budgetStatus.breakdown.map(({ provider, cost }) => (
+                                                    <div key={provider} className="flex items-center justify-between text-sm">
+                                                        <span className="capitalize">{provider}</span>
+                                                        <span className="font-mono text-xs">${cost.toFixed(4)}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Budget settings */}
+                                <div className="p-4 rounded-lg bg-[var(--bg-tertiary)] border border-[var(--border-subtle)] space-y-4">
+                                    <div className="font-medium text-sm">Budget Settings</div>
+
+                                    <div>
+                                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Monthly Limit (USD)</label>
+                                        <input
+                                            className="input w-48"
+                                            type="number"
+                                            min="0"
+                                            step="1"
+                                            placeholder="No limit"
+                                            value={budgetLimit}
+                                            onChange={e => setBudgetLimit(e.target.value)}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-medium text-[var(--text-muted)] mb-2">When budget runs out</label>
+                                        <div className="space-y-2">
+                                            {([
+                                                { value: 'none' as const, label: 'No limit', desc: 'Continue using all models' },
+                                                { value: 'local_only' as const, label: 'Local only', desc: 'Stop all cloud calls' },
+                                                { value: 'cheapest_cloud' as const, label: 'Cheapest cloud', desc: 'Fall back to cheapest provider' },
+                                                { value: 'ask' as const, label: 'Ask me', desc: 'Prompt before each cloud call' },
+                                            ]).map(opt => (
+                                                <label key={opt.value} className="flex items-center gap-3 p-2 rounded-lg hover:bg-[var(--bg-hover)] cursor-pointer">
+                                                    <input
+                                                        type="radio"
+                                                        name="exhausted"
+                                                        checked={budgetBehavior === opt.value}
+                                                        onChange={() => setBudgetBehavior(opt.value)}
+                                                        className="accent-[var(--accent-primary)]"
+                                                    />
+                                                    <div>
+                                                        <div className="text-sm">{opt.label}</div>
+                                                        <div className="text-xs text-[var(--text-muted)]">{opt.desc}</div>
+                                                    </div>
+                                                </label>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end pt-2">
+                                        <button
+                                            className="btn btn-primary btn-sm"
+                                            onClick={() => {
+                                                const limit = budgetLimit ? parseFloat(budgetLimit) : null;
+                                                setBudget(limit, budgetBehavior);
+                                            }}
+                                        >
+                                            <Save className="w-4 h-4" /> Save Budget
+                                        </button>
                                     </div>
                                 </div>
                             </div>

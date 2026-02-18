@@ -5,6 +5,46 @@
 
 export type ToolsMode = 'sandboxed' | 'restricted' | 'full';
 
+export type RoutingMode = 'single' | 'hybrid_auto' | 'hybrid_manual';
+
+export type RoutingCondition =
+    | 'vision_required'
+    | 'simple_query'
+    | 'code_task'
+    | 'large_context'
+    | 'budget_low'
+    | 'always';
+
+export interface RoutingRule {
+    condition: RoutingCondition;
+    provider: string;
+    model: string;
+    priority: number;
+}
+
+export type ModelCapability = 'reasoning' | 'code' | 'vision' | 'speed' | 'large_context' | 'tool_use' | 'balanced' | 'multilingual' | 'free' | 'cheap';
+
+export type CostTier = 'free' | 'cheap' | 'moderate' | 'expensive';
+
+export interface RoutingDecision {
+    provider: string;
+    model: string;
+    reason: string;
+    estimatedSavings: number;
+    alternativesConsidered: { model: string; estimatedCost: number }[];
+}
+
+export type BudgetExhaustedBehavior = 'local_only' | 'cheapest_cloud' | 'ask' | 'none';
+
+export interface BudgetStatus {
+    monthlyLimit: number | null;
+    used: number;
+    remaining: number;
+    percentage: number;
+    exhaustedBehavior: BudgetExhaustedBehavior;
+    breakdown: { provider: string; cost: number }[];
+}
+
 /**
  * AI Agent definition
  */
@@ -21,6 +61,8 @@ export interface Agent {
     toolsMode: ToolsMode;
     mcpServers: string[];
     approvalRules: Record<string, unknown>[];
+    routingMode: RoutingMode;
+    routingRules: RoutingRule[];
     createdAt: string;
     updatedAt: string;
     isArchived: boolean;
@@ -37,6 +79,8 @@ export interface CreateAgentRequest {
     tools?: string[];
     toolsMode?: ToolsMode;
     mcpServers?: string[];
+    routingMode?: RoutingMode;
+    routingRules?: RoutingRule[];
 }
 
 export interface UpdateAgentRequest {
@@ -51,6 +95,8 @@ export interface UpdateAgentRequest {
     toolsMode?: ToolsMode;
     mcpServers?: string[];
     approvalRules?: Record<string, unknown>[];
+    routingMode?: RoutingMode;
+    routingRules?: RoutingRule[];
 }
 
 /**
@@ -117,6 +163,9 @@ export interface SessionStats {
     totalOutputTokens: number;
     totalCostUsd: number;
     modelsUsed: string[];
+    totalRoutingDecisions: number;
+    totalEstimatedSavings: number;
+    modelUsage: { model: string; calls: number; cost: number }[];
 }
 
 /**

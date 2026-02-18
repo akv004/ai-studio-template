@@ -14,7 +14,7 @@
 | 5 | agent-inspector.md | P0 | 1 | DONE | Timeline, detail, stats, filters, export |
 | 6 | mcp-integration.md | P1 | 1 | DONE | Registry, tool calling, MCP client |
 | 7 | ui-design.md | P1 | 2 | DONE | Polish pass — error handling, UX |
-| 8 | hybrid-intelligence.md | P1 | 3 | PLANNED | Smart model routing, budget controls |
+| 8 | hybrid-intelligence.md | P1 | 3 | DONE | Smart model routing, budget controls, savings tracking |
 | 9 | phase-plan.md | — | — | REFERENCE | Implementation roadmap |
 | 10 | use-cases.md | — | — | REFERENCE | Demo script, user scenarios |
 | 11 | product-vision.md | — | — | REFERENCE | North star, positioning |
@@ -37,7 +37,7 @@
 | Node editor foundation (3A) | `node-editor.md` | DONE |
 | Node editor execution (3B) | `node-editor.md` | DONE |
 | Node editor polish (3C) | `node-editor.md` | DONE |
-| Hybrid intelligence routing | `hybrid-intelligence.md` | TODO |
+| Hybrid intelligence routing | `hybrid-intelligence.md` | DONE |
 | Plugin system | `phase-plan.md` | TODO |
 | Community templates | `phase-plan.md` | TODO |
 | One-click installers | `phase-plan.md` | TODO |
@@ -65,7 +65,7 @@
 
 **Phase 2** (COMPLETE): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (5778124). Inspector improvements (0a5895c).
 
-**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d). **3B execution DONE**: DAG walker engine, 7 node executors, validation, live node states, approval dialog, run button + input form. **3C polish DONE**: Codex review fixes (H1/H2/M1-M4 — 2380b83, 280be8c), Blender-inspired node restyling + collapse (ba82190), context menu + keyboard shortcuts (74d97df), 5 bundled templates + export/import (bb37147).
+**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d). **3B execution DONE**: DAG walker engine, 7 node executors, validation, live node states, approval dialog, run button + input form. **3C polish DONE**: Codex review fixes (H1/H2/M1-M4 — 2380b83, 280be8c), Blender-inspired node restyling + collapse (ba82190), context menu + keyboard shortcuts (74d97df), 5 bundled templates + export/import (bb37147). **Hybrid Intelligence DONE**: Schema v6 (routing_mode, routing_rules on agents), Smart Router in Rust (3 modes: single/auto/manual, 14 unit tests), budget tracking (monthly cost aggregation, threshold warnings), UI (agent routing config, Settings budget tab), Inspector integration (llm.routed + budget.warning events, routing stats, savings tracking).
 
 Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav/grouping/actions), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling, onboarding wizard, session branching, peer review workflow.
 
@@ -102,16 +102,15 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-18 (session 16)
+**Date**: 2026-02-17 (session 17)
 **What happened**:
-- Completed Phase 3C (Node Editor Polish) — all 5 chunks done:
-  - **Chunk 1** (2380b83): Rust correctness fixes — H1 (router branch types), H2 (tool approval), M2 (event envelopes), M4 (router branch skipping with transitive propagation)
-  - **Chunk 2** (280be8c): UI correctness fixes — M1 (approval preview key), M3 (run input duplicate IDs)
-  - **Chunk 3** (ba82190): Blender-inspired node restyling — dark theme, thin colored headers, labeled handles, data-type-colored dots, smoothstep edges, collapse support, execution state CSS
-  - **Chunk 4** (74d97df): Context menu (node + canvas) + keyboard shortcuts (Ctrl+D/A/C/V, Del)
-  - **Chunk 5** (bb37147): 5 bundled templates (Code Review, Research, Data Pipeline, Multi-Model Compare, Safe Executor), template picker UI, export/import workflow JSON
-- Codex architecture review fully resolved (6/6 accepted findings fixed, 1 deferred L2)
-- All 17 Rust tests pass, TypeScript clean throughout
+- Completed Hybrid Intelligence — full 5-chunk implementation:
+  - **Chunk 1**: Schema v6 migration — `routing_mode` + `routing_rules` columns on agents table, TS types (RoutingMode, RoutingRule, BudgetStatus, etc.)
+  - **Chunk 2**: Smart Router module (`routing.rs`) — MODEL_CAPABILITIES table, 3 routing modes (single/auto/manual), 14 unit tests
+  - **Chunk 3**: Budget tracking — `get_budget_status` + `set_budget` IPC commands, monthly cost aggregation from events, threshold warnings (50/80/100%), budget-aware routing
+  - **Chunk 4**: UI — Agent routing mode selector (Single/Auto/Manual), Settings budget tab (usage bar, provider breakdown, limit, exhausted behavior)
+  - **Chunk 5**: Inspector integration — `llm.routed` + `budget.warning` event rendering, routing detail panel (alternatives, savings), stats bar with routing decisions + savings, `get_session_stats` extended with model usage breakdown
+- All 31 Rust tests pass, TypeScript clean
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -131,9 +130,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 14: Design references, unit tests, UI bug fixes, review cleanup
 - Session 15: Workflow execution bug fixes — end-to-end working
 - Session 16: Phase 3C complete — visual polish + review fixes + templates
+- Session 17: Hybrid intelligence — complete (schema v6, router, budget, UI, inspector)
 
 **Next session should**:
-1. Start hybrid intelligence routing (`hybrid-intelligence.md`) — smart model router, budget controls
-2. Or: Plugin system (`phase-plan.md`) — manifest, loader, permissions
-3. README update with node editor screenshots
-4. Consider post-3C peer review to validate the full node editor feature
+1. Plugin system (`phase-plan.md`) — manifest, loader, permissions
+2. README update with node editor screenshots
+3. Peer review of hybrid intelligence feature
+4. One-click installers

@@ -4,6 +4,7 @@
 // ============================================
 
 use crate::db::{Database, now_iso};
+use chrono::Datelike;
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
@@ -28,6 +29,8 @@ pub struct Agent {
     pub tools_mode: String,
     pub mcp_servers: Vec<String>,
     pub approval_rules: Vec<serde_json::Value>,
+    pub routing_mode: String,
+    pub routing_rules: Vec<serde_json::Value>,
     pub created_at: String,
     pub updated_at: String,
     pub is_archived: bool,
@@ -53,11 +56,16 @@ pub struct CreateAgentRequest {
     pub tools_mode: String,
     #[serde(default)]
     pub mcp_servers: Vec<String>,
+    #[serde(default = "default_routing_mode")]
+    pub routing_mode: String,
+    #[serde(default)]
+    pub routing_rules: Vec<serde_json::Value>,
 }
 
 fn default_temperature() -> f64 { 0.7 }
 fn default_max_tokens() -> i64 { 4096 }
 fn default_tools_mode() -> String { "restricted".to_string() }
+fn default_routing_mode() -> String { "single".to_string() }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -73,6 +81,8 @@ pub struct UpdateAgentRequest {
     pub tools_mode: Option<String>,
     pub mcp_servers: Option<Vec<String>>,
     pub approval_rules: Option<Vec<serde_json::Value>>,
+    pub routing_mode: Option<String>,
+    pub routing_rules: Option<Vec<serde_json::Value>>,
 }
 
 // ============================================
@@ -86,7 +96,8 @@ pub fn list_agents(db: tauri::State<'_, Database>) -> Result<Vec<Agent>, String>
         .prepare(
             "SELECT id, name, description, provider, model, system_prompt,
                     temperature, max_tokens, tools, tools_mode, mcp_servers,
-                    approval_rules, created_at, updated_at, is_archived
+                    approval_rules, created_at, updated_at, is_archived,
+                    routing_mode, routing_rules
              FROM agents WHERE is_archived = 0
              ORDER BY updated_at DESC",
         )
@@ -103,6 +114,9 @@ pub fn list_agents(db: tauri::State<'_, Database>) -> Result<Vec<Agent>, String>
             let ar_json: String = row.get(11)?;
             let approval_rules: Vec<serde_json::Value> =
                 serde_json::from_str(&ar_json).unwrap_or_default();
+            let rr_json: String = row.get(16)?;
+            let routing_rules: Vec<serde_json::Value> =
+                serde_json::from_str(&rr_json).unwrap_or_default();
             Ok(Agent {
                 id: row.get(0)?,
                 name: row.get(1)?,
@@ -116,6 +130,8 @@ pub fn list_agents(db: tauri::State<'_, Database>) -> Result<Vec<Agent>, String>
                 tools_mode: row.get(9)?,
                 mcp_servers,
                 approval_rules,
+                routing_mode: row.get(15)?,
+                routing_rules,
                 created_at: row.get(12)?,
                 updated_at: row.get(13)?,
                 is_archived: row.get::<_, i32>(14)? != 0,
@@ -134,7 +150,8 @@ pub fn get_agent(db: tauri::State<'_, Database>, id: String) -> Result<Agent, St
     conn.query_row(
         "SELECT id, name, description, provider, model, system_prompt,
                 temperature, max_tokens, tools, tools_mode, mcp_servers,
-                approval_rules, created_at, updated_at, is_archived
+                approval_rules, created_at, updated_at, is_archived,
+                routing_mode, routing_rules
          FROM agents WHERE id = ?1",
         params![id],
         |row| {
@@ -160,6 +177,11 @@ pub fn get_agent(db: tauri::State<'_, Database>, id: String) -> Result<Agent, St
                 tools_mode: row.get(9)?,
                 mcp_servers,
                 approval_rules,
+                routing_mode: row.get(15)?,
+                routing_rules: {
+                    let rr_json: String = row.get(16)?;
+                    serde_json::from_str(&rr_json).unwrap_or_default()
+                },
                 created_at: row.get(12)?,
                 updated_at: row.get(13)?,
                 is_archived: row.get::<_, i32>(14)? != 0,
@@ -178,13 +200,15 @@ pub fn create_agent(
     let now = now_iso();
     let tools_json = serde_json::to_string(&agent.tools).unwrap_or_else(|_| "[]".to_string());
     let mcp_json = serde_json::to_string(&agent.mcp_servers).unwrap_or_else(|_| "[]".to_string());
+    let rr_json = serde_json::to_string(&agent.routing_rules).unwrap_or_else(|_| "[]".to_string());
 
     let conn = db.conn.lock().map_err(|e| e.to_string())?;
     conn.execute(
         "INSERT INTO agents (id, name, description, provider, model, system_prompt,
                              temperature, max_tokens, tools, tools_mode, mcp_servers,
+                             routing_mode, routing_rules,
                              created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         params![
             id,
             agent.name,
@@ -197,6 +221,8 @@ pub fn create_agent(
             tools_json,
             agent.tools_mode,
             mcp_json,
+            agent.routing_mode,
+            rr_json,
             now,
             now,
         ],
@@ -216,6 +242,8 @@ pub fn create_agent(
         tools_mode: agent.tools_mode,
         mcp_servers: agent.mcp_servers,
         approval_rules: vec![],
+        routing_mode: agent.routing_mode,
+        routing_rules: agent.routing_rules,
         created_at: now.clone(),
         updated_at: now,
         is_archived: false,
@@ -291,6 +319,17 @@ pub fn update_agent(
         let ar_json = serde_json::to_string(approval_rules).unwrap_or_else(|_| "[]".to_string());
         sets.push(format!("approval_rules = ?{param_index}"));
         values.push(Box::new(ar_json));
+        param_index += 1;
+    }
+    if let Some(ref routing_mode) = updates.routing_mode {
+        sets.push(format!("routing_mode = ?{param_index}"));
+        values.push(Box::new(routing_mode.clone()));
+        param_index += 1;
+    }
+    if let Some(ref routing_rules) = updates.routing_rules {
+        let rr_json = serde_json::to_string(routing_rules).unwrap_or_else(|_| "[]".to_string());
+        sets.push(format!("routing_rules = ?{param_index}"));
+        values.push(Box::new(rr_json));
         param_index += 1;
     }
 
@@ -696,6 +735,17 @@ pub struct SessionStats {
     pub total_output_tokens: i64,
     pub total_cost_usd: f64,
     pub models_used: Vec<String>,
+    pub total_routing_decisions: i64,
+    pub total_estimated_savings: f64,
+    pub model_usage: Vec<ModelUsageStat>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelUsageStat {
+    pub model: String,
+    pub calls: i64,
+    pub cost: f64,
 }
 
 #[tauri::command]
@@ -729,6 +779,45 @@ pub fn get_session_stats(
         .collect::<Result<Vec<_>, _>>()
         .map_err(|e| e.to_string())?;
 
+    // Routing stats: count llm.routed events and sum estimated_savings from payload
+    let total_routing_decisions: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM events WHERE session_id = ?1 AND type = 'llm.routed'",
+            params![session_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0);
+
+    let total_estimated_savings: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(
+                CAST(json_extract(payload, '$.estimated_savings') AS REAL)
+            ), 0.0) FROM events WHERE session_id = ?1 AND type = 'llm.routed'",
+            params![session_id],
+            |row| row.get(0),
+        )
+        .unwrap_or(0.0);
+
+    // Model usage breakdown: group messages by model with call count and cost
+    let mut model_stmt = conn
+        .prepare(
+            "SELECT model, COUNT(*) as calls, COALESCE(SUM(cost_usd), 0.0) as cost
+             FROM messages WHERE session_id = ?1 AND model IS NOT NULL
+             GROUP BY model ORDER BY calls DESC"
+        )
+        .map_err(|e| e.to_string())?;
+    let model_usage: Vec<ModelUsageStat> = model_stmt
+        .query_map(params![session_id], |row| {
+            Ok(ModelUsageStat {
+                model: row.get(0)?,
+                calls: row.get(1)?,
+                cost: row.get(2)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
     Ok(SessionStats {
         total_events,
         total_messages,
@@ -736,6 +825,9 @@ pub fn get_session_stats(
         total_output_tokens: total_output,
         total_cost_usd: total_cost,
         models_used: models,
+        total_routing_decisions,
+        total_estimated_savings,
+        model_usage,
     })
 }
 
@@ -1174,6 +1266,138 @@ pub fn set_setting(
 }
 
 // ============================================
+// BUDGET COMMANDS
+// ============================================
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BudgetStatus {
+    pub monthly_limit: Option<f64>,
+    pub used: f64,
+    pub remaining: f64,
+    pub percentage: f64,
+    pub exhausted_behavior: String,
+    pub breakdown: Vec<ProviderCost>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProviderCost {
+    pub provider: String,
+    pub cost: f64,
+}
+
+#[tauri::command]
+pub fn get_budget_status(db: tauri::State<'_, Database>) -> Result<BudgetStatus, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now();
+    let month_start = format!("{}-{:02}-01T00:00:00.000Z", now.year(), now.month());
+
+    // Get monthly limit from settings
+    let monthly_limit: Option<f64> = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'budget.monthly_limit'",
+            [],
+            |row| {
+                let v: String = row.get(0)?;
+                Ok(v.trim_matches('"').parse::<f64>().ok())
+            },
+        )
+        .unwrap_or(None);
+
+    let exhausted_behavior: String = conn
+        .query_row(
+            "SELECT value FROM settings WHERE key = 'budget.exhausted_behavior'",
+            [],
+            |row| {
+                let v: String = row.get(0)?;
+                Ok(v.trim_matches('"').to_string())
+            },
+        )
+        .unwrap_or_else(|_| "none".to_string());
+
+    // Total cost this month from events
+    let used: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(cost_usd), 0.0) FROM events
+             WHERE type = 'llm.response.completed' AND ts >= ?1",
+            params![month_start],
+            |row| row.get(0),
+        )
+        .unwrap_or(0.0);
+
+    // Breakdown by provider
+    let mut stmt = conn
+        .prepare(
+            "SELECT json_extract(payload, '$.provider') as p, COALESCE(SUM(cost_usd), 0.0) as c
+             FROM events
+             WHERE type = 'llm.response.completed' AND ts >= ?1
+             GROUP BY p
+             ORDER BY c DESC",
+        )
+        .map_err(|e| e.to_string())?;
+
+    let breakdown: Vec<ProviderCost> = stmt
+        .query_map(params![month_start], |row| {
+            Ok(ProviderCost {
+                provider: row.get::<_, String>(0).unwrap_or_else(|_| "unknown".to_string()),
+                cost: row.get(1)?,
+            })
+        })
+        .map_err(|e| e.to_string())?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())?;
+
+    let limit_val = monthly_limit.unwrap_or(0.0);
+    let remaining = if limit_val > 0.0 { (limit_val - used).max(0.0) } else { f64::MAX };
+    let percentage = if limit_val > 0.0 { (used / limit_val * 100.0).min(100.0) } else { 0.0 };
+
+    Ok(BudgetStatus {
+        monthly_limit,
+        used,
+        remaining,
+        percentage,
+        exhausted_behavior,
+        breakdown,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBudgetRequest {
+    pub monthly_limit: Option<f64>,
+    pub exhausted_behavior: Option<String>,
+}
+
+#[tauri::command]
+pub fn set_budget(
+    db: tauri::State<'_, Database>,
+    request: SetBudgetRequest,
+) -> Result<(), String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+
+    if let Some(limit) = request.monthly_limit {
+        let value_str = serde_json::to_string(&limit).map_err(|e| e.to_string())?;
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('budget.monthly_limit', ?1)",
+            params![value_str],
+        )
+        .map_err(|e| format!("Failed to save budget limit: {e}"))?;
+    }
+
+    if let Some(ref behavior) = request.exhausted_behavior {
+        let value_str = format!("\"{}\"", behavior);
+        conn.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('budget.exhausted_behavior', ?1)",
+            params![value_str],
+        )
+        .map_err(|e| format!("Failed to save exhausted behavior: {e}"))?;
+    }
+
+    Ok(())
+}
+
+// ============================================
 // PROVIDER KEY COMMANDS
 // ============================================
 
@@ -1265,8 +1489,8 @@ pub async fn send_message(
 ) -> Result<SendMessageResponse, String> {
     let now = now_iso();
 
-    // 1. Load session + agent info + provider config from settings
-    let (provider, model, system_prompt, tools_mode, provider_config) = {
+    // 1. Load session + agent info + provider config + routing config from settings
+    let (mut provider, mut model, system_prompt, tools_mode, tools, routing_mode, routing_rules, all_settings) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         let agent_id: String = conn
             .query_row(
@@ -1276,21 +1500,23 @@ pub async fn send_message(
             )
             .map_err(|_| "Session not found".to_string())?;
 
-        let (provider, model, system_prompt, tools_mode) = conn.query_row(
-            "SELECT provider, model, system_prompt, tools_mode FROM agents WHERE id = ?1",
+        let (provider, model, system_prompt, tools_mode, tools_json, routing_mode, routing_rules_json): (String, String, String, String, String, String, String) = conn.query_row(
+            "SELECT provider, model, system_prompt, tools_mode, tools, routing_mode, routing_rules FROM agents WHERE id = ?1",
             params![agent_id],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, String>(3)?)),
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?)),
         )
         .map_err(|_| "Agent not found".to_string())?;
 
-        // Load provider settings (e.g. provider.google.api_key, provider.azure_openai.endpoint)
-        let prefix = format!("provider.{}.", provider);
+        let tools: Vec<String> = serde_json::from_str(&tools_json).unwrap_or_default();
+        let routing_rules: Vec<serde_json::Value> = serde_json::from_str(&routing_rules_json).unwrap_or_default();
+
+        // Load ALL settings (needed for routing to check available providers)
+        let mut all_settings = std::collections::HashMap::new();
         let mut stmt = conn
-            .prepare("SELECT key, value FROM settings WHERE key LIKE ?1")
+            .prepare("SELECT key, value FROM settings")
             .map_err(|e| e.to_string())?;
-        let mut config = serde_json::Map::new();
         let rows = stmt
-            .query_map(params![format!("{}%", prefix)], |row| {
+            .query_map([], |row| {
                 let key: String = row.get(0)?;
                 let value: String = row.get(1)?;
                 Ok((key, value))
@@ -1298,14 +1524,45 @@ pub async fn send_message(
             .map_err(|e| e.to_string())?;
         for row in rows {
             let (key, value) = row.map_err(|e| e.to_string())?;
-            // Strip prefix: "provider.google.api_key" → "api_key"
-            let field = key.strip_prefix(&prefix).unwrap_or(&key);
-            // Strip JSON quotes if the value was stored as a JSON string
-            let clean_value = value.trim_matches('"').to_string();
-            config.insert(field.to_string(), serde_json::Value::String(clean_value));
+            all_settings.insert(key, value);
         }
 
-        (provider, model, system_prompt, tools_mode, config)
+        (provider, model, system_prompt, tools_mode, tools, routing_mode, routing_rules, all_settings)
+    };
+
+    // 1b. Smart Router — pick the best model for this request
+    let available_providers = crate::routing::get_available_providers(&all_settings);
+    let context_tokens = request.content.len() / 4; // heuristic
+    let budget_remaining_pct = get_budget_remaining_pct(&db, &all_settings);
+
+    let routing_decision = crate::routing::route(&crate::routing::RoutingInput {
+        message: &request.content,
+        context_tokens,
+        has_images: false, // TODO: detect image attachments
+        tools: &tools,
+        routing_mode: &routing_mode,
+        routing_rules: &routing_rules,
+        default_provider: &provider,
+        default_model: &model,
+        budget_remaining_pct,
+        available_providers: &available_providers,
+    });
+
+    // Apply routing decision
+    provider = routing_decision.provider.clone();
+    model = routing_decision.model.clone();
+
+    // Build provider config from all_settings for the routed provider
+    let provider_config = {
+        let prefix = format!("provider.{}.", provider);
+        let mut config = serde_json::Map::new();
+        for (k, v) in &all_settings {
+            if let Some(field) = k.strip_prefix(&prefix) {
+                let clean_value = v.trim_matches('"').to_string();
+                config.insert(field.to_string(), serde_json::Value::String(clean_value));
+            }
+        }
+        config
     };
 
     // 2. Get next sequence number
@@ -1371,6 +1628,19 @@ pub async fn send_message(
     // 5. Record events
     record_event(&db, &request.session_id, "message.user", "ui.user",
         serde_json::json!({ "content": request.content }))?;
+
+    // Emit routing decision event (before LLM call)
+    if routing_mode != "single" {
+        record_event(&db, &request.session_id, "llm.routed", "desktop.router",
+            serde_json::json!({
+                "chosen_model": routing_decision.model,
+                "chosen_provider": routing_decision.provider,
+                "reason": routing_decision.reason,
+                "estimated_savings": routing_decision.estimated_savings,
+                "alternatives_considered": routing_decision.alternatives_considered,
+            }))?;
+    }
+
     record_event(&db, &request.session_id, "llm.request.started", "desktop.chat",
         serde_json::json!({ "model": model, "provider": provider }))?;
 
@@ -1516,6 +1786,37 @@ pub async fn send_message(
     record_event(&db, &request.session_id, "message.assistant", "desktop.chat",
         serde_json::json!({ "content": content, "model": response_model }))?;
 
+    // 9. Check budget thresholds and emit warning events
+    let budget_pct_after = get_budget_remaining_pct(&db, &all_settings);
+    if budget_pct_after < 100.0 {
+        // Only emit if a budget is actually set (< 100% means budget is configured)
+        let used_pct = 100.0 - budget_pct_after;
+        let threshold = if used_pct >= 100.0 {
+            Some("100_percent")
+        } else if used_pct >= 80.0 && budget_remaining_pct > 20.0 {
+            Some("80_percent")
+        } else if used_pct >= 50.0 && budget_remaining_pct > 50.0 {
+            Some("50_percent")
+        } else {
+            None
+        };
+
+        if let Some(level) = threshold {
+            let limit = all_settings
+                .get("budget.monthly_limit")
+                .and_then(|v| v.trim_matches('"').parse::<f64>().ok())
+                .unwrap_or(0.0);
+            let used_amount = get_current_month_cost(&db).unwrap_or(0.0);
+            let _ = record_event(&db, &request.session_id, "budget.warning", "desktop.budget",
+                serde_json::json!({
+                    "level": level,
+                    "budget": limit,
+                    "used": used_amount,
+                    "remaining": (limit - used_amount).max(0.0),
+                }));
+        }
+    }
+
     Ok(SendMessageResponse { user_message, assistant_message })
 }
 
@@ -1614,6 +1915,46 @@ pub fn record_event_db(
         payload,
         cost_usd,
     })
+}
+
+// ============================================
+// BUDGET HELPERS
+// ============================================
+
+/// Get budget remaining percentage (0-100). Returns 100 if no budget set.
+fn get_budget_remaining_pct(
+    db: &tauri::State<'_, Database>,
+    all_settings: &std::collections::HashMap<String, String>,
+) -> f64 {
+    let limit = all_settings
+        .get("budget.monthly_limit")
+        .and_then(|v| v.trim_matches('"').parse::<f64>().ok())
+        .unwrap_or(0.0);
+
+    if limit <= 0.0 {
+        return 100.0; // No budget set
+    }
+
+    let used = get_current_month_cost(db).unwrap_or(0.0);
+    let remaining = (limit - used).max(0.0);
+    (remaining / limit) * 100.0
+}
+
+fn get_current_month_cost(db: &tauri::State<'_, Database>) -> Result<f64, String> {
+    let conn = db.conn.lock().map_err(|e| e.to_string())?;
+    let now = chrono::Utc::now();
+    let month_start = format!("{}-{:02}-01T00:00:00.000Z", now.year(), now.month());
+
+    let cost: f64 = conn
+        .query_row(
+            "SELECT COALESCE(SUM(cost_usd), 0.0) FROM events
+             WHERE type = 'llm.response.completed' AND ts >= ?1",
+            params![month_start],
+            |row| row.get(0),
+        )
+        .unwrap_or(0.0);
+
+    Ok(cost)
 }
 
 // ============================================

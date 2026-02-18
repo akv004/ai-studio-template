@@ -1,7 +1,7 @@
 import {
     Search, Download, Loader2, MessageSquare, Brain, Wrench,
     AlertCircle, Clock, Zap, DollarSign, Hash, Cpu, Copy, Check,
-    GitBranch, Play, FileText, ChevronRight, ChevronDown,
+    GitBranch, Play, FileText, ChevronRight, ChevronDown, Route, Wallet,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore, type StudioEvent } from '../../state/store';
@@ -10,13 +10,15 @@ import { useAppStore, type StudioEvent } from '../../state/store';
 // COLOR SYSTEM (per agent-inspector.md spec)
 // ============================================
 
-type EventCategory = 'message' | 'llm' | 'tool' | 'session' | 'error';
+type EventCategory = 'message' | 'llm' | 'tool' | 'session' | 'error' | 'routing' | 'budget';
 
 function getEventCategory(type: string): EventCategory {
     if (type.startsWith('message.')) return 'message';
     if (type === 'llm.response.error') return 'error';
+    if (type === 'llm.routed') return 'routing';
     if (type.startsWith('llm.')) return 'llm';
     if (type.startsWith('tool.')) return 'tool';
+    if (type.startsWith('budget.')) return 'budget';
     if (type.startsWith('session.')) return 'session';
     return 'session';
 }
@@ -27,6 +29,8 @@ const categoryIcons: Record<EventCategory, typeof MessageSquare> = {
     tool: Wrench,
     session: Zap,
     error: AlertCircle,
+    routing: Route,
+    budget: Wallet,
 };
 
 // Finer-grained colors for specific event types
@@ -42,6 +46,8 @@ function getEventColor(type: string): string {
         case 'tool.completed': return '#22C55E';
         case 'tool.rejected': return '#EF4444';
         case 'tool.denied': return '#EF4444';
+        case 'llm.routed': return '#F59E0B';
+        case 'budget.warning': return '#F97316';
         case 'session.started': return '#6B7280';
         case 'session.ended': return '#6B7280';
         default: return '#6B7280';
@@ -52,13 +58,14 @@ function getEventColor(type: string): string {
 // FILTERS
 // ============================================
 
-type FilterId = 'all' | 'messages' | 'llm' | 'tools' | 'errors';
+type FilterId = 'all' | 'messages' | 'llm' | 'tools' | 'routing' | 'errors';
 
 const FILTERS: { id: FilterId; label: string; match: (type: string) => boolean }[] = [
     { id: 'all', label: 'All', match: () => true },
     { id: 'messages', label: 'Messages', match: (t) => t.startsWith('message.') },
-    { id: 'llm', label: 'LLM', match: (t) => t.startsWith('llm.') },
+    { id: 'llm', label: 'LLM', match: (t) => t.startsWith('llm.') && t !== 'llm.routed' },
     { id: 'tools', label: 'Tools', match: (t) => t.startsWith('tool.') },
+    { id: 'routing', label: 'Routing', match: (t) => t === 'llm.routed' || t.startsWith('budget.') },
     { id: 'errors', label: 'Errors', match: (t) => t.includes('error') || t.includes('denied') || t.includes('rejected') },
 ];
 
@@ -95,6 +102,8 @@ function eventLabel(type: string): string {
         case 'tool.approved': return 'Tool Approved';
         case 'tool.completed': return 'Tool Completed';
         case 'tool.rejected': return 'Tool Denied';
+        case 'llm.routed': return 'Model Routed';
+        case 'budget.warning': return 'Budget Warning';
         case 'session.started': return 'Session Started';
         case 'session.ended': return 'Session Ended';
         default: return type;
@@ -119,6 +128,16 @@ function eventSummary(event: StudioEvent): string {
         }
         case 'llm.response.error':
             return (p.error as string) || 'Unknown error';
+        case 'llm.routed': {
+            const chosen = (p.chosen_model as string) || (p.model as string) || 'unknown';
+            const reason = (p.reason as string) || '';
+            const savings = (p.estimated_savings as number) || 0;
+            return `→ ${chosen}${reason ? ` (${reason})` : ''}${savings > 0 ? ` — saved $${savings.toFixed(4)}` : ''}`;
+        }
+        case 'budget.warning': {
+            const pct = (p.threshold as number) || 0;
+            return `${pct}% of monthly budget used`;
+        }
         case 'tool.requested':
         case 'tool.approved':
         case 'tool.completed':
@@ -174,8 +193,8 @@ function groupEvents(events: StudioEvent[]): EventGroup[] {
             }
         }
 
-        // LLM group: llm.request.started followed by llm.response.*
-        if (ev.type === 'llm.request.started') {
+        // LLM group: llm.routed or llm.request.started followed by llm.response.*
+        if (ev.type === 'llm.routed' || ev.type === 'llm.request.started') {
             const batch = [ev];
             let j = i + 1;
             while (j < events.length && events[j].type.startsWith('llm.')) {
@@ -299,12 +318,19 @@ function EventDetail({ event, sessionId, onBranch }: {
             {event.type === 'llm.response.error' && (
                 <ErrorDetail payload={p} />
             )}
+            {event.type === 'llm.routed' && (
+                <RoutingDetail payload={p} />
+            )}
+            {event.type === 'budget.warning' && (
+                <BudgetWarningDetail payload={p} />
+            )}
             {event.type.startsWith('tool.') && (
                 <ToolDetail payload={p} type={event.type} />
             )}
             {/* Fallback: raw payload for unknown types */}
             {!['message.user', 'message.assistant', 'llm.request.started',
-              'llm.response.completed', 'llm.response.error'].includes(event.type) &&
+              'llm.response.completed', 'llm.response.error', 'llm.routed',
+              'budget.warning'].includes(event.type) &&
               !event.type.startsWith('tool.') && (
                 <RawPayload payload={p} />
             )}
@@ -447,6 +473,71 @@ function ToolDetail({ payload, type }: { payload: Record<string, unknown>; type:
             {(type === 'tool.rejected' || type === 'tool.denied') && (
                 <div className="text-xs text-red-400">Tool execution was denied.</div>
             )}
+        </div>
+    );
+}
+
+function RoutingDetail({ payload }: { payload: Record<string, unknown> }) {
+    const chosenModel = String(payload.chosen_model || payload.model || '—');
+    const chosenProvider = String(payload.chosen_provider || payload.provider || '—');
+    const reason = String(payload.reason || '—');
+    const savings = (payload.estimated_savings as number) || 0;
+    const originalModel = String(payload.original_model || '—');
+    const alternatives = (payload.alternatives as Array<Record<string, unknown>>) || [];
+
+    return (
+        <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+                <MetricCard label="Chosen Model" value={chosenModel} accent />
+                <MetricCard label="Provider" value={chosenProvider} />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+                <MetricCard label="Reason" value={reason} />
+                <MetricCard label="Original Model" value={originalModel} />
+                <MetricCard label="Est. Savings" value={savings > 0 ? `$${savings.toFixed(4)}` : '—'} accent={savings > 0} />
+            </div>
+            {alternatives.length > 0 && (
+                <CollapsibleSection title={`Alternatives considered (${alternatives.length})`}>
+                    <div className="space-y-1">
+                        {alternatives.map((alt, i) => (
+                            <div key={i} className="flex items-center gap-2 text-xs">
+                                <span className="font-mono text-[var(--text-secondary)]">{String(alt.model || alt.provider || '?')}</span>
+                                {alt.reason != null && <span className="text-[var(--text-muted)]">— {String(alt.reason)}</span>}
+                            </div>
+                        ))}
+                    </div>
+                </CollapsibleSection>
+            )}
+        </div>
+    );
+}
+
+function BudgetWarningDetail({ payload }: { payload: Record<string, unknown> }) {
+    const threshold = (payload.threshold as number) || 0;
+    const currentCost = (payload.current_cost as number) || 0;
+    const limit = (payload.budget_limit as number) || 0;
+
+    const barColor = threshold >= 100 ? '#EF4444' : threshold >= 80 ? '#F97316' : '#EAB308';
+
+    return (
+        <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-3">
+                <MetricCard label="Threshold" value={`${threshold}%`} accent />
+                <MetricCard label="Current Cost" value={`$${currentCost.toFixed(2)}`} />
+                <MetricCard label="Monthly Limit" value={limit > 0 ? `$${limit.toFixed(2)}` : 'None'} />
+            </div>
+            <div className="p-3 rounded-lg bg-[var(--bg-tertiary)]">
+                <div className="flex justify-between text-xs text-[var(--text-muted)] mb-1">
+                    <span>Budget Usage</span>
+                    <span>{Math.min(threshold, 100)}%</span>
+                </div>
+                <div className="w-full h-2 bg-[var(--bg-primary)] rounded-full overflow-hidden">
+                    <div
+                        className="h-full rounded-full transition-all"
+                        style={{ width: `${Math.min(threshold, 100)}%`, background: barColor }}
+                    />
+                </div>
+            </div>
         </div>
     );
 }
@@ -625,8 +716,9 @@ export function InspectorPage() {
     const filterCounts: Record<FilterId, number> = {
         all: events.length,
         messages: events.filter(e => e.type.startsWith('message.')).length,
-        llm: events.filter(e => e.type.startsWith('llm.')).length,
+        llm: events.filter(e => e.type.startsWith('llm.') && e.type !== 'llm.routed').length,
         tools: events.filter(e => e.type.startsWith('tool.')).length,
+        routing: events.filter(e => e.type === 'llm.routed' || e.type.startsWith('budget.')).length,
         errors: events.filter(e => e.type.includes('error') || e.type.includes('denied')).length,
     };
 
@@ -1077,6 +1169,24 @@ export function InspectorPage() {
                                     label="Models"
                                     value={sessionStats.modelsUsed.join(', ')}
                                 />
+                            </>
+                        )}
+                        {sessionStats.totalRoutingDecisions > 0 && (
+                            <>
+                                <div className="h-4 w-px bg-[var(--border-subtle)]" />
+                                <StatItem
+                                    icon={<Route className="w-3.5 h-3.5" />}
+                                    label="Routed"
+                                    value={String(sessionStats.totalRoutingDecisions)}
+                                />
+                                {sessionStats.totalEstimatedSavings > 0 && (
+                                    <StatItem
+                                        icon={<Wallet className="w-3.5 h-3.5" />}
+                                        label="Saved"
+                                        value={`$${sessionStats.totalEstimatedSavings.toFixed(4)}`}
+                                        accent
+                                    />
+                                )}
                             </>
                         )}
                     </div>

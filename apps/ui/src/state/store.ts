@@ -8,6 +8,7 @@ import type {
     ApprovalRule, CreateApprovalRuleRequest, UpdateApprovalRuleRequest,
     Workflow, WorkflowSummary, CreateWorkflowRequest, UpdateWorkflowRequest,
     ValidationResult, WorkflowRunResult, NodeExecutionState, NodeExecutionStatus,
+    BudgetStatus,
 } from '@ai-studio/shared';
 
 // ============================================
@@ -155,6 +156,12 @@ interface AppState {
     runWorkflow: (workflowId: string, inputs: Record<string, unknown>) => Promise<WorkflowRunResult>;
     setNodeState: (nodeId: string, status: NodeExecutionStatus, extra?: Partial<NodeExecutionState>) => void;
     resetNodeStates: () => void;
+
+    // Budget
+    budgetStatus: BudgetStatus | null;
+    budgetLoading: boolean;
+    fetchBudgetStatus: () => Promise<void>;
+    setBudget: (monthlyLimit: number | null, exhaustedBehavior: string) => Promise<void>;
 
     // Inspector navigation (set by Sessions "Inspect" button)
     inspectorSessionId: string | null;
@@ -685,6 +692,32 @@ export const useAppStore = create<AppState>((set, get) => ({
     // System Info
     systemInfo: null,
     setSystemInfo: (info) => set({ systemInfo: info }),
+
+    // Budget
+    budgetStatus: null,
+    budgetLoading: false,
+    fetchBudgetStatus: async () => {
+        set({ budgetLoading: true });
+        try {
+            const status = await invoke<BudgetStatus>('get_budget_status');
+            set({ budgetStatus: status, budgetLoading: false });
+        } catch (e) {
+            set({ budgetLoading: false, error: `Failed to load budget: ${e}` });
+        }
+    },
+    setBudget: async (monthlyLimit, exhaustedBehavior) => {
+        try {
+            await invoke<void>('set_budget', {
+                request: { monthlyLimit, exhaustedBehavior },
+            });
+            get().addToast('Budget updated', 'success');
+            get().fetchBudgetStatus();
+        } catch (e) {
+            const msg = `Failed to save budget: ${e}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
+    },
 
     // Inspector navigation
     inspectorSessionId: null,

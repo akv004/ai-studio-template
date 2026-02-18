@@ -5,6 +5,7 @@
 
 mod commands;
 mod db;
+mod routing;
 mod sidecar;
 mod system;
 
@@ -77,6 +78,9 @@ pub fn run() {
             // Settings
             get_all_settings,
             set_setting,
+            // Budget
+            get_budget_status,
+            set_budget,
             // Provider Keys
             list_provider_keys,
             set_provider_key,

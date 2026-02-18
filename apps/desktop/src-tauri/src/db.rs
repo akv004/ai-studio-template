@@ -81,6 +81,9 @@ impl Database {
         if version < 5 {
             self.migrate_v5(&conn)?;
         }
+        if version < 6 {
+            self.migrate_v6(&conn)?;
+        }
 
         Ok(())
     }
@@ -316,6 +319,28 @@ impl Database {
         ).map_err(|e| format!("Migration v5 failed: {e}"))?;
 
         println!("[db] Migrated to schema v5 (workflows table for Node Editor)");
+        Ok(())
+    }
+
+    /// V6: Hybrid Intelligence — routing_mode and routing_rules on agents
+    fn migrate_v6(&self, conn: &Connection) -> Result<(), String> {
+        let alter_stmts = [
+            "ALTER TABLE agents ADD COLUMN routing_mode TEXT NOT NULL DEFAULT 'single'",
+            "ALTER TABLE agents ADD COLUMN routing_rules TEXT NOT NULL DEFAULT '[]'",
+        ];
+        for stmt in &alter_stmts {
+            match conn.execute(stmt, []) {
+                Ok(_) => {}
+                Err(e) if e.to_string().contains("duplicate column") => {}
+                Err(e) => return Err(format!("Migration v6 ALTER failed: {e}")),
+            }
+        }
+
+        conn.execute_batch(
+            "INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '6');"
+        ).map_err(|e| format!("Migration v6 failed: {e}"))?;
+
+        println!("[db] Migrated to schema v6 (hybrid intelligence routing)");
         Ok(())
     }
 }

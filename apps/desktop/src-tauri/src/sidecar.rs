@@ -429,6 +429,18 @@ impl Default for ApprovalManager {
     }
 }
 
+impl ApprovalManager {
+    /// Register a pending approval and return its receiver.
+    pub async fn register(&self, id: String, tx: oneshot::Sender<bool>) {
+        self.pending.lock().await.insert(id, tx);
+    }
+
+    /// Remove a pending approval (cleanup after timeout/response).
+    pub async fn remove(&self, id: &str) {
+        self.pending.lock().await.remove(id);
+    }
+}
+
 #[tauri::command]
 pub async fn sidecar_start(app: AppHandle, sidecar: State<'_, SidecarManager>) -> Result<SidecarStatus, String> {
     sidecar.start(&app).await

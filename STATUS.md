@@ -35,7 +35,7 @@
 | Node editor architecture review | `node-editor.md` | DONE |
 | CONTRIBUTING.md | — | DONE |
 | Node editor foundation (3A) | `node-editor.md` | DONE |
-| Node editor execution (3B) | `node-editor.md` | TODO |
+| Node editor execution (3B) | `node-editor.md` | DONE |
 | Node editor polish (3C) | `node-editor.md` | TODO |
 | Hybrid intelligence routing | `hybrid-intelligence.md` | TODO |
 | Plugin system | `phase-plan.md` | TODO |
@@ -65,7 +65,7 @@
 
 **Phase 2** (COMPLETE): Error handling polish + toasts (e4a8567). Agents schema alignment (8d370f0). Sidecar error events (30cd467). Onboarding wizard (b786c8b). Session branching (d3f22d9). Session branching review fixes (5778124). Inspector improvements (0a5895c).
 
-**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d).
+**Phase 3** (IN PROGRESS): CONTRIBUTING.md (fe8ba6a). Node editor spec. Node editor review triaged (Gemini 3 Pro — 4/5 items fixed in spec, 1 deferred to 3B). **3A foundation DONE**: Schema v5 + workflow CRUD (3e6c277), Node Editor UI — 8 custom nodes, React Flow canvas, palette, config panel (d2eb98d). **3B execution DONE**: DAG walker engine, 7 node executors, validation, live node states, approval dialog, run button + input form.
 
 Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi-turn tool calling, event-sourced persistence, WS bridge, cost calc (Claude/GPT/Gemini/local), Inspector (timeline/detail/stats/filters/export/keyboard nav/grouping/actions), Runs (async bg execution + UI), DB wipe, all CRUD UIs, Zustand→IPC store, toast notification system, full error handling, onboarding wizard, session branching, peer review workflow.
 
@@ -102,18 +102,23 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-15 (session 12)
+**Date**: 2026-02-17 (session 13)
 **What happened**:
-- **Phase 3A COMPLETE** — Node editor foundation built end-to-end:
-  - Schema v5 migration (workflows table) — `3e6c277`
-  - 6 Rust CRUD commands (list/get/create/update/delete/duplicate) — `3e6c277`
-  - TypeScript types + Zustand store (full workflow slice) — `3e6c277`
-  - React Flow installed (@xyflow/react) — `3e6c277`
-  - NodeEditorPage: 8 custom nodes, React Flow canvas, drag-and-drop palette, config panel, dark theme — `d2eb98d`
-  - Sidebar + keyboard shortcut (⌘5) + command palette integration
-- Triaged ChatGPT Codex scan (6 findings): 4 false positives, 2 valid low-priority fixes applied
-  - Marked `competitive-roadmap.md` as LEGACY
-  - Added workflow commands to `api-contracts.md` (bumped to v3.0)
+- Triaged Codex (GPT-5) runtime review — 4 accepted, 4 deferred to 3C (`deb6c3b`)
+  - R1: Fixed duplicate user message in chat context (sidecar history hydration)
+  - R2: Fixed run cancellation not enforced (status guard on UPDATE)
+  - R3: Fixed local provider bootstrap (accept base_url without api_key)
+  - R7: Fixed Inspector tool detail key mismatch (fallback lookups)
+- **Phase 3B COMPLETE** — Node editor execution engine (`19d6d00`):
+  - Chunk 1: Event infra + types (record_event_db, Rust structs, TS interfaces)
+  - Chunk 2: Workflow validation (cycle detection via Kahn's, Input/Output checks, orphans)
+  - Chunk 3: Core DAG walker — topological sort, sequential execution, template resolution
+  - Node executors: Input, Output, LLM (via /chat/direct), Transform (template), Router (LLM classify), Tool (via /tools/execute)
+  - Chunk 4: Tool + Router executors (built into Chunk 3)
+  - Chunk 5: Approval node (ApprovalManager register/remove, 5min timeout, workflow_approval_requested event)
+  - Chunk 6: Live node states + data preview (6 execution states, border colors, badges, output previews)
+  - Chunk 7: Run button + input form (modal with per-Input-node fields, approval dialog)
+  - Sidecar: Extended /chat/direct with api_key/base_url/system_prompt, added POST /tools/execute
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -129,7 +134,8 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 10: CONTRIBUTING.md + node editor spec (Phase 3 start)
 - Session 11: Node editor review triage (Gemini 3 Pro)
 - Session 12: Phase 3A foundation (3e6c277, d2eb98d) + Codex triage
+- Session 13: Codex runtime review triage (deb6c3b) + Phase 3B execution engine
 
 **Next session should**:
-1. Phase 3B: Node editor execution engine — DAG walker in Rust, LLM/tool node execution, live node states
-2. Or: Start hybrid intelligence routing if preferring breadth over depth
+1. Phase 3C: Node editor polish — templates, Inspector integration, agent-workflow linking
+2. Or: Start hybrid intelligence routing

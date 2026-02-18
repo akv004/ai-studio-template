@@ -21,9 +21,10 @@ import {
     Plus, Save, Play, Trash2, Copy, ChevronLeft,
     Loader2, RefreshCw, MessageSquare, Wrench, GitFork,
     ShieldCheck, Repeat, FileInput, FileOutput, Cpu,
+    Check, X, Clock,
 } from 'lucide-react';
 import { useAppStore } from '../../state/store';
-import type { Workflow, CreateWorkflowRequest } from '@ai-studio/shared';
+import type { Workflow, CreateWorkflowRequest, NodeExecutionStatus } from '@ai-studio/shared';
 
 // ============================================
 // NODE TYPE DEFINITIONS
@@ -74,6 +75,53 @@ const NODE_CATEGORIES: NodeCategory[] = [
 // CUSTOM NODE COMPONENTS
 // ============================================
 
+// Execution state visual config
+const execStateStyles: Record<NodeExecutionStatus, { border: string; icon: React.ElementType | null; label: string }> = {
+    idle: { border: '', icon: null, label: '' },
+    running: { border: '2px solid #3b82f6', icon: Loader2, label: 'Running' },
+    completed: { border: '2px solid #22c55e', icon: Check, label: 'Done' },
+    error: { border: '2px solid #ef4444', icon: X, label: 'Error' },
+    waiting: { border: '2px solid #eab308', icon: Clock, label: 'Waiting' },
+    skipped: { border: '2px dashed #6b7280', icon: null, label: 'Skipped' },
+};
+
+function ExecutionBadge({ nodeId }: { nodeId: string }) {
+    const state = useAppStore((s) => s.workflowNodeStates[nodeId]);
+    if (!state || state.status === 'idle') return null;
+    const style = execStateStyles[state.status];
+    const Icon = style.icon;
+    return (
+        <div className="absolute -top-2 -right-2 flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--bg-secondary)] border border-[var(--border-subtle)] z-10">
+            {Icon && <Icon size={10} className={state.status === 'running' ? 'animate-spin' : ''} />}
+            {style.label}
+        </div>
+    );
+}
+
+function OutputPreview({ nodeId }: { nodeId: string }) {
+    const state = useAppStore((s) => s.workflowNodeStates[nodeId]);
+    if (!state || state.status !== 'completed' || !state.output) return null;
+    return (
+        <div className="mt-1 text-[10px] text-[var(--text-muted)] truncate max-w-[160px] font-mono">
+            {state.output.slice(0, 80)}{state.output.length > 80 ? '...' : ''}
+        </div>
+    );
+}
+
+function useNodeExecBorder(nodeId: string): React.CSSProperties {
+    const state = useAppStore((s) => s.workflowNodeStates[nodeId]);
+    if (!state || state.status === 'idle') return {};
+    const style = execStateStyles[state.status];
+    if (!style.border) return {};
+    const [width, borderStyle, color] = style.border.split(' ');
+    return {
+        borderWidth: width,
+        borderStyle: borderStyle,
+        borderColor: color,
+        boxShadow: state.status === 'running' ? `0 0 8px ${color}40` : undefined,
+    };
+}
+
 const nodeColors: Record<string, string> = {
     input: '#22c55e',
     output: '#f59e0b',
@@ -85,9 +133,11 @@ const nodeColors: Record<string, string> = {
     subworkflow: '#06b6d4',
 };
 
-function InputNode({ data, selected }: { data: Record<string, unknown>; selected?: boolean }) {
+function InputNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''}`} style={{ borderColor: nodeColors.input }}>
+        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.input, ...execStyle }}>
+            <ExecutionBadge nodeId={id} />
             <div className="custom-node-header" style={{ background: nodeColors.input }}>
                 <FileInput size={14} /> INPUT
             </div>
@@ -95,15 +145,18 @@ function InputNode({ data, selected }: { data: Record<string, unknown>; selected
                 <div className="text-xs text-[var(--text-muted)]">Name</div>
                 <div className="text-sm font-medium">{(data.name as string) || 'untitled'}</div>
                 <div className="text-xs text-[var(--text-muted)] mt-1">Type: {(data.dataType as string) || 'text'}</div>
+                <OutputPreview nodeId={id} />
             </div>
             <Handle type="source" position={Position.Right} className="custom-handle" />
         </div>
     );
 }
 
-function OutputNode({ data, selected }: { data: Record<string, unknown>; selected?: boolean }) {
+function OutputNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''}`} style={{ borderColor: nodeColors.output }}>
+        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.output, ...execStyle }}>
+            <ExecutionBadge nodeId={id} />
             <div className="custom-node-header" style={{ background: nodeColors.output }}>
                 <FileOutput size={14} /> OUTPUT
             </div>
@@ -111,15 +164,18 @@ function OutputNode({ data, selected }: { data: Record<string, unknown>; selecte
                 <div className="text-xs text-[var(--text-muted)]">Name</div>
                 <div className="text-sm font-medium">{(data.name as string) || 'result'}</div>
                 <div className="text-xs text-[var(--text-muted)] mt-1">Format: {(data.format as string) || 'text'}</div>
+                <OutputPreview nodeId={id} />
             </div>
             <Handle type="target" position={Position.Left} className="custom-handle" />
         </div>
     );
 }
 
-function LLMNode({ data, selected }: { data: Record<string, unknown>; selected?: boolean }) {
+function LLMNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''}`} style={{ borderColor: nodeColors.llm }}>
+        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.llm, ...execStyle }}>
+            <ExecutionBadge nodeId={id} />
             <div className="custom-node-header" style={{ background: nodeColors.llm }}>
                 <Cpu size={14} /> LLM
             </div>
@@ -131,6 +187,7 @@ function LLMNode({ data, selected }: { data: Record<string, unknown>; selected?:
                         {(data.systemPrompt as string).slice(0, 40)}...
                     </div>
                 )}
+                <OutputPreview nodeId={id} />
             </div>
             <Handle type="target" position={Position.Left} id="prompt" className="custom-handle" />
             <Handle type="source" position={Position.Right} id="response" className="custom-handle" />
@@ -138,9 +195,11 @@ function LLMNode({ data, selected }: { data: Record<string, unknown>; selected?:
     );
 }
 
-function ToolNode({ data, selected }: { data: Record<string, unknown>; selected?: boolean }) {
+function ToolNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''}`} style={{ borderColor: nodeColors.tool }}>
+        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.tool, ...execStyle }}>
+            <ExecutionBadge nodeId={id} />
             <div className="custom-node-header" style={{ background: nodeColors.tool }}>
                 <Wrench size={14} /> TOOL
             </div>
@@ -149,6 +208,7 @@ function ToolNode({ data, selected }: { data: Record<string, unknown>; selected?
                 {Boolean(data.serverName) && (
                     <div className="text-xs text-[var(--text-muted)]">Server: {data.serverName as string}</div>
                 )}
+                <OutputPreview nodeId={id} />
             </div>
             <Handle type="target" position={Position.Left} className="custom-handle" />
             <Handle type="source" position={Position.Right} id="result" className="custom-handle" />
@@ -156,10 +216,12 @@ function ToolNode({ data, selected }: { data: Record<string, unknown>; selected?
     );
 }
 
-function RouterNode({ data, selected }: { data: Record<string, unknown>; selected?: boolean }) {
+function RouterNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+    const execStyle = useNodeExecBorder(id);
     const branches = (data.branches as string[]) || ['true', 'false'];
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''}`} style={{ borderColor: nodeColors.router }}>
+        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.router, ...execStyle }}>
+            <ExecutionBadge nodeId={id} />
             <div className="custom-node-header" style={{ background: nodeColors.router }}>
                 <GitFork size={14} /> ROUTER
             </div>
@@ -186,9 +248,11 @@ function RouterNode({ data, selected }: { data: Record<string, unknown>; selecte
     );
 }
 
-function ApprovalNode({ data, selected }: { data: Record<string, unknown>; selected?: boolean }) {
+function ApprovalNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''}`} style={{ borderColor: nodeColors.approval }}>
+        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.approval, ...execStyle }}>
+            <ExecutionBadge nodeId={id} />
             <div className="custom-node-header" style={{ background: nodeColors.approval, color: '#000' }}>
                 <ShieldCheck size={14} /> APPROVAL
             </div>
@@ -202,9 +266,11 @@ function ApprovalNode({ data, selected }: { data: Record<string, unknown>; selec
     );
 }
 
-function TransformNode({ data, selected }: { data: Record<string, unknown>; selected?: boolean }) {
+function TransformNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''}`} style={{ borderColor: nodeColors.transform }}>
+        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.transform, ...execStyle }}>
+            <ExecutionBadge nodeId={id} />
             <div className="custom-node-header" style={{ background: nodeColors.transform }}>
                 <Repeat size={14} /> TRANSFORM
             </div>
@@ -215,6 +281,7 @@ function TransformNode({ data, selected }: { data: Record<string, unknown>; sele
                         {(data.template as string).slice(0, 30)}
                     </div>
                 )}
+                <OutputPreview nodeId={id} />
             </div>
             <Handle type="target" position={Position.Left} className="custom-handle" />
             <Handle type="source" position={Position.Right} className="custom-handle" />
@@ -222,9 +289,11 @@ function TransformNode({ data, selected }: { data: Record<string, unknown>; sele
     );
 }
 
-function SubworkflowNode({ data, selected }: { data: Record<string, unknown>; selected?: boolean }) {
+function SubworkflowNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
+    const execStyle = useNodeExecBorder(id);
     return (
-        <div className={`custom-node ${selected ? 'selected' : ''}`} style={{ borderColor: nodeColors.subworkflow }}>
+        <div className={`custom-node ${selected ? 'selected' : ''} relative`} style={{ borderColor: nodeColors.subworkflow, ...execStyle }}>
+            <ExecutionBadge nodeId={id} />
             <div className="custom-node-header" style={{ background: nodeColors.subworkflow }}>
                 <MessageSquare size={14} /> SUBWORKFLOW
             </div>
@@ -518,7 +587,7 @@ function WorkflowCanvas({ workflow, onBack }: {
     workflow: Workflow;
     onBack: () => void;
 }) {
-    const { updateWorkflow, addToast } = useAppStore();
+    const { updateWorkflow, addToast, runWorkflow, setNodeState, resetNodeStates, workflowRunning } = useAppStore();
 
     // Parse graph from workflow
     const initialGraph = useMemo(() => {
@@ -539,12 +608,73 @@ function WorkflowCanvas({ workflow, onBack }: {
     const [selectedNode, setSelectedNode] = useState<Node | null>(null);
     const [saving, setSaving] = useState(false);
     const [hasChanges, setHasChanges] = useState(false);
+    const [showRunModal, setShowRunModal] = useState(false);
+    const [runInputs, setRunInputs] = useState<Record<string, unknown>>({});
+    const [approvalRequest, setApprovalRequest] = useState<{ id: string; message: string; data?: string } | null>(null);
     const reactFlowRef = useRef<HTMLDivElement>(null);
 
     // Track changes
     useEffect(() => {
         setHasChanges(true);
     }, [nodes, edges]);
+
+    // Listen for workflow node events to update execution state visuals
+    useEffect(() => {
+        let unlistenEvents: (() => void) | undefined;
+        let unlistenApproval: (() => void) | undefined;
+
+        (async () => {
+            try {
+                const { listen } = await import('@tauri-apps/api/event');
+
+                unlistenEvents = await listen<{
+                    type: string;
+                    payload: Record<string, unknown>;
+                }>('agent_event', (tauriEvent) => {
+                    const { type, payload } = tauriEvent.payload;
+                    if (!type?.startsWith('workflow.node.')) return;
+
+                    const nodeId = payload.node_id as string;
+                    if (!nodeId) return;
+
+                    if (type === 'workflow.node.started') {
+                        setNodeState(nodeId, 'running');
+                    } else if (type === 'workflow.node.completed') {
+                        setNodeState(nodeId, 'completed', {
+                            output: payload.output as string | undefined,
+                            durationMs: payload.duration_ms as number | undefined,
+                            tokens: payload.tokens as number | undefined,
+                            costUsd: payload.cost_usd as number | undefined,
+                        });
+                    } else if (type === 'workflow.node.error') {
+                        setNodeState(nodeId, 'error', {
+                            error: payload.error as string | undefined,
+                        });
+                    } else if (type === 'workflow.node.waiting') {
+                        setNodeState(nodeId, 'waiting');
+                    } else if (type === 'workflow.node.skipped') {
+                        setNodeState(nodeId, 'skipped');
+                    }
+                });
+
+                // Listen for approval requests from workflow execution
+                unlistenApproval = await listen<{
+                    id: string;
+                    message: string;
+                    data?: string;
+                }>('workflow_approval_requested', (event) => {
+                    setApprovalRequest(event.payload);
+                });
+            } catch {
+                // Not running under Tauri
+            }
+        })();
+
+        return () => {
+            unlistenEvents?.();
+            unlistenApproval?.();
+        };
+    }, [setNodeState]);
 
     // Handle new connections
     const onConnect: OnConnect = useCallback(
@@ -614,6 +744,43 @@ function WorkflowCanvas({ workflow, onBack }: {
         }
     }, [nodes, edges, workflow.id, updateWorkflow, addToast]);
 
+    // Handle approval decision
+    const handleApprovalDecision = useCallback(async (approve: boolean) => {
+        if (!approvalRequest) return;
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('approve_tool_request', { id: approvalRequest.id, approve });
+        } catch {
+            addToast('Failed to send approval decision', 'error');
+        }
+        setApprovalRequest(null);
+    }, [approvalRequest, addToast]);
+
+    // Handle run workflow
+    const handleRunClick = useCallback(() => {
+        // Build default inputs from Input nodes
+        const defaults: Record<string, unknown> = {};
+        nodes.forEach((n) => {
+            if (n.type === 'input') {
+                const name = (n.data.name as string) || 'input';
+                const defaultVal = n.data.default;
+                defaults[name] = defaultVal ?? '';
+            }
+        });
+        setRunInputs(defaults);
+        setShowRunModal(true);
+    }, [nodes]);
+
+    const handleRunSubmit = useCallback(async () => {
+        setShowRunModal(false);
+        resetNodeStates();
+        try {
+            await runWorkflow(workflow.id, runInputs);
+        } catch {
+            // Error handled by store
+        }
+    }, [workflow.id, runInputs, runWorkflow, resetNodeStates]);
+
     // Keyboard shortcuts
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
@@ -663,8 +830,14 @@ function WorkflowCanvas({ workflow, onBack }: {
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                         Save
                     </button>
-                    <button className="btn-primary" disabled title="Run (Phase 3B)">
-                        <Play size={14} /> Run
+                    <button
+                        className="btn-primary"
+                        disabled={workflowRunning || nodes.length === 0}
+                        onClick={handleRunClick}
+                        title={workflowRunning ? 'Workflow running...' : 'Run workflow'}
+                    >
+                        {workflowRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
+                        {workflowRunning ? 'Running...' : 'Run'}
                     </button>
                 </div>
             </div>
@@ -746,6 +919,88 @@ function WorkflowCanvas({ workflow, onBack }: {
                     </div>
                 )}
             </div>
+
+            {/* Run Input Modal */}
+            {showRunModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowRunModal(false)}>
+                    <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-6 w-[420px] max-h-[80vh] overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}>
+                        <h2 className="text-lg font-semibold mb-4">Run Workflow</h2>
+                        {Object.keys(runInputs).length === 0 ? (
+                            <p className="text-sm text-[var(--text-muted)] mb-4">
+                                This workflow has no Input nodes. It will run with no inputs.
+                            </p>
+                        ) : (
+                            <div className="space-y-3 mb-4">
+                                {Object.entries(runInputs).map(([name, value]) => {
+                                    const inputNode = nodes.find((n) => n.type === 'input' && (n.data.name as string) === name);
+                                    const dataType = (inputNode?.data.dataType as string) || 'text';
+                                    return (
+                                        <label key={name} className="block">
+                                            <span className="text-xs text-[var(--text-muted)] uppercase">{name}</span>
+                                            {dataType === 'boolean' ? (
+                                                <div className="mt-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(value)}
+                                                        onChange={(e) => setRunInputs((prev) => ({ ...prev, [name]: e.target.checked }))}
+                                                    />
+                                                </div>
+                                            ) : dataType === 'json' ? (
+                                                <textarea
+                                                    className="config-input min-h-[80px] font-mono text-xs"
+                                                    value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+                                                    onChange={(e) => setRunInputs((prev) => ({ ...prev, [name]: e.target.value }))}
+                                                    placeholder='{"key": "value"}'
+                                                />
+                                            ) : (
+                                                <input
+                                                    className="config-input"
+                                                    value={String(value ?? '')}
+                                                    onChange={(e) => setRunInputs((prev) => ({ ...prev, [name]: e.target.value }))}
+                                                    placeholder={`Enter ${name}...`}
+                                                />
+                                            )}
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <div className="flex justify-end gap-2">
+                            <button className="btn-secondary" onClick={() => setShowRunModal(false)}>Cancel</button>
+                            <button className="btn-primary" onClick={handleRunSubmit}>
+                                <Play size={14} /> Run
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Approval Dialog */}
+            {approvalRequest && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-6 w-[420px]">
+                        <div className="flex items-center gap-2 mb-3">
+                            <ShieldCheck size={20} className="text-yellow-400" />
+                            <h2 className="text-lg font-semibold">Approval Required</h2>
+                        </div>
+                        <p className="text-sm mb-3">{approvalRequest.message}</p>
+                        {approvalRequest.data && (
+                            <pre className="text-xs bg-[var(--bg-tertiary)] p-3 rounded mb-4 overflow-auto max-h-[200px] font-mono">
+                                {approvalRequest.data}
+                            </pre>
+                        )}
+                        <div className="flex justify-end gap-2">
+                            <button className="btn-secondary" onClick={() => handleApprovalDecision(false)}>
+                                <X size={14} /> Reject
+                            </button>
+                            <button className="btn-primary" onClick={() => handleApprovalDecision(true)}>
+                                <Check size={14} /> Approve
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

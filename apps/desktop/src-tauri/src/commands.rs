@@ -2702,10 +2702,9 @@ async fn execute_workflow(
                 sidecar, session_id, node_data, node_id, &incoming_value,
             ).await,
             "approval" => {
-                // Approval node — emit waiting event, handled in Chunk 5
-                let _ = record_event_db(db, session_id, "workflow.node.skipped", "desktop.workflow",
-                    serde_json::json!({ "node_id": node_id, "reason": "approval node not yet implemented" }));
-                Ok(incoming_value.unwrap_or(serde_json::Value::Null))
+                execute_approval_node(
+                    db, app, session_id, node_data, node_id, &incoming_value,
+                ).await
             }
             _ => {
                 // Unknown/subworkflow — skip
@@ -3104,6 +3103,67 @@ async fn execute_tool_node(
         .map_err(|e| format!("Tool execution failed for node '{}': {}", node_id, e))?;
 
     Ok(resp.get("result").cloned().unwrap_or(resp))
+}
+
+async fn execute_approval_node(
+    db: &Database,
+    app: &tauri::AppHandle,
+    session_id: &str,
+    node_data: &serde_json::Value,
+    node_id: &str,
+    incoming: &Option<serde_json::Value>,
+) -> Result<serde_json::Value, String> {
+    use tauri::Manager;
+
+    let message = node_data.get("message").and_then(|v| v.as_str())
+        .unwrap_or("Approval required to continue workflow");
+
+    let data_preview = incoming.as_ref().map(|v| match v.as_str() {
+        Some(s) => s[..s.len().min(500)].to_string(),
+        None => serde_json::to_string(v).unwrap_or_default()[..500.min(serde_json::to_string(v).unwrap_or_default().len())].to_string(),
+    }).unwrap_or_default();
+
+    // Emit waiting event
+    let _ = record_event_db(db, session_id, "workflow.node.waiting", "desktop.workflow",
+        serde_json::json!({ "node_id": node_id, "message": message }));
+    let _ = app.emit("agent_event", serde_json::json!({
+        "type": "workflow.node.waiting", "session_id": session_id,
+        "payload": { "node_id": node_id, "message": message },
+    }));
+
+    // Create approval channel
+    let approval_id = Uuid::new_v4().to_string();
+    let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
+
+    let approvals = app.state::<crate::sidecar::ApprovalManager>();
+    approvals.register(approval_id.clone(), tx).await;
+
+    // Emit event to UI requesting approval
+    let _ = app.emit("workflow_approval_requested", serde_json::json!({
+        "id": approval_id,
+        "nodeId": node_id,
+        "sessionId": session_id,
+        "message": message,
+        "dataPreview": data_preview,
+    }));
+
+    // Wait with 5 minute timeout
+    let approved = match tokio::time::timeout(
+        std::time::Duration::from_secs(300), rx,
+    ).await {
+        Ok(Ok(v)) => v,
+        Ok(Err(_)) => false, // channel dropped
+        Err(_) => false, // timeout
+    };
+
+    // Clean up
+    approvals.remove(&approval_id).await;
+
+    if approved {
+        Ok(incoming.clone().unwrap_or(serde_json::Value::Null))
+    } else {
+        Err(format!("Approval denied or timed out for node '{}'", node_id))
+    }
 }
 
 // ============================================

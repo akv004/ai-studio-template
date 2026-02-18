@@ -339,9 +339,10 @@ function defaultDataForType(type: string): Record<string, unknown> {
 // NODE CONFIG PANEL
 // ============================================
 
-function NodeConfigPanel({ node, onChange }: {
+function NodeConfigPanel({ node, onChange, onDelete }: {
     node: Node;
     onChange: (data: Record<string, unknown>) => void;
+    onDelete: () => void;
 }) {
     const data = node.data as Record<string, unknown>;
     const type = node.type || 'input';
@@ -397,8 +398,9 @@ function NodeConfigPanel({ node, onChange }: {
                 <>
                     <label className="block">
                         <span className="text-xs text-[var(--text-muted)]">Provider</span>
-                        <select className="config-input" value={(data.provider as string) || 'anthropic'}
+                        <select className="config-input" value={(data.provider as string) || ''}
                             onChange={(e) => update('provider', e.target.value)}>
+                            <option value="" disabled>Select provider...</option>
                             <option value="anthropic">Anthropic</option>
                             <option value="google">Google</option>
                             <option value="azure_openai">Azure OpenAI</option>
@@ -491,8 +493,11 @@ function NodeConfigPanel({ node, onChange }: {
                 </>
             )}
 
-            <div className="pt-2 text-xs text-[var(--text-muted)]">
-                Node ID: {node.id}
+            <div className="pt-2 flex items-center justify-between">
+                <span className="text-xs text-[var(--text-muted)]">ID: {node.id}</span>
+                <button className="btn-icon text-red-400 hover:text-red-300" title="Delete node" onClick={onDelete}>
+                    <Trash2 size={14} />
+                </button>
             </div>
         </div>
     );
@@ -809,6 +814,14 @@ function WorkflowCanvas({ workflow, onBack }: {
         setSelectedNode((prev) => prev ? { ...prev, data: newData } : null);
     }, [selectedNode, setNodes]);
 
+    // Delete selected node
+    const handleDeleteNode = useCallback(() => {
+        if (!selectedNode) return;
+        setNodes((nds) => nds.filter((n) => n.id !== selectedNode.id));
+        setEdges((eds) => eds.filter((e) => e.source !== selectedNode.id && e.target !== selectedNode.id));
+        setSelectedNode(null);
+    }, [selectedNode, setNodes, setEdges]);
+
     return (
         <div className="flex flex-col h-full">
             {/* Top bar */}
@@ -915,6 +928,7 @@ function WorkflowCanvas({ workflow, onBack }: {
                         <NodeConfigPanel
                             node={selectedNode}
                             onChange={handleNodeDataChange}
+                            onDelete={handleDeleteNode}
                         />
                     </div>
                 )}

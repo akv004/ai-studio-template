@@ -871,8 +871,17 @@ select.input option {
    NODE EDITOR — Custom Nodes + Canvas
    ======================================== */
 
+/* Override React Flow default white node background */
+.react-flow__node {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
 .custom-node {
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary);
   border: 2px solid var(--border-default);
   border-radius: 8px;
   min-width: 180px;

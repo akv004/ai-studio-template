@@ -325,7 +325,7 @@ function defaultDataForType(type: string): Record<string, unknown> {
     switch (type) {
         case 'input': return { name: 'input', dataType: 'text', default: '' };
         case 'output': return { name: 'result', format: 'text' };
-        case 'llm': return { provider: 'anthropic', model: 'claude-sonnet-4-5-20250929', systemPrompt: '', temperature: 0.7, maxTokens: 4096 };
+        case 'llm': return { provider: '', model: '', systemPrompt: '', temperature: 0.7, maxTokens: 4096 };
         case 'tool': return { toolName: '', serverName: '', approval: 'auto' };
         case 'router': return { mode: 'pattern', branches: ['true', 'false'] };
         case 'approval': return { message: 'Review before continuing', showData: true, timeout: null };
@@ -339,17 +339,33 @@ function defaultDataForType(type: string): Record<string, unknown> {
 // NODE CONFIG PANEL
 // ============================================
 
+const PROVIDER_MODELS: Record<string, string[]> = {
+    anthropic: ['claude-sonnet-4-5-20250929', 'claude-haiku-4-5-20251001', 'claude-opus-4-6'],
+    google: ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'],
+    azure_openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1'],
+    ollama: ['llama3.2', 'llama3.1', 'mistral', 'codellama', 'qwen2.5'],
+};
+
 function NodeConfigPanel({ node, onChange, onDelete }: {
     node: Node;
     onChange: (data: Record<string, unknown>) => void;
     onDelete: () => void;
 }) {
+    const nodeState = useAppStore((s) => s.workflowNodeStates[node.id]);
     const data = node.data as Record<string, unknown>;
     const type = node.type || 'input';
 
     const update = (field: string, value: unknown) => {
         onChange({ ...data, [field]: value });
     };
+
+    // Auto-correct model if it doesn't belong to the selected provider
+    const provider = (data.provider as string) || '';
+    const currentModel = (data.model as string) || '';
+    const validModels = PROVIDER_MODELS[provider] || [];
+    if (type === 'llm' && provider && currentModel && validModels.length > 0 && !validModels.includes(currentModel)) {
+        onChange({ ...data, model: validModels[0] });
+    }
 
     return (
         <div className="p-4 space-y-3">
@@ -399,7 +415,11 @@ function NodeConfigPanel({ node, onChange, onDelete }: {
                     <label className="block">
                         <span className="text-xs text-[var(--text-muted)]">Provider</span>
                         <select className="config-input" value={(data.provider as string) || ''}
-                            onChange={(e) => update('provider', e.target.value)}>
+                            onChange={(e) => {
+                                const p = e.target.value;
+                                const models = PROVIDER_MODELS[p] || [];
+                                onChange({ ...data, provider: p, model: models[0] || '' });
+                            }}>
                             <option value="" disabled>Select provider...</option>
                             <option value="anthropic">Anthropic</option>
                             <option value="google">Google</option>
@@ -409,8 +429,13 @@ function NodeConfigPanel({ node, onChange, onDelete }: {
                     </label>
                     <label className="block">
                         <span className="text-xs text-[var(--text-muted)]">Model</span>
-                        <input className="config-input" value={(data.model as string) || ''}
-                            onChange={(e) => update('model', e.target.value)} />
+                        <select className="config-input" value={(data.model as string) || ''}
+                            onChange={(e) => update('model', e.target.value)}>
+                            <option value="" disabled>Select model...</option>
+                            {validModels.map((m) => (
+                                <option key={m} value={m}>{m}</option>
+                            ))}
+                        </select>
                     </label>
                     <label className="block">
                         <span className="text-xs text-[var(--text-muted)]">System Prompt</span>
@@ -491,6 +516,35 @@ function NodeConfigPanel({ node, onChange, onDelete }: {
                             onChange={(e) => update('template', e.target.value)} />
                     </label>
                 </>
+            )}
+
+            {/* Last run output */}
+            {nodeState && nodeState.status === 'completed' && nodeState.output && (
+                <div className="pt-2 border-t border-[var(--border-subtle)]">
+                    <div className="flex items-center gap-1 mb-1">
+                        <Check size={12} className="text-green-400" />
+                        <span className="text-xs font-medium text-green-400">Output</span>
+                        {nodeState.durationMs != null && (
+                            <span className="text-[10px] text-[var(--text-muted)] ml-auto">
+                                {(nodeState.durationMs / 1000).toFixed(1)}s
+                            </span>
+                        )}
+                    </div>
+                    <pre className="text-xs text-[var(--text-secondary)] bg-[var(--bg-primary)] p-2 rounded max-h-[200px] overflow-y-auto whitespace-pre-wrap font-mono">
+                        {nodeState.output}
+                    </pre>
+                </div>
+            )}
+            {nodeState && nodeState.status === 'error' && nodeState.error && (
+                <div className="pt-2 border-t border-[var(--border-subtle)]">
+                    <div className="flex items-center gap-1 mb-1">
+                        <X size={12} className="text-red-400" />
+                        <span className="text-xs font-medium text-red-400">Error</span>
+                    </div>
+                    <pre className="text-xs text-red-300 bg-red-500/10 p-2 rounded max-h-[120px] overflow-y-auto whitespace-pre-wrap font-mono">
+                        {nodeState.error}
+                    </pre>
+                </div>
             )}
 
             <div className="pt-2 flex items-center justify-between">
@@ -588,11 +642,54 @@ function generateNodeId(type: string): string {
     return `${type}_${++nodeIdCounter}_${Date.now().toString(36)}`;
 }
 
+function formatRuntimeError(error: unknown): string {
+    if (typeof error === 'string') return error;
+    if (error instanceof Error) return error.message;
+    if (error && typeof error === 'object') {
+        const maybeError = error as { message?: unknown; error?: unknown; detail?: unknown };
+        if (typeof maybeError.message === 'string') return maybeError.message;
+        if (typeof maybeError.error === 'string') return maybeError.error;
+        if (typeof maybeError.detail === 'string') return maybeError.detail;
+        try {
+            return JSON.stringify(error);
+        } catch {
+            // fall through
+        }
+    }
+    return String(error);
+}
+
+interface LastRunDebugInfo {
+    workflowId: string;
+    sessionId: string | null;
+    status: string;
+    error: string;
+    timestamp: string;
+}
+
+interface LastRunResult {
+    sessionId: string;
+    tokens: number;
+    costUsd: number;
+    durationMs: number;
+    nodeCount: number;
+    outputs: Record<string, unknown>;
+}
+
 function WorkflowCanvas({ workflow, onBack }: {
     workflow: Workflow;
     onBack: () => void;
 }) {
-    const { updateWorkflow, addToast, runWorkflow, setNodeState, resetNodeStates, workflowRunning } = useAppStore();
+    const {
+        updateWorkflow,
+        addToast,
+        runWorkflow,
+        setNodeState,
+        resetNodeStates,
+        workflowRunning,
+        workflowNodeStates,
+        openInspector,
+    } = useAppStore();
 
     // Parse graph from workflow
     const initialGraph = useMemo(() => {
@@ -616,6 +713,8 @@ function WorkflowCanvas({ workflow, onBack }: {
     const [showRunModal, setShowRunModal] = useState(false);
     const [runInputs, setRunInputs] = useState<Record<string, unknown>>({});
     const [approvalRequest, setApprovalRequest] = useState<{ id: string; message: string; data?: string } | null>(null);
+    const [lastRunDebug, setLastRunDebug] = useState<LastRunDebugInfo | null>(null);
+    const [lastRunResult, setLastRunResult] = useState<LastRunResult | null>(null);
     const reactFlowRef = useRef<HTMLDivElement>(null);
 
     // Track changes
@@ -646,7 +745,7 @@ function WorkflowCanvas({ workflow, onBack }: {
                         setNodeState(nodeId, 'running');
                     } else if (type === 'workflow.node.completed') {
                         setNodeState(nodeId, 'completed', {
-                            output: payload.output as string | undefined,
+                            output: (payload.output_preview || payload.output) as string | undefined,
                             durationMs: payload.duration_ms as number | undefined,
                             tokens: payload.tokens as number | undefined,
                             costUsd: payload.cost_usd as number | undefined,
@@ -763,13 +862,17 @@ function WorkflowCanvas({ workflow, onBack }: {
 
     // Handle run workflow
     const handleRunClick = useCallback(() => {
-        // Build default inputs from Input nodes
+        // Build default inputs from Input nodes — include both node.id and name as keys
         const defaults: Record<string, unknown> = {};
         nodes.forEach((n) => {
             if (n.type === 'input') {
                 const name = (n.data.name as string) || 'input';
-                const defaultVal = n.data.default;
-                defaults[name] = defaultVal ?? '';
+                const defaultVal = n.data.default ?? '';
+                // Send both node ID key and name key so Rust can resolve either
+                defaults[n.id] = defaultVal;
+                if (name !== n.id) {
+                    defaults[name] = defaultVal;
+                }
             }
         });
         setRunInputs(defaults);
@@ -780,11 +883,70 @@ function WorkflowCanvas({ workflow, onBack }: {
         setShowRunModal(false);
         resetNodeStates();
         try {
-            await runWorkflow(workflow.id, runInputs);
-        } catch {
-            // Error handled by store
+            // Auto-save current graph before running so execution uses latest state
+            const graphJson = JSON.stringify({
+                nodes,
+                edges,
+                viewport: { x: 0, y: 0, zoom: 1 },
+            });
+            await updateWorkflow(workflow.id, { graphJson });
+            setHasChanges(false);
+
+            const result = await runWorkflow(workflow.id, runInputs);
+            if (result.status === 'completed') {
+                setLastRunDebug(null);
+                setLastRunResult({
+                    sessionId: result.sessionId,
+                    tokens: result.totalTokens,
+                    costUsd: result.totalCostUsd,
+                    durationMs: result.durationMs,
+                    nodeCount: result.nodeCount,
+                    outputs: result.outputs,
+                });
+                addToast(`Workflow completed in ${(result.durationMs / 1000).toFixed(1)}s (${result.totalTokens} tokens)`, 'success');
+                return;
+            }
+            setLastRunResult(null);
+            setLastRunDebug({
+                workflowId: workflow.id,
+                sessionId: result.sessionId || null,
+                status: result.status,
+                error: result.error || 'Workflow failed with unknown error',
+                timestamp: new Date().toISOString(),
+            });
+        } catch (e) {
+            setLastRunDebug({
+                workflowId: workflow.id,
+                sessionId: null,
+                status: 'invoke_error',
+                error: formatRuntimeError(e),
+                timestamp: new Date().toISOString(),
+            });
         }
-    }, [workflow.id, runInputs, runWorkflow, resetNodeStates]);
+    }, [workflow.id, nodes, edges, runInputs, runWorkflow, resetNodeStates, updateWorkflow, addToast]);
+
+    const handleCopyDebugLog = useCallback(async () => {
+        if (!lastRunDebug) return;
+        const failedNodes = Object.values(workflowNodeStates)
+            .filter((n) => n.status === 'error')
+            .map((n) => `${n.nodeId}: ${n.error || 'unknown node error'}`);
+        const debugText = [
+            '[AI Studio Workflow Run Error]',
+            `workflowId=${lastRunDebug.workflowId}`,
+            `sessionId=${lastRunDebug.sessionId || 'n/a'}`,
+            `status=${lastRunDebug.status}`,
+            `time=${lastRunDebug.timestamp}`,
+            `error=${lastRunDebug.error}`,
+            `failedNodes=${failedNodes.length > 0 ? failedNodes.join(' | ') : 'none recorded'}`,
+        ].join('\n');
+
+        try {
+            await navigator.clipboard.writeText(debugText);
+            addToast('Workflow debug log copied', 'success');
+        } catch {
+            addToast('Failed to copy workflow debug log', 'error');
+        }
+    }, [lastRunDebug, workflowNodeStates, addToast]);
 
     // Keyboard shortcuts
     useEffect(() => {
@@ -854,6 +1016,65 @@ function WorkflowCanvas({ workflow, onBack }: {
                     </button>
                 </div>
             </div>
+
+            {lastRunResult && !lastRunDebug && (
+                <div className="mx-4 mt-3 p-3 rounded border border-green-500/60 bg-green-950/20">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <Check size={16} className="text-green-400" />
+                            <span className="text-sm font-medium text-green-300">Workflow completed</span>
+                            <span className="text-xs text-[var(--text-muted)]">
+                                {(lastRunResult.durationMs / 1000).toFixed(1)}s &middot; {lastRunResult.tokens} tokens &middot; {lastRunResult.nodeCount} nodes
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <button className="btn-secondary" onClick={() => openInspector(lastRunResult.sessionId)}>
+                                Open Inspector
+                            </button>
+                            <button className="btn-icon" onClick={() => setLastRunResult(null)} title="Dismiss">
+                                <X size={14} />
+                            </button>
+                        </div>
+                    </div>
+                    {Object.entries(lastRunResult.outputs).map(([key, value]) => (
+                        <div key={key} className="mt-2">
+                            <pre className="text-sm text-[var(--text-secondary)] bg-[var(--bg-primary)] p-3 rounded max-h-[300px] overflow-y-auto whitespace-pre-wrap font-mono">
+                                {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+                            </pre>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {lastRunDebug && (
+                <div className="mx-4 mt-3 p-3 rounded border border-red-500/60 bg-red-950/20">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="text-sm font-medium text-red-300">
+                            Last workflow run failed
+                        </div>
+                        <button className="btn-icon" onClick={() => setLastRunDebug(null)} title="Dismiss">
+                            <X size={14} />
+                        </button>
+                    </div>
+                    <div className="text-xs font-mono text-red-200 whitespace-pre-wrap break-words">
+                        {lastRunDebug.error}
+                    </div>
+                    <div className="text-[11px] text-[var(--text-muted)] mt-2 font-mono break-all">
+                        Session: {lastRunDebug.sessionId || 'n/a'}
+                    </div>
+                    <div className="flex items-center gap-2 mt-3">
+                        <button className="btn-secondary" onClick={handleCopyDebugLog}>
+                            <Copy size={14} />
+                            Copy Debug Log
+                        </button>
+                        {lastRunDebug.sessionId && (
+                            <button className="btn-secondary" onClick={() => openInspector(lastRunDebug.sessionId as string)}>
+                                Open Inspector
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {/* Main editor area */}
             <div className="flex flex-1 min-h-0">

@@ -40,6 +40,23 @@ async function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T
     return tauriInvoke<T>(cmd, args);
 }
 
+function formatInvokeError(error: unknown): string {
+    if (typeof error === 'string') return error;
+    if (error instanceof Error) return error.message;
+    if (error && typeof error === 'object') {
+        const maybeError = error as { message?: unknown; error?: unknown; detail?: unknown };
+        if (typeof maybeError.message === 'string') return maybeError.message;
+        if (typeof maybeError.error === 'string') return maybeError.error;
+        if (typeof maybeError.detail === 'string') return maybeError.detail;
+        try {
+            return JSON.stringify(error);
+        } catch {
+            // fall through
+        }
+    }
+    return String(error);
+}
+
 interface AppState {
     // Navigation
     activeModule: ModuleId;
@@ -635,14 +652,23 @@ export const useAppStore = create<AppState>((set, get) => ({
             if (result.status === 'completed') {
                 get().addToast(`Workflow completed in ${(result.durationMs / 1000).toFixed(1)}s`, 'success');
             } else {
-                get().addToast(`Workflow failed: ${result.error || 'unknown error'}`, 'error');
+                get().addToast(
+                    `Workflow failed (${result.sessionId}): ${result.error || 'unknown error'}`,
+                    'error',
+                );
+                console.error('[workflow.run.failed]', {
+                    workflowId,
+                    sessionId: result.sessionId,
+                    error: result.error || 'unknown error',
+                });
             }
             return result;
         } catch (e) {
             set({ workflowRunning: false });
-            const msg = `Workflow execution failed: ${e}`;
+            const msg = `Workflow execution failed: ${formatInvokeError(e)}`;
             set({ error: msg });
             get().addToast(msg, 'error');
+            console.error('[workflow.run.error]', { workflowId, inputs, error: formatInvokeError(e), raw: e });
             throw e;
         }
     },

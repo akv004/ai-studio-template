@@ -2441,24 +2441,52 @@ pub async fn run_workflow(
     app: tauri::AppHandle,
     request: RunWorkflowRequest,
 ) -> Result<WorkflowRunResult, String> {
+    eprintln!("[workflow] === RUN START === workflow_id={}, input_keys={:?}",
+        request.workflow_id, request.inputs.keys().collect::<Vec<_>>());
+
     // 1. Load workflow
-    let (workflow_name, graph_json) = {
+    let (workflow_name, graph_json, workflow_agent_id) = {
         let conn = db.conn.lock().map_err(|e| e.to_string())?;
         conn.query_row(
-            "SELECT name, graph_json FROM workflows WHERE id = ?1 AND is_archived = 0",
+            "SELECT name, graph_json, agent_id FROM workflows WHERE id = ?1 AND is_archived = 0",
             params![request.workflow_id],
-            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?)),
         )
-        .map_err(|e| format!("Workflow not found: {e}"))?
+        .map_err(|e| {
+            eprintln!("[workflow] ERROR: Workflow not found: {e}");
+            format!("Workflow not found: {e}")
+        })?
     };
+    eprintln!("[workflow] Loaded '{}', agent_id={:?}", workflow_name, workflow_agent_id);
 
     // 2. Validate
     let validation = validate_graph_json(&graph_json)?;
     if !validation.valid {
+        eprintln!("[workflow] ERROR: Validation failed: {}", validation.errors.join("; "));
         return Err(format!("Invalid workflow: {}", validation.errors.join("; ")));
     }
 
     // 3. Create a session for this workflow run
+    // Sessions require a valid agent_id (FK constraint). Use workflow's agent or first available.
+    let agent_id = match workflow_agent_id {
+        Some(ref id) if !id.is_empty() => {
+            eprintln!("[workflow] Using workflow agent_id: {}", id);
+            id.clone()
+        }
+        _ => {
+            let conn = db.conn.lock().map_err(|e| e.to_string())?;
+            let id = conn.query_row(
+                "SELECT id FROM agents WHERE is_archived = 0 ORDER BY created_at LIMIT 1",
+                [],
+                |row| row.get::<_, String>(0),
+            ).map_err(|_| {
+                eprintln!("[workflow] ERROR: No agents in database");
+                "No agents available. Create an agent first before running workflows.".to_string()
+            })?;
+            eprintln!("[workflow] Using fallback agent_id: {}", id);
+            id
+        }
+    };
     let session_id = Uuid::new_v4().to_string();
     let now = now_iso();
     {
@@ -2466,10 +2494,14 @@ pub async fn run_workflow(
         conn.execute(
             "INSERT INTO sessions (id, agent_id, title, status, created_at, updated_at)
              VALUES (?1, ?2, ?3, 'active', ?4, ?5)",
-            params![session_id, "", format!("Workflow: {}", workflow_name), now, now],
+            params![session_id, agent_id, format!("Workflow: {}", workflow_name), now, now],
         )
-        .map_err(|e| format!("Failed to create workflow session: {e}"))?;
+        .map_err(|e| {
+            eprintln!("[workflow] ERROR: Session creation failed: {e} (agent_id={})", agent_id);
+            format!("Failed to create workflow session: {e}")
+        })?;
     }
+    eprintln!("[workflow] Created session {}", session_id);
 
     // 4. Load provider config (for LLM nodes)
     let all_settings = {
@@ -2488,6 +2520,7 @@ pub async fn run_workflow(
         }
         settings
     };
+    eprintln!("[workflow] Loaded {} settings", all_settings.len());
 
     // 5. Spawn background execution
     let db_clone = db.inner().clone();
@@ -2503,8 +2536,21 @@ pub async fn run_workflow(
     });
 
     match result_handle.await {
-        Ok(result) => result,
-        Err(e) => Err(format!("Workflow execution panicked: {e}")),
+        Ok(result) => {
+            match &result {
+                Ok(r) => eprintln!("[workflow] === RUN DONE === status={}, tokens={}, cost=${:.4}, duration={}ms",
+                    r.status, r.total_tokens, r.total_cost_usd, r.duration_ms),
+                Err(e) => eprintln!("[workflow] === RUN FAILED === {}", e),
+            }
+            result
+        }
+        Err(e) => {
+            eprintln!(
+                "[workflow.run] panic workflow_id={} session_id={} error={}",
+                request.workflow_id, session_id, e
+            );
+            Err(format!("Workflow execution panicked: {e}"))
+        }
     }
 }
 
@@ -2551,7 +2597,27 @@ fn resolve_template(
                 };
             }
         }
+        // Single-part reference (no dot): e.g. {{input}}, {{node_id}}
+        if parts.len() == 1 {
+            // Check node outputs by ID
+            if let Some(val) = node_outputs.get(key) {
+                return match val.as_str() {
+                    Some(s) => s.to_string(),
+                    None => val.to_string(),
+                };
+            }
+            // "input" as shorthand: return first input value
+            if (key == "input" || key == "inputs") && !inputs.is_empty() {
+                let val = inputs.values().next().unwrap();
+                return match val.as_str() {
+                    Some(s) => s.to_string(),
+                    None => val.to_string(),
+                };
+            }
+        }
         // Unresolved — return placeholder as-is
+        eprintln!("[workflow] WARN: Unresolved template var '{}' (node_outputs={:?}, inputs={:?})",
+            key, node_outputs.keys().collect::<Vec<_>>(), inputs.keys().collect::<Vec<_>>());
         caps[0].to_string()
     }).to_string()
 }
@@ -2633,6 +2699,7 @@ async fn execute_workflow(
     }
 
     // Execute nodes in topological order
+    eprintln!("[workflow] Topological order: {:?}", topo_order);
     let mut node_outputs: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
     let mut workflow_outputs: std::collections::HashMap<String, serde_json::Value> = std::collections::HashMap::new();
     let mut total_tokens: i64 = 0;
@@ -2762,6 +2829,10 @@ async fn execute_workflow(
                 }));
             }
             Err(err) => {
+                eprintln!(
+                    "[workflow.node.error] session_id={} node_id={} node_type={} error={}",
+                    session_id, node_id, node_type, err
+                );
                 let _ = record_event_db(db, session_id, "workflow.node.error", "desktop.workflow",
                     serde_json::json!({
                         "node_id": node_id, "node_type": node_type,
@@ -2835,21 +2906,41 @@ fn execute_input_node(
     inputs: &std::collections::HashMap<String, serde_json::Value>,
 ) -> Result<serde_json::Value, String> {
     // Input node: reads from the workflow inputs map
-    // Try node_id first, then label from node data, then "input" key
-    let label = node_data.get("label").and_then(|v| v.as_str()).unwrap_or(node_id);
-    let input_name = node_data.get("inputName").and_then(|v| v.as_str()).unwrap_or(label);
+    // Try keys in order: node_id, inputName, name, label, "input"
+    let input_name = node_data
+        .get("inputName")
+        .and_then(|v| v.as_str())
+        .or_else(|| node_data.get("name").and_then(|v| v.as_str()))
+        .or_else(|| node_data.get("label").and_then(|v| v.as_str()))
+        .unwrap_or(node_id);
 
-    if let Some(val) = inputs.get(node_id) {
+    // Try all possible keys
+    let try_keys = [node_id, input_name, "input"];
+    for key in &try_keys {
+        if let Some(val) = inputs.get(*key) {
+            eprintln!("[workflow] Input node '{}': resolved via key '{}'", node_id, key);
+            return Ok(val.clone());
+        }
+    }
+
+    // Fallback: if only one input exists, use it regardless of key name
+    if inputs.len() == 1 {
+        let (key, val) = inputs.iter().next().unwrap();
+        eprintln!("[workflow] Input node '{}': single-input fallback (key='{}')", node_id, key);
         return Ok(val.clone());
     }
-    if let Some(val) = inputs.get(input_name) {
-        return Ok(val.clone());
-    }
+
     // Use default value if configured
-    if let Some(default_val) = node_data.get("defaultValue") {
+    if let Some(default_val) = node_data.get("defaultValue").or_else(|| node_data.get("default")) {
+        eprintln!("[workflow] Input node '{}': using default value", node_id);
         return Ok(default_val.clone());
     }
-    Err(format!("No input provided for Input node '{}' (expected key: '{}')", node_id, input_name))
+
+    let available: Vec<&String> = inputs.keys().collect();
+    Err(format!(
+        "No input provided for Input node '{}' (tried keys: {:?}, available: {:?})",
+        node_id, try_keys, available
+    ))
 }
 
 fn execute_output_node(
@@ -2878,6 +2969,7 @@ async fn execute_llm_node(
     let model = node_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
     let temperature = node_data.get("temperature").and_then(|v| v.as_f64()).unwrap_or(0.7);
     let system_prompt = node_data.get("systemPrompt").and_then(|v| v.as_str()).unwrap_or("");
+    eprintln!("[workflow] LLM node '{}': provider={}, model={}", node_id, provider_name, model);
 
     // Build the user prompt from template + incoming data
     let prompt_template = node_data.get("prompt").and_then(|v| v.as_str()).unwrap_or("{{input}}");
@@ -2892,6 +2984,8 @@ async fn execute_llm_node(
     } else {
         prompt_template.to_string()
     };
+    eprintln!("[workflow] LLM node '{}': prompt='{}' (template='{}')", node_id,
+        &prompt[..prompt.len().min(200)], prompt_template);
 
     // Load provider config from settings
     let prefix = format!("provider.{}.", provider_name);
@@ -2908,6 +3002,9 @@ async fn execute_llm_node(
             }
         }
     }
+
+    eprintln!("[workflow] LLM node '{}': calling /chat/direct (api_key={}, base_url={})",
+        node_id, if api_key.is_empty() { "none" } else { "set" }, if base_url.is_empty() { "none" } else { &base_url });
 
     // Build /chat/direct request
     let mut body = serde_json::json!({
@@ -2934,9 +3031,13 @@ async fn execute_llm_node(
         serde_json::json!({ "node_id": node_id, "model": model, "provider": provider_name }));
 
     let resp = sidecar.proxy_request("POST", "/chat/direct", Some(body)).await
-        .map_err(|e| format!("LLM call failed for node '{}': {}", node_id, e))?;
+        .map_err(|e| {
+            eprintln!("[workflow] ERROR: LLM call failed for node '{}': {}", node_id, e);
+            format!("LLM call failed for node '{}': {}", node_id, e)
+        })?;
 
     let content = resp.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    eprintln!("[workflow] LLM node '{}': response OK, content_len={}", node_id, content.len());
     let usage = resp.get("usage");
     let input_tokens = usage.and_then(|u| u.get("prompt_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
     let output_tokens = usage.and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);

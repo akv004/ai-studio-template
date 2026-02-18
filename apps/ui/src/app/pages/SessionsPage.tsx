@@ -55,7 +55,8 @@ export function SessionsPage() {
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
             handleSend();
         }
     };
@@ -257,7 +258,7 @@ export function SessionsPage() {
                             <input
                                 type="text"
                                 className="input flex-1"
-                                placeholder={selectedSession ? 'Send a message... (Ctrl+Enter)' : 'Select a session first'}
+                                placeholder={selectedSession ? 'Send a message... (Enter)' : 'Select a session first'}
                                 value={input}
                                 onChange={(e) => setInput(e.target.value)}
                                 onKeyDown={handleKeyDown}

@@ -102,35 +102,20 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-17 (session 14)
+**Date**: 2026-02-17 (session 15)
 **What happened**:
-- Collected Blender + Unreal design references for node editor visual polish (`a78091d`)
-  - 7 screenshots organized in `docs/design-references/node-editor/` with analysis README
-  - Draft visual polish spec created: `docs/specs/node-editor-visual-polish.md`
-- Added 17 Rust unit tests for validation + template resolution (`e72b080`)
-- Fixed multiple UI bugs found during user testing:
-  - White node background (React Flow default) — CSS override
-  - Empty provider dropdown — dark styling + auto-model on provider change
-  - Node delete button added to config panel
-  - Enter key to send in Sessions chat (was requiring Ctrl+Enter)
-  - FOREIGN KEY constraint on workflow session creation (agent_id fallback)
-  - Stale sidecar 401 errors (old PID lingering after hot-reload)
-- Cleaned up review statuses: node-editor-review and runtime-review both → Resolved
-- Removed duplicate screenshots from docs/screenshots/
-- **Codex is concurrently working on fixes** — code files (commands.rs, NodeEditorPage.tsx, etc.) may have pending changes
-
-**IMPORTANT — Uncommitted code changes**:
-- `commands.rs`: FK fix for workflow sessions, needs debug logging added
-- `NodeEditorPage.tsx`: Event listeners, approval dialog, run button, UI fixes
-- `SessionsPage.tsx`: Enter key to send
-- `index.css`: Dark node styling, select dropdown styling
-- `store.ts`: Execution state (workflowRunning, nodeStates, runWorkflow)
-- **Codex may be modifying these files** — re-read before editing
-
-**Blockers for end-to-end workflow test**:
-1. Need proper `eprintln!` debug logging in run_workflow/execute_workflow path
-2. Need to verify FK fix works after Rust rebuild
-3. Google provider (gemini-2.0-flash) must be configured in Settings before running
+- Fixed and tested end-to-end workflow execution (Input → LLM → Output) — **working!**
+- Fixed 6 bugs blocking workflow execution:
+  1. **Stale sidecar 401 (root cause fix)**: `sidecar.rs` `start()` now checks if we own a running child before reusing. Fresh starts (after hot-reload) kill orphaned processes via `fuser -k {port}/tcp`.
+  2. **FOREIGN KEY constraint**: Workflow sessions now use workflow's agent_id or fall back to first available agent.
+  3. **Template resolver**: `{{input}}` (single-part, no dot) was unresolved — added single-part reference handling.
+  4. **Input key resolution**: Backward-compatible with fallback chain: `node_id → inputName → "input" → single-input fallback`.
+  5. **Provider/model mismatch**: Model field changed from text input to provider-filtered dropdown with auto-correct.
+  6. **Output display**: Fixed event field mismatch (`output_preview` vs `output`), added green success banner with actual LLM response.
+- Added comprehensive `eprintln!("[workflow] ...")` debug logging throughout execution path.
+- Auto-save graph before workflow run to prevent stale graph_json issues.
+- Frontend sends both `node.id` and `node.data.name` as input keys for compatibility.
+- Cleaned up duplicate screenshots, marked reviews as Resolved.
 
 **Previous sessions**:
 - Session 1: Phase 1 foundation (d3684bf), isTauri fix (a681b59), camelCase fix (8dbe4a8)
@@ -148,10 +133,9 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 12: Phase 3A foundation (3e6c277, d2eb98d) + Codex triage
 - Session 13: Codex runtime review triage (deb6c3b) + Phase 3B execution engine
 - Session 14: Design references, unit tests, UI bug fixes, review cleanup
+- Session 15: Workflow execution bug fixes — end-to-end working
 
 **Next session should**:
-1. Add `eprintln!` debug logging to workflow execution path (commands.rs)
-2. Test workflow Run end-to-end: Input → LLM (Google Gemini) → Output
-3. Commit all pending UI fixes (after Codex finishes)
-4. Phase 3C: Node editor visual polish (Blender-inspired restyling)
-5. Or: Start hybrid intelligence routing
+1. Phase 3C: Node editor visual polish (Blender-inspired restyling) — spec at `docs/specs/node-editor-visual-polish.md`
+2. Or: Add Tool + Router node execution (currently skipped with "unsupported" event)
+3. Or: Start hybrid intelligence routing

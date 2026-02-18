@@ -142,24 +142,45 @@ impl SidecarManager {
     }
 
     pub(crate) async fn start(&self, _app: &AppHandle) -> Result<SidecarStatus, String> {
-        // If already healthy, do nothing.
-        if self.is_healthy().await {
+        // If we already own a running sidecar (child + token), verify health and return.
+        {
             let inner = self.inner.lock().await;
-            return Ok(SidecarStatus {
-                running: true,
-                host: inner.host.clone(),
-                port: inner.port,
-            });
+            if inner.child.is_some() && inner.token.is_some() {
+                drop(inner);
+                if self.is_healthy().await {
+                    let inner = self.inner.lock().await;
+                    return Ok(SidecarStatus {
+                        running: true,
+                        host: inner.host.clone(),
+                        port: inner.port,
+                    });
+                }
+                // Our child died — fall through to kill + respawn.
+            }
         }
 
-        // If a previous sidecar process exists but is unhealthy, stop it before spawning a new one.
+        // Kill any existing child we own.
         {
             let mut inner = self.inner.lock().await;
             if let Some(mut child) = inner.child.take() {
+                eprintln!("[sidecar] Killing previous sidecar process");
                 let _ = child.kill();
                 let _ = child.wait();
             }
             inner.token = None;
+        }
+
+        // Kill any orphaned sidecar on our port (from a previous Tauri hot-reload).
+        // This is the key fix: after hot-reload, our SidecarManager is fresh (no child/token)
+        // but a stale sidecar may still be listening. It passes /health but rejects our new token.
+        #[cfg(unix)]
+        {
+            let port = { self.inner.lock().await.port };
+            eprintln!("[sidecar] Killing orphaned processes on port {}", port);
+            let _ = std::process::Command::new("fuser")
+                .args(["-k", &format!("{}/tcp", port)])
+                .output();
+            tokio::time::sleep(Duration::from_millis(500)).await;
         }
 
         let token = Uuid::new_v4().to_string();

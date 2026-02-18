@@ -2,7 +2,23 @@
   "name": "ai-studio-template",
   "version": "0.1.0",
   "license": "MIT",
-  "description": "The open-source IDE for AI agents",
+  "description": "The open-source IDE for AI agents — build, run, debug, and compare AI agents with full visibility",
+  "keywords": [
+    "ai",
+    "agents",
+    "llm",
+    "ide",
+    "inspector",
+    "node-editor",
+    "mcp",
+    "tauri",
+    "desktop",
+    "local-first"
+  ],
+  "homepage": "https://github.com/akv004/ai-studio-template",
+  "bugs": {
+    "url": "https://github.com/akv004/ai-studio-template/issues"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/akv004/ai-studio-template.git"

@@ -7,6 +7,49 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use tauri::Emitter;
 use uuid::Uuid;
 
+/// Select a specific output handle value from a node's stored output.
+/// If the source handle is "output" (default), returns the whole value (backward compat).
+/// If the output is structured (object) and contains the handle as a key, returns that field.
+/// Otherwise falls back to the whole value (simple string outputs, Router passthrough, etc.).
+fn resolve_source_handle(
+    node_outputs: &HashMap<String, serde_json::Value>,
+    src_id: &str,
+    src_handle: &str,
+) -> Option<serde_json::Value> {
+    let val = node_outputs.get(src_id)?;
+    // Default handle: return whole value
+    if src_handle == "output" {
+        return Some(val.clone());
+    }
+    // Structured output: select specific handle field
+    if let Some(obj) = val.as_object() {
+        if let Some(field_val) = obj.get(src_handle) {
+            return Some(field_val.clone());
+        }
+    }
+    // Fallback: whole value (simple strings, passthrough nodes)
+    Some(val.clone())
+}
+
+/// Extract the primary text from a node output value.
+/// Used for template resolution ({{node.output}}, {{node}}) and event preview strings.
+/// Tries: string → object.response → object.content → object.result → JSON serialized.
+fn extract_primary_text(val: &serde_json::Value) -> String {
+    if let Some(s) = val.as_str() {
+        return s.to_string();
+    }
+    if let Some(obj) = val.as_object() {
+        for key in &["response", "content", "result"] {
+            if let Some(field) = obj.get(*key) {
+                if let Some(s) = field.as_str() {
+                    return s.to_string();
+                }
+            }
+        }
+    }
+    val.to_string()
+}
+
 /// Template variable resolution: replaces `{{node_id.handle}}` and `{{input.name}}` patterns.
 pub fn resolve_template(
     template: &str,
@@ -29,10 +72,7 @@ pub fn resolve_template(
             }
             if let Some(val) = node_outputs.get(source) {
                 if field == "output" || field == "result" {
-                    return match val.as_str() {
-                        Some(s) => s.to_string(),
-                        None => val.to_string(),
-                    };
+                    return extract_primary_text(val);
                 }
                 if let Some(obj) = val.as_object() {
                     if let Some(field_val) = obj.get(field) {
@@ -42,19 +82,13 @@ pub fn resolve_template(
                         };
                     }
                 }
-                return match val.as_str() {
-                    Some(s) => s.to_string(),
-                    None => val.to_string(),
-                };
+                return extract_primary_text(val);
             }
         }
         // Single-part reference (no dot)
         if parts.len() == 1 {
             if let Some(val) = node_outputs.get(key) {
-                return match val.as_str() {
-                    Some(s) => s.to_string(),
-                    None => val.to_string(),
-                };
+                return extract_primary_text(val);
             }
             // Check direct input match (e.g. {{topic}})
             if let Some(val) = inputs.get(key) {
@@ -224,17 +258,17 @@ pub async fn execute_workflow(
             serde_json::json!({ "node_id": node_id, "node_type": node_type }),
             &seq_counter);
 
-        // Resolve input from incoming edges
+        // Resolve input from incoming edges (using sourceHandle for handle-specific selection)
         let incoming_value = if let Some(inc) = incoming_edges.get(node_id) {
-            // Optimization: If only 1 input and it's the default 'input' handle, flatten it.
-            // Otherwise (multiple inputs OR 1 input with specific name), return as object.
+            // Single edge to default "input" handle: flatten to the resolved value
             if inc.len() == 1 && inc[0].2 == "input" {
-                node_outputs.get(&inc[0].0).cloned()
+                resolve_source_handle(&node_outputs, &inc[0].0, &inc[0].1)
             } else {
+                // Multiple edges or named handles: build object keyed by target handle
                 let mut obj = serde_json::Map::new();
-                for (src_id, _src_handle, tgt_handle) in inc {
-                    if let Some(val) = node_outputs.get(src_id) {
-                        obj.insert(tgt_handle.clone(), val.clone());
+                for (src_id, src_handle, tgt_handle) in inc {
+                    if let Some(val) = resolve_source_handle(&node_outputs, src_id, src_handle) {
+                        obj.insert(tgt_handle.clone(), val);
                     }
                 }
                 if obj.is_empty() { None } else { Some(serde_json::Value::Object(obj)) }
@@ -283,11 +317,12 @@ pub async fn execute_workflow(
                     total_cost += cost;
                 }
 
+                // Strip only __usage (internal stats) — preserve all handle-routable fields
                 let clean_output = if let Some(obj) = output.as_object() {
                     if obj.contains_key("__usage") {
-                        obj.get("content").cloned()
-                            .or_else(|| obj.get("result").cloned())
-                            .unwrap_or(output.clone())
+                        let mut cleaned = obj.clone();
+                        cleaned.remove("__usage");
+                        serde_json::Value::Object(cleaned)
                     } else {
                         output.clone()
                     }
@@ -296,10 +331,8 @@ pub async fn execute_workflow(
                 };
                 node_outputs.insert(node_id.clone(), clean_output.clone());
 
-                let output_preview = match clean_output.as_str() {
-                    Some(s) => s[..s.len().min(200)].to_string(),
-                    None => serde_json::to_string(&clean_output).unwrap_or_default()[..200.min(serde_json::to_string(&clean_output).unwrap_or_default().len())].to_string(),
-                };
+                let preview_text = extract_primary_text(&clean_output);
+                let output_preview = preview_text[..preview_text.len().min(200)].to_string();
                 let _ = record_event(db, session_id, "workflow.node.completed", "desktop.workflow",
                     serde_json::json!({
                         "node_id": node_id, "node_type": node_type,
@@ -457,5 +490,137 @@ mod tests {
         inputs.insert("name".to_string(), serde_json::json!("Amit"));
         let result = resolve_template("Hello {{ input.name }}", &HashMap::new(), &inputs);
         assert_eq!(result, "Hello Amit");
+    }
+
+    // --- resolve_source_handle tests ---
+
+    #[test]
+    fn test_source_handle_default_output() {
+        let mut outputs = HashMap::new();
+        outputs.insert("llm_1".to_string(), serde_json::json!({"response": "hello", "usage": {"tokens": 10}}));
+        let val = resolve_source_handle(&outputs, "llm_1", "output").unwrap();
+        assert!(val.is_object());
+        assert_eq!(val.get("response").unwrap().as_str().unwrap(), "hello");
+    }
+
+    #[test]
+    fn test_source_handle_specific_field() {
+        let mut outputs = HashMap::new();
+        outputs.insert("llm_1".to_string(), serde_json::json!({
+            "response": "The answer is 42",
+            "usage": {"total_tokens": 100},
+            "cost": "$0.000060"
+        }));
+        let val = resolve_source_handle(&outputs, "llm_1", "response").unwrap();
+        assert_eq!(val.as_str().unwrap(), "The answer is 42");
+
+        let val = resolve_source_handle(&outputs, "llm_1", "usage").unwrap();
+        assert!(val.is_object());
+        assert_eq!(val.get("total_tokens").unwrap().as_i64().unwrap(), 100);
+
+        let val = resolve_source_handle(&outputs, "llm_1", "cost").unwrap();
+        assert_eq!(val.as_str().unwrap(), "$0.000060");
+    }
+
+    #[test]
+    fn test_source_handle_fallback_for_simple_output() {
+        let mut outputs = HashMap::new();
+        outputs.insert("transform_1".to_string(), serde_json::json!("plain text"));
+        // Requesting a handle from a string output falls back to the string
+        let val = resolve_source_handle(&outputs, "transform_1", "response").unwrap();
+        assert_eq!(val.as_str().unwrap(), "plain text");
+    }
+
+    #[test]
+    fn test_source_handle_missing_node() {
+        let outputs = HashMap::new();
+        assert!(resolve_source_handle(&outputs, "nonexistent", "output").is_none());
+    }
+
+    // --- extract_primary_text tests ---
+
+    #[test]
+    fn test_primary_text_string() {
+        assert_eq!(extract_primary_text(&serde_json::json!("hello")), "hello");
+    }
+
+    #[test]
+    fn test_primary_text_structured_response() {
+        let val = serde_json::json!({"response": "The answer", "usage": {"tokens": 10}});
+        assert_eq!(extract_primary_text(&val), "The answer");
+    }
+
+    #[test]
+    fn test_primary_text_structured_content() {
+        let val = serde_json::json!({"content": "Some content", "metadata": {}});
+        assert_eq!(extract_primary_text(&val), "Some content");
+    }
+
+    #[test]
+    fn test_primary_text_no_primary_field() {
+        let val = serde_json::json!({"foo": "bar", "baz": 42});
+        // Falls back to JSON serialization
+        let text = extract_primary_text(&val);
+        assert!(text.contains("foo"));
+        assert!(text.contains("bar"));
+    }
+
+    // --- resolve_template with structured LLM output ---
+
+    #[test]
+    fn test_resolve_structured_llm_output_alias() {
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("llm_1".to_string(), serde_json::json!({
+            "response": "The answer is 42",
+            "content": "The answer is 42",
+            "usage": {"total_tokens": 100},
+            "cost": "$0.000060"
+        }));
+        let inputs = HashMap::new();
+        // {{llm_1.output}} extracts primary text
+        assert_eq!(
+            resolve_template("{{llm_1.output}}", &node_outputs, &inputs),
+            "The answer is 42"
+        );
+    }
+
+    #[test]
+    fn test_resolve_structured_llm_specific_field() {
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("llm_1".to_string(), serde_json::json!({
+            "response": "The answer is 42",
+            "content": "The answer is 42",
+            "usage": {"total_tokens": 100},
+            "cost": "$0.000060"
+        }));
+        let inputs = HashMap::new();
+        // {{llm_1.response}} returns the specific field
+        assert_eq!(
+            resolve_template("{{llm_1.response}}", &node_outputs, &inputs),
+            "The answer is 42"
+        );
+        // {{llm_1.cost}} returns cost string
+        assert_eq!(
+            resolve_template("{{llm_1.cost}}", &node_outputs, &inputs),
+            "$0.000060"
+        );
+        // {{llm_1.usage}} returns usage object as JSON
+        let usage = resolve_template("{{llm_1.usage}}", &node_outputs, &inputs);
+        assert!(usage.contains("total_tokens"));
+    }
+
+    #[test]
+    fn test_resolve_structured_single_part_ref() {
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("llm_1".to_string(), serde_json::json!({
+            "response": "The answer is 42",
+            "usage": {"total_tokens": 100},
+        }));
+        let inputs = HashMap::new();
+        // {{llm_1}} (no dot) extracts primary text
+        assert_eq!(
+            resolve_template("{{llm_1}}", &node_outputs, &inputs),
+            "The answer is 42"
+        );
     }
 }

@@ -280,30 +280,70 @@ Pauses workflow for human review.
 **Input handle**: any
 **Output handle**: any (passes through on approval)
 
-#### Iterator
-Loops over an array, running a subgraph for each item.
+#### Iterator + Aggregator (pair)
+
+These two always work together. **Iterator splits** an array into items and runs a subgraph per item. **Aggregator collects** all results back into one output.
+
+**How it works:**
+```
+[Iterator] → [LLM] → [Aggregator]
+     ↓
+  Item 1 → LLM runs → result 1
+  Item 2 → LLM runs → result 2
+  Item 3 → LLM runs → result 3
+                          ↓
+              Aggregator combines → single output
+```
+
+The nodes between Iterator and Aggregator form the **subgraph** — it repeats once per item in the array.
+
+**Example — Summarize 10 files:**
+```
+File Glob (*.txt) → Iterator → LLM ("Summarize this") → Aggregator (concat, "\n\n") → Output
+```
+- File Glob finds 10 files → outputs array of 10 texts
+- Iterator splits into 10 items
+- LLM runs 10 times, once per file
+- Aggregator joins 10 summaries with blank lines between them
+
+**Example — Translate CSV rows:**
+```
+File Read (data.csv) → Iterator ($.rows) → LLM ("Translate to Spanish") → Aggregator (array) → File Write
+```
+
+**Example — Parallel API calls:**
+```
+Input (JSON array of URLs) → Iterator (parallel, max 4) → HTTP Request → Aggregator (array) → Output
+```
+
+##### Iterator Config
 
 | Field | What it does |
 |-------|-------------|
-| **Mode** | `sequential` (one at a time) or `parallel` |
-| **Expression** | JSONPath to extract array from input (e.g. `$.items`) |
-| **Max Concurrency** | For parallel mode |
+| **Mode** | `sequential` (one at a time, safe) or `parallel` (concurrent, faster) |
+| **Expression** | JSONPath to extract the array from input (e.g. `$.items`, `$[*]`, `$.data.rows`) |
+| **Max Concurrency** | For parallel mode — how many run at once (default 4) |
 
 **Input handle**: json (must contain an array)
-**Output handle**: connects to the subgraph that runs per item
+**Output handle**: connects to the first node of the subgraph
 
-**Rule**: Must have exactly one Aggregator downstream to collect results.
-
-#### Aggregator
-Collects results from an Iterator's subgraph.
+##### Aggregator Config
 
 | Field | What it does |
 |-------|-------------|
-| **Strategy** | `array` (collect as JSON array), `concat` (join as text), `merge` (deep merge objects) |
-| **Separator** | For concat mode (e.g. `\n`) |
+| **Strategy** | `array` — collect all results as a JSON array |
+| | `concat` — join all results as text with a separator |
+| | `merge` — deep merge JSON objects into one |
+| **Separator** | For concat mode (e.g. `\n`, `\n\n`, `, `) |
 
 **Input handle**: from the subgraph's last node
 **Output handle**: json or text (aggregated results)
+
+##### Rules
+- Every Iterator must have **exactly one** Aggregator downstream
+- 0 Aggregators = error, 2+ Aggregators = error
+- Use `sequential` mode when order matters or when calling rate-limited APIs
+- Use `parallel` mode for independent tasks (file processing, batch LLM calls)
 
 ---
 

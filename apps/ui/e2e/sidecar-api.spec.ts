@@ -4,6 +4,8 @@ import * as http from 'http';
 
 const SIDECAR_URL = process.env.SIDECAR_URL || 'http://localhost:8765';
 const SIDECAR_TOKEN = process.env.AI_STUDIO_TOKEN || '';
+const LLM_BASE_URL = process.env.LLM_BASE_URL || 'http://localhost:8003/v1';
+const LLM_MODEL = process.env.LLM_MODEL || 'Qwen/Qwen3-VL-8B-Instruct';
 
 // Common headers for authenticated sidecar requests
 const headers = (): Record<string, string> => {
@@ -45,9 +47,9 @@ test.describe('Sidecar API Tests', () => {
             data: {
                 messages: [{ role: 'user', content: 'What is 2+2? Answer with just the number.' }],
                 provider: 'local',
-                model: 'qwen3-vl',
+                model: LLM_MODEL,
                 temperature: 0.1,
-                base_url: 'http://localhost:11434/v1',
+                base_url: LLM_BASE_URL,
             },
         });
 
@@ -80,9 +82,9 @@ test.describe('Sidecar API Tests', () => {
             data: {
                 messages: [{ role: 'user', content: 'Describe what you see in this image briefly.' }],
                 provider: 'local',
-                model: 'qwen3-vl',
+                model: LLM_MODEL,
                 temperature: 0.1,
-                base_url: 'http://localhost:11434/v1',
+                base_url: LLM_BASE_URL,
                 images: [{
                     data: base64Data,
                     mime_type: 'image/png',
@@ -122,9 +124,9 @@ test.describe('Sidecar API Tests', () => {
             data: {
                 messages: [{ role: 'user', content: 'How many images do you see? Describe each briefly.' }],
                 provider: 'local',
-                model: 'qwen3-vl',
+                model: LLM_MODEL,
                 temperature: 0.1,
-                base_url: 'http://localhost:11434/v1',
+                base_url: LLM_BASE_URL,
                 images: [
                     { data: base64Data, mime_type: 'image/png' },
                     { data: base64Data, mime_type: 'image/png' },
@@ -150,7 +152,7 @@ test.describe('Sidecar API Tests', () => {
             data: {
                 messages: [],
                 provider: 'local',
-                model: 'qwen3-vl',
+                model: LLM_MODEL,
             },
         });
 
@@ -184,9 +186,9 @@ test.describe('File Read → LLM Integration', () => {
             data: {
                 messages: [{ role: 'user', content: content }],
                 provider: 'local',
-                model: 'qwen3-vl',
+                model: LLM_MODEL,
                 temperature: 0.1,
-                base_url: 'http://localhost:11434/v1',
+                base_url: LLM_BASE_URL,
                 system_prompt: 'Summarize this bug report in 2-3 sentences.',
             },
         });
@@ -216,9 +218,9 @@ test.describe('File Read → LLM Integration', () => {
             data: {
                 messages: [{ role: 'user', content: content }],
                 provider: 'local',
-                model: 'qwen3-vl',
+                model: LLM_MODEL,
                 temperature: 0.1,
-                base_url: 'http://localhost:11434/v1',
+                base_url: LLM_BASE_URL,
                 system_prompt: 'What is the top performing product by growth? Answer in one sentence.',
             },
         });

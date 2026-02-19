@@ -100,6 +100,20 @@
 9. ~~Community template gallery~~ DONE (10 templates + templates/README.md contributor guide)
 10. ~~Open-source launch prep~~ DONE (CHANGELOG.md, SECURITY.md, Show HN draft, CI, GitHub templates, package.json metadata)
 
+### Phase 5+ Backlog (killer features — work top-down)
+
+11. **A/B Eval Node** — Split input to multiple LLMs in parallel, score outputs side-by-side. Built-in eval grid: latency, cost, quality rating. "Which model is best for this task" in one click. Easiest to build (parallel LLM calls exist), highest demo impact.
+12. **Time-Travel Debug** — Click any completed node → edit its output → re-run from that point forward. Don't restart the whole workflow. Inspector + node states already exist — this is an evolution. Unique differentiator, no competitor has this.
+13. **Auto-Pipeline Generator** — Describe a workflow in English → AI generates the graph JSON → canvas fills itself. Meta: use AI to build AI pipelines. The "wow" demo moment for Show HN.
+14. **Guardrails Node** — Built-in safety: PII detection, content filtering, hallucination check, schema enforcement. Drop anywhere in pipeline. Enterprise magnet, huge credibility for production use.
+15. **RAG Pipeline Nodes** — 3 new node types for first-class RAG support:
+    - **Text Chunker**: Split documents into overlapping chunks (configurable size/overlap/strategy)
+    - **Embedding**: Call embedding APIs (OpenAI, Cohere, local models) to convert text → vectors
+    - **Vector Search**: Query vector DBs (Pinecone, Chroma, Qdrant, pgvector) for top-k retrieval
+    - Enables visual RAG builder: File Glob → Chunker → Embedding → Vector Search → LLM → Output
+16. Phase 4C: Streaming, containers, UX polish
+17. v0.2.0 tag for Phase 4B completion
+
 ---
 
 ## Done (Compressed)

@@ -113,8 +113,13 @@
     - **Embedding**: Call embedding APIs (OpenAI, Cohere, local models) to convert text → vectors
     - **Vector Search**: Query vector DBs (Pinecone, Chroma, Qdrant, pgvector) for top-k retrieval
     - Enables visual RAG builder: File Glob → Chunker → Embedding → Vector Search → LLM → Output
-16. Phase 4C: Streaming, containers, UX polish
-17. v0.2.0 tag for Phase 4B completion
+16. **EIP: Error Handler / Dead Letter** — Route errors to a fallback path instead of stopping the workflow. Node-level `onError` output handle that connects to recovery logic. Table stakes for production automation.
+17. **EIP: Content Enricher** — Merge data from an external source (DB, API) into the current message. Ties into SQL Query node — "enrich this record with customer data from the DB."
+18. **EIP: Wire Tap** — Copy node output to a side channel (log, file, webhook) without affecting the main flow. Non-blocking audit/debugging.
+19. **EIP: Recipient List** — Dynamic routing to multiple destinations based on message content. Router is static branches; this evaluates at runtime.
+20. **SQL Query Node** — Connect to Postgres/MySQL/SQLite, run queries, return rows. Settings gets a Connections tab. Enables natural language → SQL → results → LLM summary pipelines.
+21. Phase 4C: Streaming, containers, UX polish
+22. v0.2.0 tag for Phase 4B completion
 
 ---
 

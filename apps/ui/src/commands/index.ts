@@ -54,7 +54,7 @@ export function useCommands(): Command[] {
         },
         {
             id: 'nav-workflows',
-            label: 'Go to Node Editor',
+            label: 'Go to Workflows',
             shortcut: '⌘5',
             category: 'navigation',
             action: () => navigateTo('workflows'),

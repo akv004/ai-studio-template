@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-    Plus, Trash2, Copy, RefreshCw, GitFork,
+    Plus, Trash2, Copy, RefreshCw, Workflow,
     Loader2, Upload, LayoutTemplate, Pencil, Check, X,
 } from 'lucide-react';
 import { useAppStore } from '../../../state/store';
@@ -77,7 +77,7 @@ export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
     return (
         <div className="page-content">
             <div className="page-header">
-                <h1 className="page-title">Node Editor</h1>
+                <h1 className="page-title">Workflows</h1>
                 <div className="flex items-center gap-3">
                     <button className="btn-icon-sm btn-secondary" onClick={() => fetchWorkflows()} title="Refresh">
                         <RefreshCw size={14} />
@@ -128,7 +128,7 @@ export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
                 </div>
             ) : workflows.length === 0 ? (
                 <div className="empty-state">
-                    <GitFork size={48} className="text-[var(--text-muted)]" />
+                    <Workflow size={48} className="text-[var(--text-muted)]" />
                     <h2>No workflows yet</h2>
                     <p>Create your first workflow to build AI pipelines visually.</p>
                     <div className="flex gap-3 mt-4">

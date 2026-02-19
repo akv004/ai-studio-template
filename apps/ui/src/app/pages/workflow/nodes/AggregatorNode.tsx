@@ -8,7 +8,7 @@ export function AggregatorNode({ id, data, selected }: { id: string; data: Recor
 
     return (
         <NodeShell id={id} type="aggregator" label="AGGREGATOR" icon={Layers} selected={selected}
-            collapsed={data.collapsed as boolean}>
+            collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="handle-row input">
                 <Handle type="target" position={Position.Left} id="input"
                     className="custom-handle handle-any" title="any" />

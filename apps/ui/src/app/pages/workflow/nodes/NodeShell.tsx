@@ -1,6 +1,8 @@
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Check, X, Clock } from 'lucide-react';
 import { useAppStore } from '../../../../state/store';
 import { nodeColors } from '../nodeColors';
+import { useNodeData } from '../hooks/useNodeData';
 import type { NodeExecutionStatus } from '@ai-studio/shared';
 
 const execBadgeConfig: Record<NodeExecutionStatus, { icon: React.ElementType | null; label: string }> = {
@@ -45,23 +47,71 @@ export function useExecClass(nodeId: string): string {
     return `exec-${state.status}`;
 }
 
-export function NodeShell({ id, type, label, icon: Icon, selected, collapsed, onToggleCollapse, children }: {
+export function NodeShell({ id, type, label, icon: Icon, selected, collapsed, onToggleCollapse, customLabel, children }: {
     id: string; type: string; label: string; icon: React.ElementType;
     selected?: boolean; collapsed?: boolean; onToggleCollapse?: () => void;
-    children: React.ReactNode;
+    customLabel?: string; children: React.ReactNode;
 }) {
     const execClass = useExecClass(id);
+    const { updateField } = useNodeData(id);
+    const [editingLabel, setEditingLabel] = useState(false);
+    const [labelDraft, setLabelDraft] = useState('');
+    const labelInputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        if (editingLabel && labelInputRef.current) {
+            labelInputRef.current.focus();
+            labelInputRef.current.select();
+        }
+    }, [editingLabel]);
+
+    const handleLabelSubmit = () => {
+        const trimmed = labelDraft.trim();
+        updateField('label', trimmed);
+        setEditingLabel(false);
+    };
+
     return (
         <div className={`custom-node ${selected ? 'selected' : ''} ${collapsed ? 'collapsed' : ''} ${execClass} relative`}>
             <ExecutionBadge nodeId={id} />
             <div className="custom-node-header" style={{ background: nodeColors[type] }}
-                onClick={onToggleCollapse}>
+                onClick={onToggleCollapse}
+                onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    setLabelDraft(customLabel || '');
+                    setEditingLabel(true);
+                }}>
                 <span className="collapse-chevron">
                     {collapsed ? <ChevronRight size={8} /> : <ChevronDown size={8} />}
                 </span>
                 <Icon size={12} />
                 {label}
+                {customLabel && !editingLabel && (
+                    <span className="opacity-80 font-normal"> · {customLabel}</span>
+                )}
+                {!customLabel && !editingLabel && selected && (
+                    <span className="opacity-40 font-normal text-[9px] ml-1">dbl-click to name</span>
+                )}
             </div>
+            {editingLabel && (
+                <div className="px-1.5 py-1 bg-[#2a2a2a] border-b border-[#3a3a3a]"
+                    onClick={e => e.stopPropagation()}>
+                    <input
+                        ref={labelInputRef}
+                        className="w-full bg-[#1e1e1e] border border-[#555] rounded px-1.5 py-0.5 text-[11px] text-white outline-none focus:border-blue-500"
+                        value={labelDraft}
+                        placeholder="Node name..."
+                        onChange={e => setLabelDraft(e.target.value)}
+                        onKeyDown={e => {
+                            e.stopPropagation();
+                            if (e.key === 'Enter') handleLabelSubmit();
+                            if (e.key === 'Escape') setEditingLabel(false);
+                        }}
+                        onMouseDown={e => e.stopPropagation()}
+                        onBlur={handleLabelSubmit}
+                    />
+                </div>
+            )}
             <div className="custom-node-body">
                 {children}
             </div>

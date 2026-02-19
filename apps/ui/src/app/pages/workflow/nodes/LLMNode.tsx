@@ -15,7 +15,7 @@ export function LLMNode({ id, data, selected }: { id: string; data: Record<strin
 
     return (
         <NodeShell id={id} type="llm" label="LLM" icon={Cpu} selected={selected}
-            collapsed={data.collapsed as boolean}>
+            collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="flex flex-col gap-1">
                 {/* Inputs */}
                 <div className="handle-row input">

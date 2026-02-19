@@ -8,7 +8,7 @@ export function IteratorNode({ id, data, selected }: { id: string; data: Record<
 
     return (
         <NodeShell id={id} type="iterator" label="ITERATOR" icon={Repeat} selected={selected}
-            collapsed={data.collapsed as boolean}>
+            collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="handle-row input">
                 <Handle type="target" position={Position.Left} id="items"
                     className="custom-handle handle-json" title="json" />

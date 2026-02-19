@@ -9,7 +9,7 @@ export function RouterNode({ id, data, selected }: { id: string; data: Record<st
 
     return (
         <NodeShell id={id} type="router" label="ROUTER" icon={GitFork} selected={selected}
-            collapsed={data.collapsed as boolean}>
+            collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="handle-row input">
                 <Handle type="target" position={Position.Left} className="custom-handle handle-text" title="text" />
                 <span className="handle-label">input</span>

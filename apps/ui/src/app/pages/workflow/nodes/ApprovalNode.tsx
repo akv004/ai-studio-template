@@ -5,7 +5,7 @@ import { NodeShell } from './NodeShell';
 export function ApprovalNode({ id, data, selected }: { id: string; data: Record<string, unknown>; selected?: boolean }) {
     return (
         <NodeShell id={id} type="approval" label="APPROVAL" icon={ShieldCheck} selected={selected}
-            collapsed={data.collapsed as boolean}>
+            collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="handle-row input">
                 <Handle type="target" position={Position.Left} className="custom-handle handle-any" title="any" />
                 <span className="handle-label">data</span>

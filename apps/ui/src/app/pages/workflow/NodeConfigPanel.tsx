@@ -31,6 +31,17 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                 {type} Configuration
             </h3>
 
+            {/* Common: custom label for all nodes */}
+            <label className="block">
+                <span className="text-xs text-[var(--text-muted)]">Node Label</span>
+                <input
+                    className="config-input"
+                    value={(data.label as string) || ''}
+                    placeholder="e.g. Summarizer, Classifier..."
+                    onChange={(e) => update('label', e.target.value)}
+                />
+            </label>
+
             {/* Common: name field for input/output */}
             {(type === 'input' || type === 'output') && (
                 <label className="block">

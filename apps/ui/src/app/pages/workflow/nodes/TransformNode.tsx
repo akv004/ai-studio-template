@@ -9,7 +9,7 @@ export function TransformNode({ id, data, selected }: { id: string; data: Record
 
     return (
         <NodeShell id={id} type="transform" label="TRANSFORM" icon={Repeat} selected={selected}
-            collapsed={data.collapsed as boolean}>
+            collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             {inputs.map((inputName) => (
                 <div key={inputName} className="handle-row input">
                     <Handle type="target" position={Position.Left} id={inputName} className="custom-handle handle-any" title="any" />

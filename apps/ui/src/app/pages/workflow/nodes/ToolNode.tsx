@@ -8,7 +8,7 @@ export function ToolNode({ id, data, selected }: { id: string; data: Record<stri
 
     return (
         <NodeShell id={id} type="tool" label="TOOL" icon={Wrench} selected={selected}
-            collapsed={data.collapsed as boolean}>
+            collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="handle-row input">
                 <Handle type="target" position={Position.Left} className="custom-handle handle-json" title="json" />
                 <span className="handle-label">input</span>

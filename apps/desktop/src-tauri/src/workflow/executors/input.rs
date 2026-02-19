@@ -14,7 +14,7 @@ pub fn resolve_input_value(
         .get("inputName")
         .and_then(|v| v.as_str())
         .or_else(|| node_data.get("name").and_then(|v| v.as_str()))
-        .or_else(|| node_data.get("label").and_then(|v| v.as_str()))
+        .or_else(|| node_data.get("label").and_then(|v| v.as_str()).filter(|s| !s.is_empty()))
         .unwrap_or(node_id);
 
     let default_value = node_data.get("defaultValue")

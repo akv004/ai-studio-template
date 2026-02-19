@@ -8,7 +8,7 @@ export function InputNode({ id, data, selected }: { id: string; data: Record<str
 
     return (
         <NodeShell id={id} type="input" label="INPUT" icon={FileInput} selected={selected}
-            collapsed={data.collapsed as boolean}>
+            collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>
                 <input className="node-inline-input" value={(data.defaultValue as string) || ''}
                     placeholder="Enter value..."

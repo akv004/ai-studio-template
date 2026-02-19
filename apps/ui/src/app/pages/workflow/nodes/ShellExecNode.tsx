@@ -9,7 +9,7 @@ export function ShellExecNode({ id, data, selected }: { id: string; data: Record
 
     return (
         <NodeShell id={id} type="shell_exec" label="SHELL EXEC" icon={Terminal} selected={selected}
-            collapsed={data.collapsed as boolean}>
+            collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="handle-row input">
                 <Handle type="target" position={Position.Left} id="command"
                     className="custom-handle handle-text" title="text" />

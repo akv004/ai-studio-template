@@ -10,6 +10,7 @@ export const nodeColors: Record<string, string> = {
     subworkflow: '#1a5a7a',
     http_request: '#2a6a4a',
     file_read: '#4a6a2a',
+    file_glob: '#3a7a3a',
     file_write: '#6a4a2a',
     shell_exec: '#3a3a3a',
     validator: '#2a5a6a',

@@ -9,6 +9,7 @@ import { TransformNode } from './nodes/TransformNode';
 import { SubworkflowNode } from './nodes/SubworkflowNode';
 import { HttpRequestNode } from './nodes/HttpRequestNode';
 import { FileReadNode } from './nodes/FileReadNode';
+import { FileGlobNode } from './nodes/FileGlobNode';
 import { FileWriteNode } from './nodes/FileWriteNode';
 import { ShellExecNode } from './nodes/ShellExecNode';
 import { ValidatorNode } from './nodes/ValidatorNode';
@@ -24,6 +25,7 @@ export const customNodeTypes: NodeTypes = {
     subworkflow: SubworkflowNode,
     http_request: HttpRequestNode,
     file_read: FileReadNode,
+    file_glob: FileGlobNode,
     file_write: FileWriteNode,
     shell_exec: ShellExecNode,
     validator: ValidatorNode,

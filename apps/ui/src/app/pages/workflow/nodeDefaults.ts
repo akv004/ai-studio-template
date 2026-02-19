@@ -14,6 +14,11 @@ export function defaultDataForType(type: string): Record<string, unknown> {
             auth: 'none', authTokenSettingsKey: '', authHeader: 'Authorization',
             maxResponseBytes: 10485760,
         };
+        case 'file_glob': return {
+            directory: '', pattern: '*', mode: 'text', recursive: false,
+            maxFiles: 100, maxSize: 10, sortBy: 'name', sortOrder: 'asc',
+            csvDelimiter: ',', csvHasHeader: true,
+        };
         case 'file_read': return {
             path: '', mode: 'text', encoding: 'utf-8',
             csvDelimiter: ',', csvHasHeader: true, maxSize: 10,

@@ -9,7 +9,7 @@ const DENIED_FILES: &[&str] = &[
     "/etc/shadow", "/etc/passwd",
 ];
 
-fn is_path_denied(path: &std::path::Path) -> bool {
+pub fn is_path_denied(path: &std::path::Path) -> bool {
     let path_str = path.to_string_lossy();
     for denied in DENIED_FILES {
         if path_str.as_ref() == *denied {
@@ -142,7 +142,7 @@ impl NodeExecutor for FileReadExecutor {
 }
 
 /// Guess MIME type from file extension
-fn guess_mime_type(path: &std::path::Path) -> &'static str {
+pub fn guess_mime_type(path: &std::path::Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase().as_str() {
         "png" => "image/png",
         "jpg" | "jpeg" => "image/jpeg",
@@ -159,7 +159,7 @@ fn guess_mime_type(path: &std::path::Path) -> &'static str {
 }
 
 /// Simple CSV parser — handles quoted fields, returns array of objects
-fn parse_csv(content: &str, delimiter: char, has_header: bool) -> Result<Vec<serde_json::Value>, String> {
+pub fn parse_csv(content: &str, delimiter: char, has_header: bool) -> Result<Vec<serde_json::Value>, String> {
     let lines: Vec<&str> = content.lines().collect();
     if lines.is_empty() {
         return Ok(vec![]);

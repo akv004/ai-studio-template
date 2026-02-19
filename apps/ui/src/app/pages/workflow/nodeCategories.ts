@@ -1,7 +1,7 @@
 import {
     FileInput, FileOutput, Cpu, GitFork,
     Wrench, ShieldCheck, Repeat, MessageSquare,
-    Globe, Terminal, CheckSquare,
+    Globe, Terminal, CheckSquare, FolderOpen,
 } from 'lucide-react';
 
 export interface NodeCategory {
@@ -34,6 +34,7 @@ export const NODE_CATEGORIES: NodeCategory[] = [
         label: 'Data I/O',
         types: [
             { type: 'http_request', label: 'HTTP Request', icon: Globe, description: 'Make HTTP API calls' },
+            { type: 'file_glob', label: 'File Glob', icon: FolderOpen, description: 'Match files by pattern' },
             { type: 'file_read', label: 'File Read', icon: FileInput, description: 'Read local files' },
             { type: 'file_write', label: 'File Write', icon: FileOutput, description: 'Write local files' },
             { type: 'shell_exec', label: 'Shell Exec', icon: Terminal, description: 'Run shell commands' },

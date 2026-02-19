@@ -8,6 +8,7 @@ pub mod approval;
 pub mod subworkflow;
 pub mod http_request;
 pub mod file_read;
+pub mod file_glob;
 pub mod file_write;
 pub mod shell_exec;
 pub mod validator;
@@ -77,6 +78,7 @@ impl ExecutorRegistry {
         executors.insert("subworkflow".to_string(), Box::new(subworkflow::SubworkflowExecutor));
         executors.insert("http_request".to_string(), Box::new(http_request::HttpRequestExecutor));
         executors.insert("file_read".to_string(), Box::new(file_read::FileReadExecutor));
+        executors.insert("file_glob".to_string(), Box::new(file_glob::FileGlobExecutor));
         executors.insert("file_write".to_string(), Box::new(file_write::FileWriteExecutor));
         executors.insert("shell_exec".to_string(), Box::new(shell_exec::ShellExecExecutor));
         executors.insert("validator".to_string(), Box::new(validator::ValidatorExecutor));

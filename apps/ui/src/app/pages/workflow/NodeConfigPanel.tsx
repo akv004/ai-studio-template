@@ -274,6 +274,81 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                 </>
             )}
 
+            {type === 'file_glob' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Directory</span>
+                        <input className="config-input" value={(data.directory as string) || ''}
+                            onChange={(e) => update('directory', e.target.value)}
+                            placeholder="/path/to/directory" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Pattern</span>
+                        <input className="config-input" value={(data.pattern as string) || '*'}
+                            onChange={(e) => update('pattern', e.target.value)}
+                            placeholder="*.csv" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Mode</span>
+                        <select className="config-input" value={(data.mode as string) || 'text'}
+                            onChange={(e) => update('mode', e.target.value)}>
+                            <option value="text">Text</option>
+                            <option value="json">JSON</option>
+                            <option value="csv">CSV</option>
+                            <option value="binary">Binary</option>
+                        </select>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <input type="checkbox" checked={(data.recursive as boolean) ?? false}
+                            onChange={(e) => update('recursive', e.target.checked)} />
+                        Recursive (search subdirectories)
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Max Files</span>
+                        <input type="number" className="config-input" value={(data.maxFiles as number) ?? 100}
+                            onChange={(e) => update('maxFiles', parseInt(e.target.value) || 100)} />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Max File Size (MB)</span>
+                        <input type="number" className="config-input" value={(data.maxSize as number) ?? 10}
+                            onChange={(e) => update('maxSize', parseFloat(e.target.value) || 10)} />
+                    </label>
+                    <div className="flex gap-2">
+                        <label className="block flex-1">
+                            <span className="text-xs text-[var(--text-muted)]">Sort By</span>
+                            <select className="config-input" value={(data.sortBy as string) || 'name'}
+                                onChange={(e) => update('sortBy', e.target.value)}>
+                                <option value="name">Name</option>
+                                <option value="modified">Modified</option>
+                                <option value="size">Size</option>
+                            </select>
+                        </label>
+                        <label className="block flex-1">
+                            <span className="text-xs text-[var(--text-muted)]">Order</span>
+                            <select className="config-input" value={(data.sortOrder as string) || 'asc'}
+                                onChange={(e) => update('sortOrder', e.target.value)}>
+                                <option value="asc">Ascending</option>
+                                <option value="desc">Descending</option>
+                            </select>
+                        </label>
+                    </div>
+                    {(data.mode === 'csv') && (
+                        <>
+                            <label className="block">
+                                <span className="text-xs text-[var(--text-muted)]">CSV Delimiter</span>
+                                <input className="config-input" value={(data.csvDelimiter as string) || ','}
+                                    onChange={(e) => update('csvDelimiter', e.target.value)} maxLength={1} />
+                            </label>
+                            <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                <input type="checkbox" checked={(data.csvHasHeader as boolean) ?? true}
+                                    onChange={(e) => update('csvHasHeader', e.target.checked)} />
+                                First row is header
+                            </label>
+                        </>
+                    )}
+                </>
+            )}
+
             {type === 'file_read' && (
                 <>
                     <label className="block">

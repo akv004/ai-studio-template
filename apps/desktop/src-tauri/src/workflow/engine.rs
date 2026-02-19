@@ -309,6 +309,7 @@ pub async fn execute_workflow_with_visited(
                 outgoing_by_handle: &outgoing_by_handle,
                 seq_counter: &seq_counter,
                 visited_workflows,
+                graph_json,
             };
             executor.execute(&ctx, node_id, node_data, &incoming_value).await
         } else {
@@ -323,9 +324,14 @@ pub async fn execute_workflow_with_visited(
 
         match result {
             Ok(node_output) => {
-                // Handle skip_nodes from router
+                // Handle skip_nodes from router/iterator
                 for skip_id in &node_output.skip_nodes {
                     skipped_nodes.insert(skip_id.clone());
+                }
+
+                // Handle extra_outputs from iterator (pre-computed aggregator results)
+                for (extra_id, extra_val) in node_output.extra_outputs {
+                    node_outputs.insert(extra_id, extra_val);
                 }
 
                 let output = node_output.value;

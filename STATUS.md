@@ -50,9 +50,8 @@
 | **v0.1.0 tagged** | DONE | Phase 1-3 + 4A release tag (91007cc) |
 | **Transform jsonpath + script modes** | DONE | RFC 9535 JSONPath + pipe expressions, 24 tests (b765061) |
 | EIP spec peer review | TODO | Run via Antigravity/Gemini |
-| 4B.1 File Glob node | TODO | Directory listing with wildcard filtering |
-| 4B.2 Iterator/Splitter | TODO | Process items from array/glob one-by-one |
-| 4B.3 Aggregator | TODO | Collect outputs from iterator into summary |
+| 4B.1 File Glob node | DONE | glob executor + UI node, 8 tests (e352d0c) |
+| **4B.2 Iterator + 4B.3 Aggregator** | DONE | Subgraph extraction, synthetic workflow execution per item, 3 aggregation strategies, 23 tests |
 | 4B.4 LLM Session mode | TODO | Stateful multi-turn conversations in workflows |
 
 ---
@@ -143,16 +142,17 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-19 (session 25)
+**Date**: 2026-02-19 (session 25, continued)
 **What happened**:
-- **v0.1.0 tagged and pushed** (91007cc): First public release tag. CHANGELOG updated with Phase 4A. All Phase 4 reviews archived and cleaned up (6 files deleted, summaries in README).
-- **Competitive landscape research**: Analyzed 12 competitors (LangFlow 100K, Dify 115K, n8n 175K, Rivet, ComfyUI, etc.). AI Studio's unique positioning: desktop-native + Inspector + node editor + hybrid routing + MCP + local-first. No competitor combines all. Gap is real but narrow.
-- **MCP = integration layer**: Confirmed MCP plugin system already supports GitHub-style automation. Install MCP server → enable plugin → Tool nodes call it. Full pipeline wired end-to-end.
-- **Transform jsonpath + script modes** (b765061): 3 transformation modes now fully implemented:
-  - `jsonpath`: RFC 9535 JSONPath via `serde_json_path` crate
-  - `script`: Pipe-based expressions with 15 operations (map, select, join, sort, from_json, etc.)
-  - 24 unit tests including GitHub tags extraction scenario
-- **Hybrid intelligence use cases doc** moved from `docs/reviews/` to `docs/hybrid-intelligence-use-cases.md`
+- **v0.1.0 tagged and pushed** (91007cc): First public release tag. CHANGELOG updated with Phase 4A.
+- **Transform jsonpath + script modes** (b765061): 3 transformation modes, 24 tests
+- **File Glob node** (e352d0c): Glob executor + UI, 8 tests
+- **Iterator + Aggregator nodes** (4B.2+4B.3): Full subgraph-based iteration system:
+  - Iterator: extracts items (array/jsonpath), finds subgraph via forward+backward BFS, builds synthetic workflow, executes per item
+  - Aggregator: 3 strategies (array/concat/merge), works paired with Iterator or standalone
+  - Engine: `extra_outputs` on NodeOutput for cross-node result injection, `graph_json` in ExecutionContext
+  - 23 new tests (iterator 16 + aggregator 7), 109 total passing
+  - UI: IteratorNode.tsx + AggregatorNode.tsx + config panels, registered in all 5 files
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history

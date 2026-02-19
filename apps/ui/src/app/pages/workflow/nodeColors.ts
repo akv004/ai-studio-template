@@ -14,6 +14,8 @@ export const nodeColors: Record<string, string> = {
     file_write: '#6a4a2a',
     shell_exec: '#3a3a3a',
     validator: '#2a5a6a',
+    iterator: '#6a3a6a',
+    aggregator: '#4a2a6a',
 };
 
 export const PROVIDER_MODELS: Record<string, string[]> = {

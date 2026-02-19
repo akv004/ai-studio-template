@@ -13,6 +13,8 @@ import { FileGlobNode } from './nodes/FileGlobNode';
 import { FileWriteNode } from './nodes/FileWriteNode';
 import { ShellExecNode } from './nodes/ShellExecNode';
 import { ValidatorNode } from './nodes/ValidatorNode';
+import { IteratorNode } from './nodes/IteratorNode';
+import { AggregatorNode } from './nodes/AggregatorNode';
 
 export const customNodeTypes: NodeTypes = {
     input: InputNode,
@@ -29,4 +31,6 @@ export const customNodeTypes: NodeTypes = {
     file_write: FileWriteNode,
     shell_exec: ShellExecNode,
     validator: ValidatorNode,
+    iterator: IteratorNode,
+    aggregator: AggregatorNode,
 };

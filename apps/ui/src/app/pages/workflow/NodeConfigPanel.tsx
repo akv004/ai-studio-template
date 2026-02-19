@@ -470,6 +470,47 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                 </>
             )}
 
+            {type === 'iterator' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Mode</span>
+                        <select className="config-input" value={(data.mode as string) || 'sequential'}
+                            onChange={(e) => update('mode', e.target.value)}>
+                            <option value="sequential">Sequential</option>
+                            <option value="parallel">Parallel (future)</option>
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">JSONPath Expression (optional)</span>
+                        <input className="config-input font-mono text-xs" value={(data.expression as string) || ''}
+                            onChange={(e) => update('expression', e.target.value)}
+                            placeholder="$.data[*]" />
+                    </label>
+                </>
+            )}
+
+            {type === 'aggregator' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Strategy</span>
+                        <select className="config-input" value={(data.strategy as string) || 'array'}
+                            onChange={(e) => update('strategy', e.target.value)}>
+                            <option value="array">Array (collect all)</option>
+                            <option value="concat">Concat (join as text)</option>
+                            <option value="merge">Merge (combine objects)</option>
+                        </select>
+                    </label>
+                    {(data.strategy as string) === 'concat' && (
+                        <label className="block">
+                            <span className="text-xs text-[var(--text-muted)]">Separator</span>
+                            <input className="config-input" value={(data.separator as string) ?? '\\n'}
+                                onChange={(e) => update('separator', e.target.value)}
+                                placeholder="\n" />
+                        </label>
+                    )}
+                </>
+            )}
+
             {/* Last run output */}
             {nodeState && nodeState.status === 'completed' && nodeState.output && (
                 <div className="pt-2 border-t border-[var(--border-subtle)]">

@@ -34,8 +34,8 @@ pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String>
     for node in nodes {
         let id = node.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let ntype = node.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        if ntype == "input" || ntype == "file_read" || ntype == "file_glob" { has_input = true; }
-        if ntype == "output" || ntype == "file_write" { has_output = true; }
+        if ntype == "input" || ntype == "file_read" || ntype == "file_glob" || ntype == "iterator" { has_input = true; }
+        if ntype == "output" || ntype == "file_write" || ntype == "aggregator" { has_output = true; }
         node_ids.push(id.clone());
         node_types.insert(id, ntype);
     }

@@ -1,7 +1,7 @@
 import {
     FileInput, FileOutput, Cpu, GitFork,
     Wrench, ShieldCheck, Repeat, MessageSquare,
-    Globe, Terminal, CheckSquare, FolderOpen,
+    Globe, Terminal, CheckSquare, FolderOpen, Layers,
 } from 'lucide-react';
 
 export interface NodeCategory {
@@ -46,6 +46,8 @@ export const NODE_CATEGORIES: NodeCategory[] = [
             { type: 'approval', label: 'Approval', icon: ShieldCheck, description: 'Human approval gate' },
             { type: 'transform', label: 'Transform', icon: Repeat, description: 'Data transformation' },
             { type: 'validator', label: 'Validator', icon: CheckSquare, description: 'JSON Schema validation' },
+            { type: 'iterator', label: 'Iterator', icon: Repeat, description: 'Loop over array items' },
+            { type: 'aggregator', label: 'Aggregator', icon: Layers, description: 'Collect iteration results' },
         ],
     },
     {

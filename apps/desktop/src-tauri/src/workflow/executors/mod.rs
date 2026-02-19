@@ -12,6 +12,8 @@ pub mod file_glob;
 pub mod file_write;
 pub mod shell_exec;
 pub mod validator;
+pub mod iterator;
+pub mod aggregator;
 
 use crate::db::Database;
 use crate::sidecar::SidecarManager;
@@ -29,20 +31,22 @@ pub struct ExecutionContext<'a> {
     pub outgoing_by_handle: &'a HashMap<(String, String), Vec<String>>,
     pub seq_counter: &'a AtomicI64,
     pub visited_workflows: &'a HashSet<String>,
+    pub graph_json: &'a str,
 }
 
 pub struct NodeOutput {
     pub value: serde_json::Value,
     pub skip_nodes: Vec<String>,
+    pub extra_outputs: HashMap<String, serde_json::Value>,
 }
 
 impl NodeOutput {
     pub fn value(value: serde_json::Value) -> Self {
-        Self { value, skip_nodes: Vec::new() }
+        Self { value, skip_nodes: Vec::new(), extra_outputs: HashMap::new() }
     }
 
     pub fn with_skips(value: serde_json::Value, skip_nodes: Vec<String>) -> Self {
-        Self { value, skip_nodes }
+        Self { value, skip_nodes, extra_outputs: HashMap::new() }
     }
 }
 
@@ -82,6 +86,9 @@ impl ExecutorRegistry {
         executors.insert("file_write".to_string(), Box::new(file_write::FileWriteExecutor));
         executors.insert("shell_exec".to_string(), Box::new(shell_exec::ShellExecExecutor));
         executors.insert("validator".to_string(), Box::new(validator::ValidatorExecutor));
+        // Phase 4B
+        executors.insert("iterator".to_string(), Box::new(iterator::IteratorExecutor));
+        executors.insert("aggregator".to_string(), Box::new(aggregator::AggregatorExecutor));
         Self { executors }
     }
 

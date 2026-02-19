@@ -34,6 +34,13 @@ export function defaultDataForType(type: string): Record<string, unknown> {
         case 'validator': return {
             schema: '{}', failOnError: false,
         };
+        // Phase 4B
+        case 'iterator': return {
+            mode: 'sequential', expression: '', maxConcurrency: 5,
+        };
+        case 'aggregator': return {
+            strategy: 'array', separator: '\n',
+        };
         default: return {};
     }
 }

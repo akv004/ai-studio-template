@@ -28,18 +28,30 @@
 ## Current Phase: 4 (Universal Automation Canvas)
 
 **Goal**: Graduate node editor from AI workflow builder to universal automation platform. Data I/O nodes, control flow, engine refactoring, canvas UX.
-**Status**: SPEC REVIEWED — READY FOR IMPLEMENTATION
-**Specs in scope**: `phase4-automation-canvas.md` (primary), `node-editor.md` (reference)
+**Status**: IN PROGRESS — 4A complete, 4B next
+**Specs in scope**: `phase4-automation-canvas.md` (primary), `eip-data-io-nodes.md` (data I/O), `node-editor.md` (reference)
 
-### Phase 4 Review Cycle (CURRENT)
+### Phase 4A — Canvas + Node Types (DONE)
+| Step | Status | Commit |
+|------|--------|--------|
+| Spec v1.2 (reviewed by Gemini + Codex) | DONE | — |
+| Engine bug fixes (sourceHandle + clean_output) | DONE | ff2b271 |
+| 4A.1 monolith split (NodeEditorPage → 16 modules) | DONE | bd6cbe1 |
+| 4A.V visual overhaul (typed edges, inline editing, CSS) | DONE | 0924d2f |
+| 4A.3-4A.8 new node types + executors | DONE | 2787a24 |
+| Output truncation fix + vision pipeline | DONE | 4db3fd9 |
+| Validation relaxation (file_read/file_write) | DONE | 4db3fd9 |
+| Playwright E2E testing (15 tests, screenshots) | DONE | 378990e |
+
+### Phase 4B — Data I/O + EIP Patterns (NEXT)
 | Step | Status | Description |
 |------|--------|-------------|
-| Spec v1.1 written | DONE | `docs/specs/phase4-automation-canvas.md` — 10 node types, container model, EIP patterns, canvas UX |
-| Architecture review (Gemini) | DONE | 5 findings — all accepted, spec updated |
-| Implementation review (Codex) | DONE | 10 findings — 9 accepted (spec updated), 1 deferred (F10→4C). Found 2 existing engine bugs (sourceHandle, clean_output). |
-| Iterate on feedback | DONE | Spec v1.2 updated with all accepted findings |
-| Pre-Phase 4 engine fixes | TODO | Fix sourceHandle resolution + clean_output in engine.rs (BLOCKING — must be done before 4A) |
-| Begin 4A implementation | TODO | Start with 4A.1 (UI refactor) after engine fixes |
+| EIP spec written | DONE | `docs/specs/eip-data-io-nodes.md` — File Glob, Iterator, Aggregator, LLM Session, Streaming |
+| EIP spec peer review | TODO | Run via Antigravity/Gemini |
+| 4B.1 File Glob node | TODO | Directory listing with wildcard filtering |
+| 4B.2 Iterator/Splitter | TODO | Process items from array/glob one-by-one |
+| 4B.3 Aggregator | TODO | Collect outputs from iterator into summary |
+| 4B.4 LLM Session mode | TODO | Stateful multi-turn conversations in workflows |
 
 ---
 
@@ -129,18 +141,20 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-18 (session 23)
+**Date**: 2026-02-19 (session 24)
 **What happened**:
-- **Phase 4A.V visual overhaul DONE** (0924d2f):
-  - TypedEdge: colored bezier wires by source handle type
-  - TypedConnectionLine: colored dashed drag preview
-  - Inline editing on all 8 node types via useNodeData hook
-  - Fixed drop position bug (screenToFlowPosition)
-  - Fixed stale selectedNode (now selectedNodeId, derived from nodes array)
-  - CSS polish: node shadows, selection glow (2px ring + glow), header gradient
-  - Edge flow animation during workflow execution
-  - Handle improvements: 10px size, hover glow, title tooltips
-  - New inline input CSS classes (node-inline-input, node-inline-slider)
+- **Output truncation fix** (4db3fd9): Full LLM output sent to UI events (DB gets 200-char preview). RichOutput component with react-markdown. Scrollable output on nodes (NodeShell) and config panel.
+- **Vision pipeline DONE** (4db3fd9): File Read binary mode → LLM → multimodal message → Qwen3-VL. Multi-image support (Vec of images from upstream nodes). Sidecar builds OpenAI-compatible `image_url` content blocks.
+- **Validation relaxation** (4db3fd9): `file_read` counts as input source, `file_write` as output sink — File Read workflows no longer require Input/Output nodes.
+- **EIP spec written** (`docs/specs/eip-data-io-nodes.md`): File Glob, Iterator, Aggregator, LLM Session mode, Streaming, Multi-Image Vision Pipeline. Ready for peer review.
+- **Playwright E2E testing DONE** (e420795, 8ab403f, 70c9fd0, 378990e):
+  - Playwright + Chromium installed, `pnpm test:e2e` / `pnpm test:e2e:ui`
+  - Tauri IPC mock (`e2e/tauri-mock.ts`): all 30+ commands with camelCase fixtures matching `@ai-studio/shared` interfaces
+  - UI tests (6): app loads, sidebar, workflow list, canvas, node palette, node labels — with screenshots
+  - Sidecar API tests (7): health, text chat, vision single/multi image, empty messages, file read→LLM integration
+  - **15/15 tests pass** (sidecar tests skip gracefully when not running)
+  - Screenshots render full UI (Agents page, Node Editor list, workflow canvas with nodes)
+  - Configurable via env: `SIDECAR_URL`, `AI_STUDIO_TOKEN`, `LLM_BASE_URL`, `LLM_MODEL`
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -149,7 +163,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 20: Docker cleanup, template gallery (10 total), launch prep
 - Session 21: Phase 4 spec v1.1 written (10+ nodes, EIP patterns, Unreal architecture, containers)
 - Session 22: Phase 4 spec v1.2, peer reviews triaged, engine bugs fixed, 4A.1 monolith split
+- Session 23: Phase 4A.V visual overhaul (TypedEdge, TypedConnectionLine, inline editing, CSS polish)
 
 **Next session should**:
-1. Resume 4A.3-4A.8: New node types + data I/O executors (all new nodes get inline editing from day one)
-2. Consider v0.1.0 tag for Phase 3 before starting Phase 4 Rust code
+1. Peer review EIP spec (`docs/specs/eip-data-io-nodes.md`)
+2. Triage pending review (`docs/reviews/phase4-spec-architecture-review-2026-02-18.md`)
+3. Implement File Glob node (Phase 4B.1 from EIP spec)
+4. Consider v0.1.0 tag for Phase 3 before starting Phase 4 Rust code

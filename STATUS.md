@@ -28,7 +28,7 @@
 ## Current Phase: 4 (Universal Automation Canvas)
 
 **Goal**: Graduate node editor from AI workflow builder to universal automation platform. Data I/O nodes, control flow, engine refactoring, canvas UX.
-**Status**: IN PROGRESS — 4A + 4B complete, UX polish ongoing
+**Status**: IN PROGRESS — 4A + 4B complete, UX polish in progress
 **Specs in scope**: `phase4-automation-canvas.md` (primary), `eip-data-io-nodes.md` (data I/O), `node-editor.md` (reference)
 
 ### Phase 4A — Canvas + Node Types (DONE)
@@ -43,7 +43,7 @@
 | Validation relaxation (file_read/file_write) | DONE | 4db3fd9 |
 | Playwright E2E testing (15 tests, screenshots) | DONE | 378990e |
 
-### Phase 4B — Data I/O + EIP Patterns (IN PROGRESS)
+### Phase 4B — Data I/O + EIP Patterns (DONE)
 | Step | Status | Description |
 |------|--------|-------------|
 | EIP spec written | DONE | `docs/specs/eip-data-io-nodes.md` — File Glob, Iterator, Aggregator, LLM Session, Streaming |
@@ -57,6 +57,7 @@
 | **Agent edit mode** | DONE | Edit provider, model, prompt after agent creation (4f49165) |
 | **Click-to-place nodes** | DONE | macOS WebKit drag-and-drop fix — click palette then click canvas (335f166) |
 | **Custom node labels** | DONE | Double-click header to name any node (e.g. "LLM · Summarizer"), config panel field (11a166a) |
+| **Toolbar + list UI polish** | DONE | Dividers, node count badge, hover card actions, btn-icon-sm utility (8f4906a) |
 
 ---
 
@@ -146,12 +147,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-19 (session 28)
+**Date**: 2026-02-19 (session 29)
 **What happened**:
-- **Agent edit mode**: Added edit button to agent detail panel — can now change provider, model, system prompt after creation (4f49165)
-- **macOS drag-and-drop fix**: Click-to-place nodes as alternative to HTML5 drag-and-drop (unreliable on macOS WKWebView). Click palette item → click canvas. Crosshair cursor, blue banner indicator, ESC to cancel (335f166)
-- **Custom node labels**: All 16 node types support naming via double-click header (e.g. "LLM · Summarizer"). Also editable in config panel. Labels persist in graph JSON. Empty labels filtered from input name resolution (11a166a)
-- All 115 Rust tests pass, clean TypeScript + Vite build
+- **Toolbar + list UI polish**: Vertical dividers between button groups, node count as styled badge, export button as icon-only, workflow card actions appear on hover, smaller utility icons (Refresh/Upload → 28px), `.btn-icon-sm` + `.toolbar-divider` CSS utilities (8f4906a)
+- Clean TypeScript + Vite build
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -165,6 +164,7 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 25: v0.1.0 tag, Transform jsonpath+script, File Glob, Iterator+Aggregator
 - Session 26: LLM Session mode (4B.4), 5 tests, Playwright verification
 - Session 27: EIP peer reviews (Gemini+Codex), 5 code fixes (UTF-8, containment, cycle detection)
+- Session 28: Agent edit mode, click-to-place nodes, custom node labels
 
 **Next session should**:
 1. Build compelling demo workflow (batch CSV analysis with session LLM)

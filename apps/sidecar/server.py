@@ -73,6 +73,7 @@ class ChatMessageRequest(BaseModel):
     base_url: Optional[str] = None
     extra_config: Optional[dict] = None
     system_prompt: Optional[str] = None
+    images: Optional[list[dict]] = None  # [{"data": "base64...", "mime_type": "image/png"}]
 
 
 class ChatResponse(BaseModel):
@@ -218,7 +219,7 @@ def create_provider_for_request(
         )
     elif name == "local":
         return LocalOpenAIProvider(
-            base_url=base_url or cfg.get("base_url", "http://localhost:8003/v1"),
+            base_url=base_url or cfg.get("base_url", "http://localhost:11434/v1"),
             api_key=api_key or "",
             model_name=cfg.get("model_name", ""),
         )
@@ -464,6 +465,10 @@ async def chat(request: ChatRequest):
 async def chat_direct(request: ChatMessageRequest):
     """Direct chat without conversation history. Used by workflow LLM nodes."""
     try:
+        print(f"[chat/direct] provider={request.provider} model={request.model} "
+              f"base_url={request.base_url} extra_config={request.extra_config} "
+              f"msgs={len(request.messages)}")
+
         # Register provider on-the-fly if config provided
         if request.provider and (request.api_key or request.base_url or request.extra_config):
             provider_inst = create_provider_for_request(
@@ -473,11 +478,28 @@ async def chat_direct(request: ChatMessageRequest):
                 extra_config=request.extra_config,
             )
             chat_service.register_provider(provider_inst)
+        else:
+            print(f"[chat/direct] WARN: No dynamic config — using default provider for '{request.provider}'")
 
         messages = []
         if request.system_prompt:
             messages.append(Message(role="system", content=request.system_prompt))
-        messages.extend(Message(role=m["role"], content=m["content"]) for m in request.messages)
+
+        # Build messages — inject images into multimodal content if present
+        if request.images:
+            print(f"[chat/direct] Vision mode: {len(request.images)} image(s) attached")
+            for m in request.messages:
+                content_blocks = [{"type": "text", "text": m["content"]}]
+                for img in request.images:
+                    data_uri = f"data:{img['mime_type']};base64,{img['data']}"
+                    content_blocks.append({
+                        "type": "image_url",
+                        "image_url": {"url": data_uri},
+                    })
+                messages.append(Message(role=m["role"], content=content_blocks))
+        else:
+            messages.extend(Message(role=m["role"], content=m["content"]) for m in request.messages)
+
         provider = chat_service.get_provider(request.provider or "ollama")
 
         response = await provider.chat(

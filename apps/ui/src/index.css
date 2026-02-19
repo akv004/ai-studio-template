@@ -945,38 +945,48 @@ select.input option {
 .handle-row {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   padding: 2px 0;
   position: relative;
-  min-height: 18px;
+  min-height: 20px;
 }
 
+/* Input handles sit on the left edge — push label away from left */
 .handle-row.input {
   justify-content: flex-start;
+  padding-left: 14px;
 }
 
+/* Output handles sit on the right edge — push label away from right */
 .handle-row.output {
   justify-content: flex-end;
+  padding-right: 14px;
 }
 
 .handle-label {
   font-size: 10px;
   color: #a0a0a0;
   white-space: nowrap;
+  line-height: 1;
+  user-select: none;
 }
 
 /* --- Handle Dots (color-coded by data type, V6: larger + glow) --- */
 .custom-handle {
   width: 10px !important;
   height: 10px !important;
+  min-width: 10px;
+  min-height: 10px;
   border-radius: 50% !important;
   border: none !important;
+  flex-shrink: 0;
   transition: transform var(--transition-fast), filter var(--transition-fast);
 }
 
 .custom-handle:hover {
   transform: scale(1.8);
   filter: drop-shadow(0 0 3px currentColor);
+  z-index: 10;
 }
 
 .custom-handle.handle-text {

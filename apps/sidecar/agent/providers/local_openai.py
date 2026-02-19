@@ -21,7 +21,7 @@ class LocalOpenAIProvider(AgentProvider):
 
     def __init__(
         self,
-        base_url: str = "http://localhost:8003/v1",
+        base_url: str = "http://localhost:11434/v1",
         api_key: str = "",
         model_name: str = "llama3.2",
         timeout: float = 120.0,
@@ -30,6 +30,7 @@ class LocalOpenAIProvider(AgentProvider):
         self.api_key = api_key
         self.model_name = model_name
         self.timeout = timeout
+        print(f"[local] LocalOpenAIProvider init: base_url={self.base_url}, model={self.model_name}")
 
     async def chat(
         self,
@@ -44,6 +45,14 @@ class LocalOpenAIProvider(AgentProvider):
             raise ValueError("base_url is required for local provider")
 
         model = model or self.model_name
+        url = f"{self.base_url}/chat/completions"
+        last_content = messages[-1].content if messages else "(empty)"
+        if isinstance(last_content, list):
+            msg_preview = f"[multimodal: {len(last_content)} blocks]"
+        else:
+            msg_preview = str(last_content)[:80]
+        print(f"[local] chat → {url} model={model} msgs={len(messages)} preview='{msg_preview}'")
+
         headers: dict[str, str] = {"Content-Type": "application/json"}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"

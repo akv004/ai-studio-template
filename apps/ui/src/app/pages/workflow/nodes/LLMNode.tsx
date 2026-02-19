@@ -43,6 +43,7 @@ export function LLMNode({ id, data, selected }: { id: string; data: Record<strin
                         <option value="google">Google</option>
                         <option value="azure_openai">Azure OpenAI</option>
                         <option value="ollama">Ollama</option>
+                        <option value="local">Local</option>
                     </select>
                     <select className="node-inline-input" value={model}
                         onChange={e => updateField('model', e.target.value)}

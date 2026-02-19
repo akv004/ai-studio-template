@@ -2,6 +2,7 @@ import { Plus, Trash2, Check, X } from 'lucide-react';
 import type { Node } from '@xyflow/react';
 import { useAppStore } from '../../../state/store';
 import { PROVIDER_MODELS } from './nodeColors';
+import { RichOutput } from './components/RichOutput';
 
 export function NodeConfigPanel({ node, onChange, onDelete }: {
     node: Node;
@@ -406,9 +407,7 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                             </span>
                         )}
                     </div>
-                    <pre className="text-xs text-[var(--text-secondary)] bg-[var(--bg-primary)] p-2 rounded max-h-[200px] overflow-y-auto whitespace-pre-wrap font-mono">
-                        {nodeState.output}
-                    </pre>
+                    <RichOutput content={nodeState.output} />
                 </div>
             )}
             {nodeState && nodeState.status === 'error' && nodeState.error && (

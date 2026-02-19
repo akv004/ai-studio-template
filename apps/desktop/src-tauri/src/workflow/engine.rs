@@ -275,14 +275,23 @@ pub async fn execute_workflow_with_visited(
 
         // Resolve input from incoming edges (using sourceHandle for handle-specific selection)
         let incoming_value = if let Some(inc) = incoming_edges.get(node_id) {
+            eprintln!("[workflow] Engine: resolving incoming for node '{}' ({}) — {} edge(s): {:?}",
+                node_id, node_type, inc.len(),
+                inc.iter().map(|(s, sh, th)| format!("{}:{} → {}", s, sh, th)).collect::<Vec<_>>());
             // Single edge to default "input" handle: flatten to the resolved value
             if inc.len() == 1 && inc[0].2 == "input" {
-                resolve_source_handle(&node_outputs, &inc[0].0, &inc[0].1)
+                let val = resolve_source_handle(&node_outputs, &inc[0].0, &inc[0].1);
+                eprintln!("[workflow] Engine: node '{}' single-edge flatten → {:?}",
+                    node_id, val.as_ref().map(|v| v.to_string()[..v.to_string().len().min(100)].to_string()));
+                val
             } else {
                 // Multiple edges or named handles: build object keyed by target handle
                 let mut obj = serde_json::Map::new();
                 for (src_id, src_handle, tgt_handle) in inc {
                     if let Some(val) = resolve_source_handle(&node_outputs, src_id, src_handle) {
+                        eprintln!("[workflow] Engine: node '{}' handle '{}' ← {}:{} = '{}'",
+                            node_id, tgt_handle, src_id, src_handle,
+                            &val.to_string()[..val.to_string().len().min(100)]);
                         obj.insert(tgt_handle.clone(), val);
                     }
                 }
@@ -347,8 +356,9 @@ pub async fn execute_workflow_with_visited(
                 };
                 node_outputs.insert(node_id.clone(), clean_output.clone());
 
-                let preview_text = extract_primary_text(&clean_output);
-                let output_preview = preview_text[..preview_text.len().min(200)].to_string();
+                let full_text = extract_primary_text(&clean_output);
+                let output_preview = full_text[..full_text.len().min(200)].to_string();
+                // DB event gets preview only (storage), UI event gets full output (display)
                 let _ = record_event(db, session_id, "workflow.node.completed", "desktop.workflow",
                     serde_json::json!({
                         "node_id": node_id, "node_type": node_type,
@@ -357,7 +367,9 @@ pub async fn execute_workflow_with_visited(
                 emit_workflow_event(app, session_id, "workflow.node.completed",
                     serde_json::json!({
                         "node_id": node_id, "node_type": node_type,
-                        "output_preview": output_preview, "duration_ms": node_duration,
+                        "output_preview": output_preview,
+                        "output_full": full_text,
+                        "duration_ms": node_duration,
                     }),
                     &seq_counter);
             }
@@ -638,5 +650,145 @@ mod tests {
             resolve_template("{{llm_1}}", &node_outputs, &inputs),
             "The answer is 42"
         );
+    }
+
+    // --- Integration tests: simulate Input → LLM data flow ---
+
+    /// Simulates the engine's incoming resolution for a named target handle.
+    /// This is exactly what engine.rs lines 277-293 do.
+    fn simulate_incoming_resolution(
+        node_outputs: &HashMap<String, serde_json::Value>,
+        edges: &[(String, String, String, String)], // (src_id, src_handle, tgt_id, tgt_handle)
+        target_node: &str,
+    ) -> Option<serde_json::Value> {
+        let inc: Vec<_> = edges.iter()
+            .filter(|(_, _, tgt, _)| tgt == target_node)
+            .map(|(src, sh, _, th)| (src.clone(), sh.clone(), th.clone()))
+            .collect();
+
+        if inc.is_empty() { return None; }
+
+        if inc.len() == 1 && inc[0].2 == "input" {
+            return resolve_source_handle(node_outputs, &inc[0].0, &inc[0].1);
+        }
+
+        let mut obj = serde_json::Map::new();
+        for (src_id, src_handle, tgt_handle) in &inc {
+            if let Some(val) = resolve_source_handle(node_outputs, src_id, src_handle) {
+                obj.insert(tgt_handle.clone(), val);
+            }
+        }
+        if obj.is_empty() { None } else { Some(serde_json::Value::Object(obj)) }
+    }
+
+    /// Simulates LLM prompt resolution given incoming data and node config.
+    fn simulate_llm_prompt(
+        incoming: &Option<serde_json::Value>,
+        node_data: &serde_json::Value,
+        node_outputs: &HashMap<String, serde_json::Value>,
+        inputs: &HashMap<String, serde_json::Value>,
+    ) -> String {
+        let incoming_prompt = incoming.as_ref()
+            .and_then(|inc| inc.get("prompt"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        let incoming_bare = incoming.as_ref()
+            .and_then(|inc| inc.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        let prompt_template = node_data.get("prompt").and_then(|v| v.as_str()).unwrap_or("{{input}}");
+
+        if let Some(p) = incoming_prompt {
+            return p;
+        }
+        if let Some(s) = incoming_bare {
+            return s;
+        }
+        if prompt_template.contains("{{") {
+            return resolve_template(prompt_template, node_outputs, inputs);
+        }
+        prompt_template.to_string()
+    }
+
+    #[test]
+    fn test_input_to_llm_with_value_via_prompt_handle() {
+        // Scenario: Input node outputs "2*8=?", edge to LLM "prompt" handle
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("input_1".to_string(), serde_json::json!("2*8=?"));
+
+        // Edge: input_1:output → llm_1:prompt
+        let edges = vec![
+            ("input_1".to_string(), "output".to_string(), "llm_1".to_string(), "prompt".to_string()),
+        ];
+        let incoming = simulate_incoming_resolution(&node_outputs, &edges, "llm_1");
+        assert_eq!(incoming, Some(serde_json::json!({"prompt": "2*8=?"})));
+
+        // LLM resolves prompt from incoming "prompt" handle
+        let llm_data = serde_json::json!({"provider": "google", "model": "gemini-2.0-flash"});
+        let prompt = simulate_llm_prompt(&incoming, &llm_data, &node_outputs, &HashMap::new());
+        assert_eq!(prompt, "2*8=?");
+    }
+
+    #[test]
+    fn test_input_to_llm_empty_value_falls_to_template() {
+        // Scenario: Input node outputs "" (empty), edge to LLM "prompt" handle
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("input_1".to_string(), serde_json::json!(""));
+
+        let edges = vec![
+            ("input_1".to_string(), "output".to_string(), "llm_1".to_string(), "prompt".to_string()),
+        ];
+        let incoming = simulate_incoming_resolution(&node_outputs, &edges, "llm_1");
+        // incoming = {"prompt": ""} — empty string
+        assert_eq!(incoming, Some(serde_json::json!({"prompt": ""})));
+
+        // LLM skips empty "prompt" handle, falls to template
+        let mut inputs = HashMap::new();
+        inputs.insert("query".to_string(), serde_json::json!("What is 2+2?"));
+        let llm_data = serde_json::json!({"provider": "google", "model": "gemini-2.0-flash"});
+        let prompt = simulate_llm_prompt(&incoming, &llm_data, &node_outputs, &inputs);
+        // Template {{input}} resolves from inputs — picks first value
+        assert_eq!(prompt, "What is 2+2?");
+    }
+
+    #[test]
+    fn test_input_to_llm_via_value_handle() {
+        // Scenario: Input node source handle is "value" (not default "output")
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("input_1".to_string(), serde_json::json!("Hello world"));
+
+        // Edge: input_1:value → llm_1:prompt
+        let edges = vec![
+            ("input_1".to_string(), "value".to_string(), "llm_1".to_string(), "prompt".to_string()),
+        ];
+        let incoming = simulate_incoming_resolution(&node_outputs, &edges, "llm_1");
+        // resolve_source_handle with "value" on a string falls back to whole value
+        assert_eq!(incoming, Some(serde_json::json!({"prompt": "Hello world"})));
+
+        let llm_data = serde_json::json!({"provider": "local", "model": "qwen3"});
+        let prompt = simulate_llm_prompt(&incoming, &llm_data, &node_outputs, &HashMap::new());
+        assert_eq!(prompt, "Hello world");
+    }
+
+    #[test]
+    fn test_input_to_llm_single_edge_to_default_handle() {
+        // Scenario: single edge to default "input" handle (legacy)
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("input_1".to_string(), serde_json::json!("test prompt"));
+
+        let edges = vec![
+            ("input_1".to_string(), "output".to_string(), "llm_1".to_string(), "input".to_string()),
+        ];
+        let incoming = simulate_incoming_resolution(&node_outputs, &edges, "llm_1");
+        // Single edge to "input" handle: flattened to bare value
+        assert_eq!(incoming, Some(serde_json::json!("test prompt")));
+
+        let llm_data = serde_json::json!({});
+        let prompt = simulate_llm_prompt(&incoming, &llm_data, &node_outputs, &HashMap::new());
+        // incoming is bare string → picked up by incoming_bare
+        assert_eq!(prompt, "test prompt");
     }
 }

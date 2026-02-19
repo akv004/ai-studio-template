@@ -29,8 +29,12 @@ export function OutputPreview({ nodeId }: { nodeId: string }) {
     const state = useAppStore((s) => s.workflowNodeStates[nodeId]);
     if (!state || state.status !== 'completed' || !state.output) return null;
     return (
-        <div className="mt-1 text-[10px] text-[#888] truncate max-w-[160px] font-mono">
-            {state.output.slice(0, 80)}{state.output.length > 80 ? '...' : ''}
+        <div
+            className="mt-1 text-[10px] text-[#999] max-w-[180px] max-h-[80px] overflow-y-auto font-mono leading-tight whitespace-pre-wrap break-words cursor-default"
+            title={state.output.slice(0, 1000)}
+            onMouseDown={e => e.stopPropagation()}
+        >
+            {state.output}
         </div>
     );
 }

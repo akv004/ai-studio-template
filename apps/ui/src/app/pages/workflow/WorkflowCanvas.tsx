@@ -26,6 +26,7 @@ import { NODE_CATEGORIES } from './nodeCategories';
 import { nodeColors } from './nodeColors';
 import { defaultDataForType } from './nodeDefaults';
 import { NodeConfigPanel } from './NodeConfigPanel';
+import { RichOutput } from './components/RichOutput';
 import { generateNodeId, formatRuntimeError } from './utils';
 import { TypedEdge } from './edges/TypedEdge';
 import { TypedConnectionLine } from './edges/TypedConnectionLine';
@@ -89,12 +90,31 @@ export function WorkflowCanvas({ workflow, onBack }: {
     const [lastRunDebug, setLastRunDebug] = useState<LastRunDebugInfo | null>(null);
     const [lastRunResult, setLastRunResult] = useState<LastRunResult | null>(null);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null);
+    const [editingName, setEditingName] = useState(false);
+    const [nameDraft, setNameDraft] = useState(workflow.name);
     const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
     const reactFlowRef = useRef<HTMLDivElement>(null);
     const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
+    const nameInputRef = useRef<HTMLInputElement>(null);
 
     // A1: Derive selectedNode from nodes array — always fresh, never stale
     const selectedNode = selectedNodeId ? nodes.find(n => n.id === selectedNodeId) ?? null : null;
+
+    const handleNameSubmit = useCallback(async () => {
+        const trimmed = nameDraft.trim();
+        if (trimmed && trimmed !== workflow.name) {
+            try {
+                await updateWorkflow(workflow.id, { name: trimmed });
+                addToast('Workflow renamed', 'success');
+            } catch {
+                addToast('Failed to rename', 'error');
+                setNameDraft(workflow.name);
+            }
+        } else {
+            setNameDraft(workflow.name);
+        }
+        setEditingName(false);
+    }, [nameDraft, workflow.id, workflow.name, updateWorkflow, addToast]);
 
     // Track changes
     useEffect(() => {
@@ -124,7 +144,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
                         setNodeState(nodeId, 'running');
                     } else if (type === 'workflow.node.completed') {
                         setNodeState(nodeId, 'completed', {
-                            output: (payload.output_preview || payload.output) as string | undefined,
+                            output: (payload.output_full || payload.output_preview || payload.output) as string | undefined,
                             durationMs: payload.duration_ms as number | undefined,
                             tokens: payload.tokens as number | undefined,
                             costUsd: payload.cost_usd as number | undefined,
@@ -287,7 +307,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
         nodes.forEach((n) => {
             if (n.type === 'input') {
                 const name = (n.data.name as string) || 'input';
-                const defaultVal = n.data.default ?? '';
+                const defaultVal = (n.data.defaultValue as string) ?? (n.data.default as string) ?? '';
                 defaults[name] = defaultVal;
             }
         });
@@ -480,7 +500,26 @@ export function WorkflowCanvas({ workflow, onBack }: {
                     <button className="btn-icon" onClick={onBack} title="Back to list">
                         <ChevronLeft size={18} />
                     </button>
-                    <span className="font-medium">{workflow.name}</span>
+                    {editingName ? (
+                        <input
+                            ref={nameInputRef}
+                            className="font-medium bg-transparent border-b border-[var(--border-accent)] outline-none px-1 py-0 text-[var(--text-primary)] w-48"
+                            value={nameDraft}
+                            onChange={e => setNameDraft(e.target.value)}
+                            onBlur={handleNameSubmit}
+                            onKeyDown={e => {
+                                if (e.key === 'Enter') handleNameSubmit();
+                                if (e.key === 'Escape') { setNameDraft(workflow.name); setEditingName(false); }
+                            }}
+                            autoFocus
+                        />
+                    ) : (
+                        <span
+                            className="font-medium cursor-pointer hover:text-[var(--text-accent)] transition-colors"
+                            onClick={() => { setEditingName(true); setNameDraft(workflow.name); }}
+                            title="Click to rename"
+                        >{workflow.name}</span>
+                    )}
                     {hasChanges && (
                         <span className="text-xs text-yellow-400">unsaved</span>
                     )}
@@ -536,13 +575,14 @@ export function WorkflowCanvas({ workflow, onBack }: {
                             </button>
                         </div>
                     </div>
-                    {Object.entries(lastRunResult.outputs).map(([key, value]) => (
-                        <div key={key} className="mt-2">
-                            <pre className="text-sm text-[var(--text-secondary)] bg-[var(--bg-primary)] p-3 rounded max-h-[300px] overflow-y-auto whitespace-pre-wrap font-mono">
-                                {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
-                            </pre>
-                        </div>
-                    ))}
+                    {Object.entries(lastRunResult.outputs).map(([key, value]) => {
+                        const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+                        return (
+                            <div key={key} className="mt-2">
+                                <RichOutput content={text} />
+                            </div>
+                        );
+                    })}
                 </div>
             )}
 

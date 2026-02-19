@@ -18,7 +18,12 @@ impl NodeExecutor for LlmExecutor {
         let provider_name = node_data.get("provider").and_then(|v| v.as_str()).unwrap_or("ollama");
         let model = node_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
         let temperature = node_data.get("temperature").and_then(|v| v.as_f64()).unwrap_or(0.7);
-        
+
+        eprintln!("[workflow] LLM node '{}': incoming={:?}", node_id,
+            incoming.as_ref().map(|v| v.to_string()[..v.to_string().len().min(200)].to_string()));
+        eprintln!("[workflow] LLM node '{}': node_data keys={:?}", node_id,
+            node_data.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+
         // Handle Inputs (System, Context, Prompt)
         // 1. System Prompt: Check incoming "system" -> config "systemPrompt" -> default
         let mut system_prompt = incoming.as_ref()
@@ -26,7 +31,7 @@ impl NodeExecutor for LlmExecutor {
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        
+
         if system_prompt.is_empty() {
              system_prompt = node_data.get("systemPrompt").and_then(|v| v.as_str()).unwrap_or("").to_string();
         }
@@ -37,38 +42,59 @@ impl NodeExecutor for LlmExecutor {
             .map(|v| if let Some(s) = v.as_str() { s.to_string() } else { serde_json::to_string_pretty(v).unwrap_or_default() })
             .unwrap_or_default();
 
-        // 3. Prompt: Check incoming "prompt" -> config "prompt" -> default template
-        // Note: Engine passes flattened input (single edge) or object (multiple edges).
-        // If single edge to NOT "prompt", it might be mapped via handle name logic in engine.
-        // Assuming engine handles mapping correctly if multiple inputs exist.
-        
+        // 3. Prompt resolution chain:
+        //    a) incoming edge "prompt" handle (non-empty) → use directly
+        //    b) incoming as bare string (single edge, non-empty) → use directly
+        //    c) template from node config → resolve via template engine
+        //    d) fallback: "{{input}}" template
+
+        let incoming_prompt = incoming.as_ref()
+            .and_then(|inc| inc.get("prompt"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        let incoming_bare = incoming.as_ref()
+            .and_then(|inc| inc.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
         let prompt_template = node_data.get("prompt").and_then(|v| v.as_str()).unwrap_or("{{input}}");
-        
-        // Construct final prompt
-        let mut prompt = if prompt_template.contains("{{") {
-             resolve_template(prompt_template, ctx.node_outputs, ctx.inputs)
+
+        eprintln!("[workflow] LLM node '{}': incoming_prompt={:?}, incoming_bare={:?}, template='{}'",
+            node_id,
+            incoming_prompt.as_ref().map(|s| &s[..s.len().min(80)]),
+            incoming_bare.as_ref().map(|s| &s[..s.len().min(80)]),
+            &prompt_template[..prompt_template.len().min(80)]);
+
+        let mut prompt = if let Some(p) = incoming_prompt {
+            eprintln!("[workflow] LLM node '{}': prompt from incoming 'prompt' handle", node_id);
+            p
+        } else if let Some(s) = incoming_bare {
+            eprintln!("[workflow] LLM node '{}': prompt from incoming bare string", node_id);
+            s
+        } else if prompt_template.contains("{{") {
+            let resolved = resolve_template(prompt_template, ctx.node_outputs, ctx.inputs);
+            eprintln!("[workflow] LLM node '{}': prompt from template '{}' → '{}'",
+                node_id, prompt_template, &resolved[..resolved.len().min(80)]);
+            resolved
         } else {
-             prompt_template.to_string()
+            eprintln!("[workflow] LLM node '{}': prompt from literal template", node_id);
+            prompt_template.to_string()
         };
 
-        // If specific "prompt" input exists (overriding template logic slightly if simple)
-        if let Some(inc) = incoming {
-            if let Some(p) = inc.get("prompt").and_then(|v| v.as_str()) {
-                prompt = p.to_string();
-            } else if !context_str.is_empty() {
-                 if !prompt.contains(&context_str) {
-                      prompt = format!("Context:\n{}\n\nQuestion:\n{}", context_str, prompt);
-                 }
-            } else if inc.is_string() {
-                 // Fallback for single string input not named "prompt" but treating as such
-                 // prompt is already resolved from template, maybe we append?
-                 // Let's stick to template resolution for main flow.
-            }
+        // Inject context if present and not already in prompt
+        if !context_str.is_empty() && !prompt.contains(&context_str) {
+            prompt = format!("Context:\n{}\n\nQuestion:\n{}", context_str, prompt);
         }
-        
-        eprintln!("[workflow] LLM node '{}': provider={}, model={}", node_id, provider_name, model);
-        eprintln!("[workflow] LLM node '{}': prompt='{}' system='{}'", node_id, 
-            &prompt[..prompt.len().min(50)], &system_prompt[..system_prompt.len().min(50)]);
+
+        if prompt.is_empty() {
+            eprintln!("[workflow] LLM node '{}': WARNING — prompt is EMPTY after all resolution!", node_id);
+        }
+
+        eprintln!("[workflow] LLM node '{}': FINAL provider={}, model={}, prompt='{}', system='{}'",
+            node_id, provider_name, model,
+            &prompt[..prompt.len().min(100)], &system_prompt[..system_prompt.len().min(50)]);
 
         let prefix = format!("provider.{}.", provider_name);
         let mut api_key = String::new();
@@ -84,6 +110,94 @@ impl NodeExecutor for LlmExecutor {
                 }
             }
         }
+        eprintln!("[workflow] LLM node '{}': settings → base_url='{}', api_key_len={}, extra_config={:?}",
+            node_id, base_url, api_key.len(), extra_config);
+
+        // Collect image data from upstream nodes (File Read binary mode, future File Glob)
+        // resolve_source_handle strips metadata (encoding, mime_type) when extracting
+        // a specific handle field, so we also scan ctx.node_outputs for the full output.
+        let images: Vec<(String, String)> = {
+            let extract_image = |obj: &serde_json::Map<String, serde_json::Value>| -> Option<(String, String)> {
+                let encoding = obj.get("encoding").and_then(|v| v.as_str()).unwrap_or("");
+                let mime = obj.get("mime_type").and_then(|v| v.as_str()).unwrap_or("");
+                if encoding == "base64" && mime.starts_with("image/") {
+                    let data = obj.get("content").and_then(|v| v.as_str()).unwrap_or("");
+                    if !data.is_empty() {
+                        return Some((data.to_string(), mime.to_string()));
+                    }
+                }
+                None
+            };
+
+            let mut found: Vec<(String, String)> = Vec::new();
+
+            // 1. Check incoming object (handles, nested values)
+            if let Some(inc) = incoming.as_ref() {
+                if let Some(obj) = inc.as_object() {
+                    if let Some(img) = extract_image(obj) {
+                        found.push(img);
+                    }
+                    // Check nested handle values
+                    for (_key, val) in obj {
+                        if let Some(inner) = val.as_object() {
+                            if let Some(img) = extract_image(inner) {
+                                found.push(img);
+                            }
+                        }
+                        // Future: File Glob "files" array with multiple images
+                        if let Some(arr) = val.as_array() {
+                            for item in arr {
+                                if let Some(item_obj) = item.as_object() {
+                                    if let Some(img) = extract_image(item_obj) {
+                                        found.push(img);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 2. Fallback: scan upstream node outputs for image data
+            if found.is_empty() {
+                for (_nid, output) in ctx.node_outputs.iter() {
+                    if let Some(obj) = output.as_object() {
+                        if let Some(img) = extract_image(obj) {
+                            eprintln!("[workflow] LLM node '{}': found image in upstream node '{}'", node_id, _nid);
+                            found.push(img);
+                        }
+                        // Check "files" array (File Glob output)
+                        if let Some(files) = obj.get("files").and_then(|v| v.as_array()) {
+                            for file_entry in files {
+                                if let Some(file_obj) = file_entry.as_object() {
+                                    if let Some(img) = extract_image(file_obj) {
+                                        found.push(img);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            found
+        };
+
+        // When images detected: if the prompt IS base64 data (leaked through from File Read
+        // content → prompt wire), replace with the config prompt or default vision prompt.
+        if !images.is_empty() {
+            eprintln!("[workflow] LLM node '{}': detected {} image(s), building multimodal message", node_id, images.len());
+            if prompt.len() > 100 && !prompt.contains(' ') {
+                let config_prompt = node_data.get("prompt").and_then(|v| v.as_str()).unwrap_or("");
+                prompt = if !config_prompt.is_empty() && config_prompt != "{{input}}" {
+                    config_prompt.to_string()
+                } else {
+                    "Describe what you see in this image in detail.".to_string()
+                };
+                eprintln!("[workflow] LLM node '{}': replaced base64 prompt with text: '{}'",
+                    node_id, &prompt[..prompt.len().min(80)]);
+            }
+        }
 
         let mut body = serde_json::json!({
             "messages": [{ "role": "user", "content": prompt }],
@@ -91,6 +205,14 @@ impl NodeExecutor for LlmExecutor {
             "model": model,
             "temperature": temperature,
         });
+
+        // Attach images for vision models (supports multiple)
+        if !images.is_empty() {
+            let img_arr: Vec<serde_json::Value> = images.iter().map(|(data, mime)| {
+                serde_json::json!({"data": data, "mime_type": mime})
+            }).collect();
+            body["images"] = serde_json::Value::Array(img_arr);
+        }
         if !system_prompt.is_empty() {
             body["system_prompt"] = serde_json::Value::String(system_prompt.to_string());
         }
@@ -103,6 +225,9 @@ impl NodeExecutor for LlmExecutor {
         if !extra_config.is_empty() {
             body["extra_config"] = serde_json::Value::Object(extra_config);
         }
+
+        eprintln!("[workflow] LLM node '{}': POST /chat/direct body={}", node_id,
+            &body.to_string()[..body.to_string().len().min(300)]);
 
         let _ = record_event(ctx.db, ctx.session_id, "llm.request.started", "desktop.workflow",
             serde_json::json!({ "node_id": node_id, "model": model, "provider": provider_name }));
@@ -119,26 +244,28 @@ impl NodeExecutor for LlmExecutor {
         let output_tokens = usage.and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
         let resp_model = resp.get("model").and_then(|v| v.as_str()).unwrap_or(model).to_string();
 
+        eprintln!("[workflow] LLM node '{}': response model={}, tokens={}/{}, content='{}'",
+            node_id, resp_model, input_tokens, output_tokens,
+            &content[..content.len().min(100)]);
+
         let _ = record_event(ctx.db, ctx.session_id, "llm.response.completed", "desktop.workflow",
             serde_json::json!({
                 "node_id": node_id, "model": resp_model, "provider": provider_name,
                 "input_tokens": input_tokens, "output_tokens": output_tokens,
             }));
 
-        // Cost estimation (approximate generic logic, ideally from sidecar)
-        // This is a placeholder. Real cost should come from a pricing table.
-        let cost_usd = (input_tokens as f64 * 0.00000015) + (output_tokens as f64 * 0.0000006); 
+        let cost_usd = (input_tokens as f64 * 0.00000015) + (output_tokens as f64 * 0.0000006);
 
         Ok(NodeOutput::value(serde_json::json!({
-            "response": content,       // Main text output
-            "content": content,        // Backward compat alias
-            "usage": {                 // JSON output
+            "response": content,
+            "content": content,
+            "usage": {
                 "total_tokens": input_tokens + output_tokens,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,
             },
-            "cost": format!("${:.6}", cost_usd), // String output (Float in future)
-            "__usage": {               // Internal usage for graph stats
+            "cost": format!("${:.6}", cost_usd),
+            "__usage": {
                 "total_tokens": input_tokens + output_tokens,
                 "input_tokens": input_tokens,
                 "output_tokens": output_tokens,

@@ -11,7 +11,7 @@ import time
 import json
 from typing import Optional
 from dataclasses import dataclass, field
-from agent.providers import AgentProvider, Message, ChatResponse, OllamaProvider
+from agent.providers import AgentProvider, Message, ChatResponse, OllamaProvider, LocalOpenAIProvider
 
 
 @dataclass
@@ -63,6 +63,7 @@ class ChatService:
 
         # Register default providers
         self.register_provider(OllamaProvider())
+        self.register_provider(LocalOpenAIProvider())
 
     def register_provider(self, provider: AgentProvider):
         """Register a provider instance"""

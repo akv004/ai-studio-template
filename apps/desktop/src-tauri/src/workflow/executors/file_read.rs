@@ -120,8 +120,11 @@ impl NodeExecutor for FileReadExecutor {
                     .map_err(|e| format!("Failed to read file: {}", e))?;
                 use base64::Engine;
                 let encoded = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                let mime = guess_mime_type(&canonical);
                 Ok(NodeOutput::value(serde_json::json!({
                     "content": encoded,
+                    "encoding": "base64",
+                    "mime_type": mime,
                     "size": file_size,
                 })))
             }
@@ -135,6 +138,23 @@ impl NodeExecutor for FileReadExecutor {
                 })))
             }
         }
+    }
+}
+
+/// Guess MIME type from file extension
+fn guess_mime_type(path: &std::path::Path) -> &'static str {
+    match path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase().as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "pdf" => "application/pdf",
+        "mp3" => "audio/mpeg",
+        "wav" => "audio/wav",
+        "mp4" => "video/mp4",
+        _ => "application/octet-stream",
     }
 }
 

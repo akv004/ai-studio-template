@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Plus, Trash2, Copy, RefreshCw, GitFork,
-    Loader2, Upload, LayoutTemplate,
+    Loader2, Upload, LayoutTemplate, Pencil, Check, X,
 } from 'lucide-react';
 import { useAppStore } from '../../../state/store';
 
@@ -17,10 +17,25 @@ export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
     onCreate: () => void;
     onCreateFromTemplate: (templateId: string) => void;
 }) {
-    const { workflows, workflowsLoading, fetchWorkflows, deleteWorkflow, duplicateWorkflow, createWorkflow, addToast } = useAppStore();
+    const { workflows, workflowsLoading, fetchWorkflows, deleteWorkflow, duplicateWorkflow, createWorkflow, updateWorkflow, addToast } = useAppStore();
     const [templates, setTemplates] = useState<TemplateSummary[]>([]);
     const [showTemplates, setShowTemplates] = useState(false);
+    const [renamingId, setRenamingId] = useState<string | null>(null);
+    const [renameDraft, setRenameDraft] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const handleRenameSubmit = useCallback(async (id: string) => {
+        const trimmed = renameDraft.trim();
+        if (trimmed) {
+            try {
+                await updateWorkflow(id, { name: trimmed });
+                addToast('Renamed', 'success');
+            } catch {
+                addToast('Failed to rename', 'error');
+            }
+        }
+        setRenamingId(null);
+    }, [renameDraft, updateWorkflow, addToast]);
 
     useEffect(() => {
         fetchWorkflows();
@@ -133,8 +148,26 @@ export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
                             className="card cursor-pointer hover:border-[var(--border-accent)]"
                             onClick={() => onSelect(w.id)}>
                             <div className="flex items-center justify-between">
-                                <div>
-                                    <div className="font-medium">{w.name}</div>
+                                <div className="flex-1 min-w-0">
+                                    {renamingId === w.id ? (
+                                        <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                                            <input
+                                                className="font-medium bg-transparent border-b border-[var(--border-accent)] outline-none px-1 text-[var(--text-primary)] w-full"
+                                                value={renameDraft}
+                                                onChange={e => setRenameDraft(e.target.value)}
+                                                onBlur={() => handleRenameSubmit(w.id)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') handleRenameSubmit(w.id);
+                                                    if (e.key === 'Escape') setRenamingId(null);
+                                                }}
+                                                autoFocus
+                                            />
+                                            <button className="btn-icon" onClick={() => handleRenameSubmit(w.id)}><Check size={12} /></button>
+                                            <button className="btn-icon" onClick={() => setRenamingId(null)}><X size={12} /></button>
+                                        </div>
+                                    ) : (
+                                        <div className="font-medium truncate">{w.name}</div>
+                                    )}
                                     {w.description && (
                                         <div className="text-sm text-[var(--text-muted)] mt-0.5">{w.description}</div>
                                     )}
@@ -143,6 +176,10 @@ export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
                                     </div>
                                 </div>
                                 <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                                    <button className="btn-icon" title="Rename"
+                                        onClick={() => { setRenamingId(w.id); setRenameDraft(w.name); }}>
+                                        <Pencil size={14} />
+                                    </button>
                                     <button className="btn-icon" title="Duplicate"
                                         onClick={() => duplicateWorkflow(w.id)}>
                                         <Copy size={14} />

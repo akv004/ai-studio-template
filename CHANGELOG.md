@@ -2,7 +2,40 @@
 
 All notable changes to AI Studio are documented here.
 
-## [0.1.0] - 2026-02-18
+## [0.1.0] - 2026-02-19
+
+### Phase 4A: Universal Automation Canvas
+
+**New Node Types**
+- HTTP Request node: GET/POST/PUT/DELETE with headers, body, auth token support
+- File Read node: text and binary modes with encoding selection
+- File Write node: create/append/overwrite with directory auto-creation
+- Shell Exec node: command execution with timeout, working directory, environment variables
+- Validator node: JSON Schema validation with pass/fail routing
+
+**Visual Overhaul**
+- TypedEdge: colored bezier wires matching handle data types (magenta=text, orange=json, red=bool, green=float, gray=any)
+- TypedConnectionLine: live drag preview with type-aware coloring
+- Inline editing on all 8 node types (edit directly on canvas without config panel)
+- CSS polish: shadows, glow effects, gradient backgrounds, edge animation
+- Handle improvements: better spacing, hover states, type labels
+
+**Vision Pipeline**
+- File Read binary mode outputs base64 with mime_type detection
+- LLM node accepts multiple image inputs from upstream nodes
+- Sidecar builds OpenAI-compatible multi-image content blocks
+- Validated end-to-end with Qwen3-VL (local vision model)
+
+**Architecture**
+- Monolith split: NodeEditorPage.tsx refactored into 16 focused modules
+- Engine bug fixes: sourceHandle routing + clean_output preservation for structured data
+- Validation relaxation: file_read counts as input source, file_write as output sink
+
+**Testing**
+- Playwright E2E infrastructure with Tauri IPC mock (30+ commands)
+- 15 tests: 6 UI tests (sidebar, canvas, node palette) + 7 sidecar API tests + 2 integration
+- Screenshots capture full UI state for visual regression
+- Configurable via environment variables (SIDECAR_URL, LLM_BASE_URL, LLM_MODEL)
 
 ### Phase 3: Advanced Features
 

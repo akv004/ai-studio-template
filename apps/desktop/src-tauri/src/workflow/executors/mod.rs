@@ -32,6 +32,8 @@ pub struct ExecutionContext<'a> {
     pub seq_counter: &'a AtomicI64,
     pub visited_workflows: &'a HashSet<String>,
     pub graph_json: &'a str,
+    /// Unique per workflow run — used for LLM session conversation IDs
+    pub workflow_run_id: &'a str,
 }
 
 pub struct NodeOutput {

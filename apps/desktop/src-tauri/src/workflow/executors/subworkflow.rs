@@ -58,7 +58,7 @@ impl NodeExecutor for SubworkflowExecutor {
         let result = crate::workflow::engine::execute_workflow_with_visited(
             ctx.db, ctx.sidecar, ctx.app,
             ctx.session_id, &graph_json, &sub_inputs, ctx.all_settings,
-            &visited,
+            &visited, ctx.workflow_run_id,
         ).await?;
 
         // Extract the sub-workflow output

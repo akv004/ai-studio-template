@@ -343,7 +343,7 @@ impl NodeExecutor for IteratorExecutor {
                 ctx.db, ctx.sidecar, ctx.app,
                 ctx.session_id, &synthetic_graph,
                 &sub_inputs, ctx.all_settings,
-                ctx.visited_workflows,
+                ctx.visited_workflows, ctx.workflow_run_id,
             ).await.map_err(|e| format!("Iterator item {} failed: {}", idx, e))?;
 
             // Extract output from synthetic workflow

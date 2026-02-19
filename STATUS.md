@@ -52,7 +52,7 @@
 | EIP spec peer review | TODO | Run via Antigravity/Gemini |
 | 4B.1 File Glob node | DONE | glob executor + UI node, 8 tests (e352d0c) |
 | **4B.2 Iterator + 4B.3 Aggregator** | DONE | Subgraph extraction, synthetic workflow execution per item, 3 aggregation strategies, 23 tests |
-| 4B.4 LLM Session mode | TODO | Stateful multi-turn conversations in workflows |
+| **4B.4 LLM Session mode** | DONE | Stateful multi-turn conversations via sidecar session accumulation, 5 tests |
 
 ---
 
@@ -142,17 +142,15 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-19 (session 25, continued)
+**Date**: 2026-02-19 (session 26)
 **What happened**:
-- **v0.1.0 tagged and pushed** (91007cc): First public release tag. CHANGELOG updated with Phase 4A.
-- **Transform jsonpath + script modes** (b765061): 3 transformation modes, 24 tests
-- **File Glob node** (e352d0c): Glob executor + UI, 8 tests
-- **Iterator + Aggregator nodes** (4B.2+4B.3): Full subgraph-based iteration system:
-  - Iterator: extracts items (array/jsonpath), finds subgraph via forward+backward BFS, builds synthetic workflow, executes per item
-  - Aggregator: 3 strategies (array/concat/merge), works paired with Iterator or standalone
-  - Engine: `extra_outputs` on NodeOutput for cross-node result injection, `graph_json` in ExecutionContext
-  - 23 new tests (iterator 16 + aggregator 7), 109 total passing
-  - UI: IteratorNode.tsx + AggregatorNode.tsx + config panels, registered in all 5 files
+- **LLM Session mode** (4B.4): Stateful multi-turn conversations in workflows
+  - Sidecar: Extended `/chat/direct` with `conversation_id` + `max_history` fields for session accumulation
+  - Engine: Added `workflow_run_id` (UUID per run) to `ExecutionContext`, threaded through Iterator + Subworkflow
+  - LLM executor: Reads `sessionMode`/`maxHistory` from config, sends `conversation_id=wf-{run_id}-{node_id}` to sidecar
+  - UI: Session mode toggle + max history field on LLM node
+  - 5 new Rust tests (114 total passing), 6 Playwright UI tests pass
+  - Key design: per-node conversation (one LLM node accumulates its own history across Iterator iterations)
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -163,9 +161,9 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 22: Phase 4 spec v1.2, peer reviews triaged, engine bugs fixed, 4A.1 monolith split
 - Session 23: Phase 4A.V visual overhaul (TypedEdge, TypedConnectionLine, inline editing, CSS polish)
 - Session 24: Output truncation fix, vision pipeline, EIP spec, Playwright E2E (15 tests)
+- Session 25: v0.1.0 tag, Transform jsonpath+script, File Glob, Iterator+Aggregator
 
 **Next session should**:
-1. Implement File Glob node (Phase 4B.1 from EIP spec)
-2. Implement Iterator/Splitter node (Phase 4B.2)
-3. Build a compelling demo workflow (GitHub tags → Transform → display)
-4. Peer review EIP spec via Antigravity/Gemini
+1. Peer review EIP spec via Antigravity/Gemini
+2. Build compelling demo workflow (batch CSV analysis with session LLM)
+3. Phase 4C planning (streaming, containers, UX polish)

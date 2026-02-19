@@ -9,6 +9,8 @@ export function LLMNode({ id, data, selected }: { id: string; data: Record<strin
     const provider = (data.provider as string) || '';
     const model = (data.model as string) || '';
     const temperature = (data.temperature as number) ?? 0.7;
+    const sessionMode = (data.sessionMode as string) || 'stateless';
+    const maxHistory = (data.maxHistory as number) ?? 20;
     const validModels = PROVIDER_MODELS[provider] || [];
 
     return (
@@ -59,6 +61,25 @@ export function LLMNode({ id, data, selected }: { id: string; data: Record<strin
                             onChange={e => updateField('temperature', parseFloat(e.target.value))}
                             onMouseDown={e => e.stopPropagation()} />
                     </div>
+                    {/* Session Mode */}
+                    <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-[#666] w-12">Session</span>
+                        <select className="node-inline-input flex-1" value={sessionMode}
+                            onChange={e => updateField('sessionMode', e.target.value)}
+                            onMouseDown={e => e.stopPropagation()}>
+                            <option value="stateless">Stateless</option>
+                            <option value="session">Session</option>
+                        </select>
+                    </div>
+                    {sessionMode === 'session' && (
+                        <div className="flex items-center gap-1">
+                            <span className="text-[9px] text-[#666] w-12">History</span>
+                            <input type="number" className="node-inline-input flex-1" min={1} max={100}
+                                value={maxHistory}
+                                onChange={e => updateField('maxHistory', parseInt(e.target.value) || 20)}
+                                onMouseDown={e => e.stopPropagation()} />
+                        </div>
+                    )}
                 </div>
 
                 {/* Outputs */}

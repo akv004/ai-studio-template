@@ -74,6 +74,9 @@ class ChatMessageRequest(BaseModel):
     extra_config: Optional[dict] = None
     system_prompt: Optional[str] = None
     images: Optional[list[dict]] = None  # [{"data": "base64...", "mime_type": "image/png"}]
+    # Session mode: accumulate history across calls with the same conversation_id
+    conversation_id: Optional[str] = None
+    max_history: Optional[int] = 20
 
 
 class ChatResponse(BaseModel):
@@ -463,11 +466,13 @@ async def chat(request: ChatRequest):
 
 @app.post("/chat/direct")
 async def chat_direct(request: ChatMessageRequest):
-    """Direct chat without conversation history. Used by workflow LLM nodes."""
+    """Direct chat without conversation history. Used by workflow LLM nodes.
+    When conversation_id is provided, accumulates history across calls (session mode).
+    """
     try:
         print(f"[chat/direct] provider={request.provider} model={request.model} "
               f"base_url={request.base_url} extra_config={request.extra_config} "
-              f"msgs={len(request.messages)}")
+              f"msgs={len(request.messages)} session={request.conversation_id or 'none'}")
 
         # Register provider on-the-fly if config provided
         if request.provider and (request.api_key or request.base_url or request.extra_config):
@@ -485,7 +490,23 @@ async def chat_direct(request: ChatMessageRequest):
         if request.system_prompt:
             messages.append(Message(role="system", content=request.system_prompt))
 
-        # Build messages — inject images into multimodal content if present
+        # Session mode: inject history from previous turns
+        conv = None
+        if request.conversation_id:
+            conv = chat_service.get_or_create_conversation(
+                request.conversation_id,
+                provider_name=request.provider,
+                system_prompt=request.system_prompt,
+            )
+            history = [m for m in conv.messages if m.role != "system"]
+            max_h = request.max_history or 20
+            if len(history) > max_h:
+                history = history[-max_h:]
+            if history:
+                print(f"[chat/direct] Session '{request.conversation_id}': injecting {len(history)} history messages")
+                messages.extend(history)
+
+        # Build current messages — inject images into multimodal content if present
         if request.images:
             print(f"[chat/direct] Vision mode: {len(request.images)} image(s) attached")
             for m in request.messages:
@@ -507,6 +528,12 @@ async def chat_direct(request: ChatMessageRequest):
             model=request.model,
             temperature=request.temperature,
         )
+
+        # Session mode: store current turn in conversation history
+        if conv is not None:
+            for m in request.messages:
+                conv.messages.append(Message(role=m["role"], content=m["content"]))
+            conv.messages.append(Message(role="assistant", content=response.content))
 
         return {
             "content": response.content,

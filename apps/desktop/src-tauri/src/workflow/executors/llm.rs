@@ -18,6 +18,8 @@ impl NodeExecutor for LlmExecutor {
         let provider_name = node_data.get("provider").and_then(|v| v.as_str()).unwrap_or("ollama");
         let model = node_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
         let temperature = node_data.get("temperature").and_then(|v| v.as_f64()).unwrap_or(0.7);
+        let session_mode = node_data.get("sessionMode").and_then(|v| v.as_str()).unwrap_or("stateless");
+        let max_history = node_data.get("maxHistory").and_then(|v| v.as_i64()).unwrap_or(20);
 
         eprintln!("[workflow] LLM node '{}': incoming={:?}", node_id,
             incoming.as_ref().map(|v| v.to_string()[..v.to_string().len().min(200)].to_string()));
@@ -206,6 +208,14 @@ impl NodeExecutor for LlmExecutor {
             "temperature": temperature,
         });
 
+        // Session mode: attach conversation_id for history accumulation
+        if session_mode == "session" {
+            let conversation_id = format!("wf-{}-{}", ctx.workflow_run_id, node_id);
+            eprintln!("[workflow] LLM node '{}': session mode, conversation_id='{}'", node_id, conversation_id);
+            body["conversation_id"] = serde_json::Value::String(conversation_id);
+            body["max_history"] = serde_json::json!(max_history);
+        }
+
         // Attach images for vision models (supports multiple)
         if !images.is_empty() {
             let img_arr: Vec<serde_json::Value> = images.iter().map(|(data, mime)| {
@@ -272,5 +282,78 @@ impl NodeExecutor for LlmExecutor {
                 "cost_usd": cost_usd,
             }
         })))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_session_mode_defaults() {
+        let node_data = serde_json::json!({"provider": "ollama", "model": "llama3.2"});
+        let session_mode = node_data.get("sessionMode").and_then(|v| v.as_str()).unwrap_or("stateless");
+        let max_history = node_data.get("maxHistory").and_then(|v| v.as_i64()).unwrap_or(20);
+        assert_eq!(session_mode, "stateless");
+        assert_eq!(max_history, 20);
+    }
+
+    #[test]
+    fn test_session_mode_configured() {
+        let node_data = serde_json::json!({
+            "provider": "ollama", "model": "llama3.2",
+            "sessionMode": "session", "maxHistory": 10
+        });
+        let session_mode = node_data.get("sessionMode").and_then(|v| v.as_str()).unwrap_or("stateless");
+        let max_history = node_data.get("maxHistory").and_then(|v| v.as_i64()).unwrap_or(20);
+        assert_eq!(session_mode, "session");
+        assert_eq!(max_history, 10);
+    }
+
+    #[test]
+    fn test_session_conversation_id_format() {
+        let workflow_run_id = "abc123";
+        let node_id = "llm_1";
+        let conversation_id = format!("wf-{}-{}", workflow_run_id, node_id);
+        assert_eq!(conversation_id, "wf-abc123-llm_1");
+    }
+
+    #[test]
+    fn test_session_body_construction_stateless() {
+        let node_data = serde_json::json!({"provider": "ollama", "model": "llama3.2"});
+        let session_mode = node_data.get("sessionMode").and_then(|v| v.as_str()).unwrap_or("stateless");
+        let mut body = serde_json::json!({
+            "messages": [{"role": "user", "content": "hello"}],
+            "provider": "ollama",
+            "model": "llama3.2",
+            "temperature": 0.7,
+        });
+        if session_mode == "session" {
+            body["conversation_id"] = serde_json::Value::String("wf-test-llm_1".to_string());
+            body["max_history"] = serde_json::json!(20);
+        }
+        // Stateless: no conversation_id in body
+        assert!(body.get("conversation_id").is_none());
+    }
+
+    #[test]
+    fn test_session_body_construction_session() {
+        let node_data = serde_json::json!({
+            "provider": "ollama", "model": "llama3.2",
+            "sessionMode": "session", "maxHistory": 15
+        });
+        let session_mode = node_data.get("sessionMode").and_then(|v| v.as_str()).unwrap_or("stateless");
+        let max_history = node_data.get("maxHistory").and_then(|v| v.as_i64()).unwrap_or(20);
+        let mut body = serde_json::json!({
+            "messages": [{"role": "user", "content": "hello"}],
+            "provider": "ollama",
+            "model": "llama3.2",
+            "temperature": 0.7,
+        });
+        if session_mode == "session" {
+            let conversation_id = format!("wf-{}-{}", "run123", "llm_1");
+            body["conversation_id"] = serde_json::Value::String(conversation_id);
+            body["max_history"] = serde_json::json!(max_history);
+        }
+        assert_eq!(body["conversation_id"].as_str().unwrap(), "wf-run123-llm_1");
+        assert_eq!(body["max_history"].as_i64().unwrap(), 15);
     }
 }

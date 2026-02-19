@@ -544,15 +544,16 @@ export function WorkflowCanvas({ workflow, onBack }: {
                         <span className="text-xs text-yellow-400">unsaved</span>
                     )}
                 </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-xs text-[var(--text-muted)]">
+                <div className="flex items-center gap-3">
+                    <span className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-xs text-[var(--text-muted)]">
                         {nodes.length} nodes
                     </span>
+                    <div className="toolbar-divider" />
                     <button className="btn-secondary" onClick={handleSave} disabled={saving || !hasChanges}>
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                         Save
                     </button>
-                    <button className="btn-secondary" title="Export workflow as JSON" onClick={() => {
+                    <button className="btn-icon btn-secondary" title="Export workflow as JSON" onClick={() => {
                         const graph = JSON.stringify({ nodes, edges, viewport: { x: 0, y: 0, zoom: 1 } }, null, 2);
                         const blob = new Blob([graph], { type: 'application/json' });
                         const url = URL.createObjectURL(blob);
@@ -564,6 +565,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
                     }}>
                         <Download size={14} />
                     </button>
+                    <div className="toolbar-divider" />
                     <button
                         className="btn-primary"
                         disabled={workflowRunning || nodes.length === 0}

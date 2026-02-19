@@ -78,12 +78,12 @@ export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
         <div className="page-content">
             <div className="page-header">
                 <h1 className="page-title">Node Editor</h1>
-                <div className="flex gap-2">
-                    <button className="btn-secondary" onClick={() => fetchWorkflows()}>
-                        <RefreshCw size={16} />
+                <div className="flex items-center gap-3">
+                    <button className="btn-icon-sm btn-secondary" onClick={() => fetchWorkflows()} title="Refresh">
+                        <RefreshCw size={14} />
                     </button>
-                    <button className="btn-secondary" onClick={() => fileInputRef.current?.click()} title="Import workflow JSON">
-                        <Upload size={16} />
+                    <button className="btn-icon-sm btn-secondary" onClick={() => fileInputRef.current?.click()} title="Import workflow JSON">
+                        <Upload size={14} />
                     </button>
                     <input
                         ref={fileInputRef}
@@ -92,6 +92,7 @@ export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
                         className="hidden"
                         onChange={handleImport}
                     />
+                    <div className="toolbar-divider" />
                     <div className="relative">
                         <button className="btn-secondary" onClick={() => setShowTemplates(!showTemplates)}>
                             <LayoutTemplate size={16} /> Templates
@@ -145,7 +146,7 @@ export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
                 <div className="grid gap-3">
                     {workflows.map((w) => (
                         <div key={w.id}
-                            className="card cursor-pointer hover:border-[var(--border-accent)]"
+                            className="group card cursor-pointer hover:border-[var(--border-accent)]"
                             onClick={() => onSelect(w.id)}>
                             <div className="flex items-center justify-between">
                                 <div className="flex-1 min-w-0">
@@ -175,16 +176,16 @@ export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
                                         {w.nodeCount} nodes
                                     </div>
                                 </div>
-                                <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                                    <button className="btn-icon" title="Rename"
+                                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                                    <button className="btn-icon hover:bg-[var(--bg-elevated)]" title="Rename"
                                         onClick={() => { setRenamingId(w.id); setRenameDraft(w.name); }}>
                                         <Pencil size={14} />
                                     </button>
-                                    <button className="btn-icon" title="Duplicate"
+                                    <button className="btn-icon hover:bg-[var(--bg-elevated)]" title="Duplicate"
                                         onClick={() => duplicateWorkflow(w.id)}>
                                         <Copy size={14} />
                                     </button>
-                                    <button className="btn-icon text-red-400" title="Delete"
+                                    <button className="btn-icon text-red-400 hover:bg-[var(--bg-elevated)]" title="Delete"
                                         onClick={() => deleteWorkflow(w.id)}>
                                         <Trash2 size={14} />
                                     </button>

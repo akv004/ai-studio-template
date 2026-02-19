@@ -320,6 +320,20 @@ body {
   border-radius: 6px;
 }
 
+.btn-icon-sm {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+}
+
+.toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-subtle);
+  flex-shrink: 0;
+}
+
 /* ========================================
    INPUTS
    ======================================== */

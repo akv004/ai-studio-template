@@ -44,7 +44,7 @@ These patterns are well-established in enterprise integration (Apache Camel EIPs
 | count | float | Number of matched files |
 | paths | json | Array of file paths only (lightweight) |
 
-**Security**: Same denied-paths list as File Read. Max total read size = sum of all files capped at `maxFiles * maxSize`.
+**Security**: Same denied-paths list as File Read. Per-file size limit via `maxSize` (MB) — files exceeding the limit are skipped. Total file count capped at `maxFiles`.
 
 **UI Node Design**:
 ```
@@ -125,9 +125,8 @@ These patterns are well-established in enterprise integration (Apache Camel EIPs
 **Config**:
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| strategy | enum | array | array / concat / merge / custom |
+| strategy | enum | array | array / concat / merge (custom: future) |
 | separator | string | `\n` | For concat mode |
-| template | string | - | For custom mode (Handlebars template) |
 
 **Input Handles**:
 | Handle | Type | Description |

@@ -49,10 +49,11 @@
 | EIP spec written | DONE | `docs/specs/eip-data-io-nodes.md` — File Glob, Iterator, Aggregator, LLM Session, Streaming |
 | **v0.1.0 tagged** | DONE | Phase 1-3 + 4A release tag (91007cc) |
 | **Transform jsonpath + script modes** | DONE | RFC 9535 JSONPath + pipe expressions, 24 tests (b765061) |
-| EIP spec peer review | TODO | Run via Antigravity/Gemini |
+| EIP spec peer review (Gemini + Codex) | DONE | 7+12 findings triaged, 8 accepted + fixed |
 | 4B.1 File Glob node | DONE | glob executor + UI node, 8 tests (e352d0c) |
 | **4B.2 Iterator + 4B.3 Aggregator** | DONE | Subgraph extraction, synthetic workflow execution per item, 3 aggregation strategies, 23 tests |
 | **4B.4 LLM Session mode** | DONE | Stateful multi-turn conversations via sidecar session accumulation, 5 tests |
+| **Codex review fixes** | DONE | UTF-8 safe truncation, File Glob containment, multi-aggregator detection, maxHistory clamp, cycle detection |
 
 ---
 
@@ -142,15 +143,18 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-19 (session 26)
+**Date**: 2026-02-19 (session 27)
 **What happened**:
-- **LLM Session mode** (4B.4): Stateful multi-turn conversations in workflows
-  - Sidecar: Extended `/chat/direct` with `conversation_id` + `max_history` fields for session accumulation
-  - Engine: Added `workflow_run_id` (UUID per run) to `ExecutionContext`, threaded through Iterator + Subworkflow
-  - LLM executor: Reads `sessionMode`/`maxHistory` from config, sends `conversation_id=wf-{run_id}-{node_id}` to sidecar
-  - UI: Session mode toggle + max history field on LLM node
-  - 5 new Rust tests (114 total passing), 6 Playwright UI tests pass
-  - Key design: per-node conversation (one LLM node accumulates its own history across Iterator iterations)
+- **EIP peer reviews**: Both Gemini (architecture) and Codex (code quality) reviewed EIP implementation
+  - Gemini: 7 findings — 3 fixed (spec updates, nested iterator warning), 1 deferred, 3 PASS
+  - Codex: 12 findings — 5 fixed, 7 deferred to Phase 5
+- **Codex review fixes implemented**:
+  - UTF-8 safe truncation: Added `truncate()` helper using `char_indices`, replaced 11 byte-index slices in llm.rs + engine.rs
+  - File Glob directory containment: `canonical.starts_with(canonical_base)` prevents `../../` escape
+  - Multi-aggregator detection: Iterator fails fast if >1 aggregator reachable (was silently picking last one)
+  - maxHistory clamp: clamped to [1, 100] in Rust (prevents 0-means-20 sidecar bug and unbounded values)
+  - Cycle detection: engine returns error if topo sort doesn't cover all nodes (was silently skipping cyclic nodes)
+- All 115 Rust tests pass
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -162,8 +166,9 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 23: Phase 4A.V visual overhaul (TypedEdge, TypedConnectionLine, inline editing, CSS polish)
 - Session 24: Output truncation fix, vision pipeline, EIP spec, Playwright E2E (15 tests)
 - Session 25: v0.1.0 tag, Transform jsonpath+script, File Glob, Iterator+Aggregator
+- Session 26: LLM Session mode (4B.4), 5 tests, Playwright verification
 
 **Next session should**:
-1. Peer review EIP spec via Antigravity/Gemini
-2. Build compelling demo workflow (batch CSV analysis with session LLM)
-3. Phase 4C planning (streaming, containers, UX polish)
+1. Build compelling demo workflow (batch CSV analysis with session LLM)
+2. Phase 4C planning (streaming, containers, UX polish)
+3. Consider v0.2.0 tag for Phase 4B completion

@@ -7,6 +7,14 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use tauri::Emitter;
 use uuid::Uuid;
 
+/// Truncate a string to at most `max_chars` characters (UTF-8 safe).
+fn truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        Some((idx, _)) => &s[..idx],
+        None => s,
+    }
+}
+
 /// Select a specific output handle value from a node's stored output.
 /// If the source handle is "output" (default), returns the whole value (backward compat).
 /// If the output is structured (object) and contains the handle as a key, returns that field.
@@ -234,6 +242,14 @@ pub async fn execute_workflow_with_visited(
         }
     }
 
+    // Cycle detection: if topo sort didn't visit all nodes, a cycle exists
+    if topo_order.len() < node_map.len() {
+        let cyclic: Vec<_> = node_map.keys()
+            .filter(|id| !topo_order.contains(id))
+            .collect();
+        return Err(format!("Workflow contains a cycle involving nodes: {:?}", cyclic));
+    }
+
     // Execute nodes in topological order
     eprintln!("[workflow] Topological order: {:?}", topo_order);
     let registry = ExecutorRegistry::new();
@@ -284,7 +300,7 @@ pub async fn execute_workflow_with_visited(
             if inc.len() == 1 && inc[0].2 == "input" {
                 let val = resolve_source_handle(&node_outputs, &inc[0].0, &inc[0].1);
                 eprintln!("[workflow] Engine: node '{}' single-edge flatten → {:?}",
-                    node_id, val.as_ref().map(|v| v.to_string()[..v.to_string().len().min(100)].to_string()));
+                    node_id, val.as_ref().map(|v| truncate(&v.to_string(), 100).to_string()));
                 val
             } else {
                 // Multiple edges or named handles: build object keyed by target handle
@@ -293,7 +309,7 @@ pub async fn execute_workflow_with_visited(
                     if let Some(val) = resolve_source_handle(&node_outputs, src_id, src_handle) {
                         eprintln!("[workflow] Engine: node '{}' handle '{}' ← {}:{} = '{}'",
                             node_id, tgt_handle, src_id, src_handle,
-                            &val.to_string()[..val.to_string().len().min(100)]);
+                            truncate(&val.to_string(), 100));
                         obj.insert(tgt_handle.clone(), val);
                     }
                 }
@@ -366,7 +382,7 @@ pub async fn execute_workflow_with_visited(
                 node_outputs.insert(node_id.clone(), clean_output.clone());
 
                 let full_text = extract_primary_text(&clean_output);
-                let output_preview = full_text[..full_text.len().min(200)].to_string();
+                let output_preview = truncate(&full_text, 200).to_string();
                 // DB event gets preview only (storage), UI event gets full output (display)
                 let _ = record_event(db, session_id, "workflow.node.completed", "desktop.workflow",
                     serde_json::json!({

@@ -82,7 +82,7 @@ fn find_subgraph(
 
     // Step 1: BFS forward from iterator — stop at aggregator nodes
     let mut forward_set: HashSet<String> = HashSet::new();
-    let mut aggregator_id: Option<String> = None;
+    let mut aggregator_ids: Vec<String> = Vec::new();
     let mut queue: VecDeque<String> = VecDeque::new();
 
     if let Some(neighbors) = fwd_adj.get(iterator_id) {
@@ -92,12 +92,12 @@ fn find_subgraph(
     }
 
     while let Some(node_id) = queue.pop_front() {
-        if forward_set.contains(&node_id) || aggregator_id.as_ref() == Some(&node_id) {
+        if forward_set.contains(&node_id) || aggregator_ids.contains(&node_id) {
             continue;
         }
         let ntype = node_types.get(&node_id).map(|s| s.as_str()).unwrap_or("");
         if ntype == "aggregator" {
-            aggregator_id = Some(node_id);
+            aggregator_ids.push(node_id);
             continue; // Don't traverse past aggregator
         }
         forward_set.insert(node_id.clone());
@@ -108,8 +108,16 @@ fn find_subgraph(
         }
     }
 
-    let agg_id = aggregator_id
-        .ok_or("Iterator has no paired Aggregator node downstream. Add an Aggregator after the processing nodes.")?;
+    if aggregator_ids.is_empty() {
+        return Err("Iterator has no paired Aggregator node downstream. Add an Aggregator after the processing nodes.".into());
+    }
+    if aggregator_ids.len() > 1 {
+        return Err(format!(
+            "Iterator '{}' has {} reachable Aggregators ({:?}). Each Iterator must pair with exactly one Aggregator.",
+            iterator_id, aggregator_ids.len(), aggregator_ids
+        ));
+    }
+    let agg_id = aggregator_ids.into_iter().next().unwrap();
 
     // Step 2: BFS backward from aggregator — stop at iterator
     let mut backward_set: HashSet<String> = HashSet::new();

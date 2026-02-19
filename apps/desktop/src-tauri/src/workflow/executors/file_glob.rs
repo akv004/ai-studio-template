@@ -42,6 +42,8 @@ impl NodeExecutor for FileGlobExecutor {
         if !dir_path.is_dir() {
             return Err(format!("File Glob: path is not a directory: {}", dir_str));
         }
+        let canonical_base = dir_path.canonicalize()
+            .map_err(|e| format!("File Glob: cannot resolve directory '{}': {}", dir_str, e))?;
 
         let pattern = node_data.get("pattern").and_then(|v| v.as_str()).unwrap_or("*");
         let pattern = resolve_template(pattern, ctx.node_outputs, ctx.inputs);
@@ -80,13 +82,16 @@ impl NodeExecutor for FileGlobExecutor {
                 continue;
             }
 
-            // Security check
+            // Security check: deny-list + directory containment
             let canonical = match path.canonicalize() {
                 Ok(c) => c,
                 Err(_) => continue,
             };
             if is_path_denied(&canonical) {
                 continue;
+            }
+            if !canonical.starts_with(&canonical_base) {
+                continue; // Escaped configured directory via ../ or symlink
             }
 
             // Metadata

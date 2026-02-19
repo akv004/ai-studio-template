@@ -104,3 +104,5 @@ All resolved reviews have been deleted. Summary of completed reviews:
 | 2026-02-18 | Phase 4 spec — implementation | Codex (GPT-5.2) | 10 findings — 9 accepted (spec updated to v1.2), 1 deferred (F10 event consistency → 4C). Found 2 existing engine bugs (sourceHandle, clean_output). Best review yet. |
 | 2026-02-18 | Phase 4 combined verdict | Codex (GPT-5.3) | 12 findings — CF1/CF2 already fixed (ff2b271), CF3/CF7/CF11 deferred (container model, router IDs, code sandbox). Verdict: "Continue Phase 4, prioritize engine fixes before more nodes." |
 | 2026-02-18 | Node field model coherence | Codex (GPT-5.3) | 8 findings — F2 already fixed (ff2b271), F7 deferred (router branch IDs). Fields being wired incrementally per executor. |
+| 2026-02-19 | EIP spec vs implementation | Gemini 3 Pro | 7 findings — 3 fixed (spec updates, nested iterator warning), 1 deferred (session cleanup), 3 PASS |
+| 2026-02-19 | EIP implementation code review | GPT-5 Codex | 12 findings — 5 fixed (UTF-8 truncation, File Glob containment, multi-aggregator, maxHistory clamp, cycle detection), 7 deferred to Phase 5 |

@@ -2,6 +2,14 @@ use super::{ExecutionContext, NodeExecutor, NodeOutput};
 use crate::events::record_event;
 use crate::workflow::engine::resolve_template;
 
+/// Truncate a string to at most `max_chars` characters (UTF-8 safe).
+fn truncate(s: &str, max_chars: usize) -> &str {
+    match s.char_indices().nth(max_chars) {
+        Some((idx, _)) => &s[..idx],
+        None => s,
+    }
+}
+
 pub struct LlmExecutor;
 
 #[async_trait::async_trait]
@@ -19,10 +27,10 @@ impl NodeExecutor for LlmExecutor {
         let model = node_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
         let temperature = node_data.get("temperature").and_then(|v| v.as_f64()).unwrap_or(0.7);
         let session_mode = node_data.get("sessionMode").and_then(|v| v.as_str()).unwrap_or("stateless");
-        let max_history = node_data.get("maxHistory").and_then(|v| v.as_i64()).unwrap_or(20);
+        let max_history = node_data.get("maxHistory").and_then(|v| v.as_i64()).unwrap_or(20).clamp(1, 100);
 
         eprintln!("[workflow] LLM node '{}': incoming={:?}", node_id,
-            incoming.as_ref().map(|v| v.to_string()[..v.to_string().len().min(200)].to_string()));
+            incoming.as_ref().map(|v| truncate(&v.to_string(), 200).to_string()));
         eprintln!("[workflow] LLM node '{}': node_data keys={:?}", node_id,
             node_data.as_object().map(|o| o.keys().collect::<Vec<_>>()));
 
@@ -65,9 +73,9 @@ impl NodeExecutor for LlmExecutor {
 
         eprintln!("[workflow] LLM node '{}': incoming_prompt={:?}, incoming_bare={:?}, template='{}'",
             node_id,
-            incoming_prompt.as_ref().map(|s| &s[..s.len().min(80)]),
-            incoming_bare.as_ref().map(|s| &s[..s.len().min(80)]),
-            &prompt_template[..prompt_template.len().min(80)]);
+            incoming_prompt.as_ref().map(|s| truncate(s, 80)),
+            incoming_bare.as_ref().map(|s| truncate(s, 80)),
+            truncate(prompt_template, 80));
 
         let mut prompt = if let Some(p) = incoming_prompt {
             eprintln!("[workflow] LLM node '{}': prompt from incoming 'prompt' handle", node_id);
@@ -78,7 +86,7 @@ impl NodeExecutor for LlmExecutor {
         } else if prompt_template.contains("{{") {
             let resolved = resolve_template(prompt_template, ctx.node_outputs, ctx.inputs);
             eprintln!("[workflow] LLM node '{}': prompt from template '{}' → '{}'",
-                node_id, prompt_template, &resolved[..resolved.len().min(80)]);
+                node_id, prompt_template, truncate(&resolved, 80));
             resolved
         } else {
             eprintln!("[workflow] LLM node '{}': prompt from literal template", node_id);
@@ -96,7 +104,7 @@ impl NodeExecutor for LlmExecutor {
 
         eprintln!("[workflow] LLM node '{}': FINAL provider={}, model={}, prompt='{}', system='{}'",
             node_id, provider_name, model,
-            &prompt[..prompt.len().min(100)], &system_prompt[..system_prompt.len().min(50)]);
+            truncate(&prompt, 100), truncate(&system_prompt, 50));
 
         let prefix = format!("provider.{}.", provider_name);
         let mut api_key = String::new();
@@ -197,7 +205,7 @@ impl NodeExecutor for LlmExecutor {
                     "Describe what you see in this image in detail.".to_string()
                 };
                 eprintln!("[workflow] LLM node '{}': replaced base64 prompt with text: '{}'",
-                    node_id, &prompt[..prompt.len().min(80)]);
+                    node_id, truncate(&prompt, 80));
             }
         }
 
@@ -237,7 +245,7 @@ impl NodeExecutor for LlmExecutor {
         }
 
         eprintln!("[workflow] LLM node '{}': POST /chat/direct body={}", node_id,
-            &body.to_string()[..body.to_string().len().min(300)]);
+            truncate(&body.to_string(), 300));
 
         let _ = record_event(ctx.db, ctx.session_id, "llm.request.started", "desktop.workflow",
             serde_json::json!({ "node_id": node_id, "model": model, "provider": provider_name }));
@@ -256,7 +264,7 @@ impl NodeExecutor for LlmExecutor {
 
         eprintln!("[workflow] LLM node '{}': response model={}, tokens={}/{}, content='{}'",
             node_id, resp_model, input_tokens, output_tokens,
-            &content[..content.len().min(100)]);
+            truncate(&content, 100));
 
         let _ = record_event(ctx.db, ctx.session_id, "llm.response.completed", "desktop.workflow",
             serde_json::json!({

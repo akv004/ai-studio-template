@@ -95,6 +95,12 @@ pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String>
         errors.push("Workflow contains a cycle — execution would loop forever".to_string());
     }
 
+    // Check for nested iterators (not yet supported — BFS subgraph extraction can't handle nesting)
+    let iterator_count = node_types.values().filter(|t| t.as_str() == "iterator").count();
+    if iterator_count > 1 {
+        warnings.push("Multiple Iterator nodes detected — nested iteration is not yet supported and may produce unexpected results".to_string());
+    }
+
     // Check for orphan nodes
     for id in &node_ids {
         let ntype = node_types.get(id).map(|s| s.as_str()).unwrap_or("");
@@ -214,6 +220,25 @@ mod tests {
         );
         let result = validate_graph_json(&graph).unwrap();
         assert!(result.valid, "errors: {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_nested_iterator_warning() {
+        let graph = make_graph(
+            &[
+                ("in1", "input"), ("iter1", "iterator"), ("llm1", "llm"),
+                ("iter2", "iterator"), ("llm2", "llm"), ("agg2", "aggregator"),
+                ("agg1", "aggregator"), ("out1", "output"),
+            ],
+            &[
+                ("in1", "iter1"), ("iter1", "iter2"), ("iter2", "llm2"),
+                ("llm2", "agg2"), ("agg2", "llm1"), ("llm1", "agg1"), ("agg1", "out1"),
+            ],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid, "should be valid");
+        assert!(result.warnings.iter().any(|w| w.contains("nested iteration")),
+            "warnings: {:?}", result.warnings);
     }
 
     #[test]

@@ -8,6 +8,11 @@ export const nodeColors: Record<string, string> = {
     approval: '#8a7a1a',
     transform: '#5a3a8a',
     subworkflow: '#1a5a7a',
+    http_request: '#2a6a4a',
+    file_read: '#4a6a2a',
+    file_write: '#6a4a2a',
+    shell_exec: '#3a3a3a',
+    validator: '#2a5a6a',
 };
 
 export const PROVIDER_MODELS: Record<string, string[]> = {
@@ -15,4 +20,5 @@ export const PROVIDER_MODELS: Record<string, string[]> = {
     google: ['gemini-2.0-flash', 'gemini-2.5-pro', 'gemini-2.5-flash'],
     azure_openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1'],
     ollama: ['llama3.2', 'llama3.1', 'mistral', 'codellama', 'qwen2.5'],
+    local: ['qwen3-vl', 'qwen2.5-vl', 'llama3.2'],
 };

@@ -150,6 +150,21 @@ pub async fn execute_workflow(
     inputs: &HashMap<String, serde_json::Value>,
     all_settings: &HashMap<String, String>,
 ) -> Result<WorkflowRunResult, String> {
+    let visited = HashSet::new();
+    execute_workflow_with_visited(db, sidecar, app, session_id, graph_json, inputs, all_settings, &visited).await
+}
+
+/// Execute workflow with circular reference tracking (for subworkflow support).
+pub async fn execute_workflow_with_visited(
+    db: &Database,
+    sidecar: &crate::sidecar::SidecarManager,
+    app: &tauri::AppHandle,
+    session_id: &str,
+    graph_json: &str,
+    inputs: &HashMap<String, serde_json::Value>,
+    all_settings: &HashMap<String, String>,
+    visited_workflows: &HashSet<String>,
+) -> Result<WorkflowRunResult, String> {
     let start_time = std::time::Instant::now();
     let seq_counter = AtomicI64::new(1);
     let graph: serde_json::Value = serde_json::from_str(graph_json)
@@ -284,6 +299,7 @@ pub async fn execute_workflow(
                 all_settings, node_outputs: &node_outputs, inputs,
                 outgoing_by_handle: &outgoing_by_handle,
                 seq_counter: &seq_counter,
+                visited_workflows,
             };
             executor.execute(&ctx, node_id, node_data, &incoming_value).await
         } else {

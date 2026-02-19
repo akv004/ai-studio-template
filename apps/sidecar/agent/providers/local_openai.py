@@ -21,7 +21,7 @@ class LocalOpenAIProvider(AgentProvider):
 
     def __init__(
         self,
-        base_url: str = "http://localhost:11434/v1",
+        base_url: str = "http://localhost:8003/v1",
         api_key: str = "",
         model_name: str = "llama3.2",
         timeout: float = 120.0,

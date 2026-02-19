@@ -5,10 +5,16 @@ pub mod transform;
 pub mod router;
 pub mod tool;
 pub mod approval;
+pub mod subworkflow;
+pub mod http_request;
+pub mod file_read;
+pub mod file_write;
+pub mod shell_exec;
+pub mod validator;
 
 use crate::db::Database;
 use crate::sidecar::SidecarManager;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicI64;
 
 pub struct ExecutionContext<'a> {
@@ -21,6 +27,7 @@ pub struct ExecutionContext<'a> {
     pub inputs: &'a HashMap<String, serde_json::Value>,
     pub outgoing_by_handle: &'a HashMap<(String, String), Vec<String>>,
     pub seq_counter: &'a AtomicI64,
+    pub visited_workflows: &'a HashSet<String>,
 }
 
 pub struct NodeOutput {
@@ -58,6 +65,7 @@ pub struct ExecutorRegistry {
 impl ExecutorRegistry {
     pub fn new() -> Self {
         let mut executors: HashMap<String, Box<dyn NodeExecutor>> = HashMap::new();
+        // Phase 3 core
         executors.insert("input".to_string(), Box::new(input::InputExecutor));
         executors.insert("output".to_string(), Box::new(output::OutputExecutor));
         executors.insert("llm".to_string(), Box::new(llm::LlmExecutor));
@@ -65,6 +73,13 @@ impl ExecutorRegistry {
         executors.insert("router".to_string(), Box::new(router::RouterExecutor));
         executors.insert("tool".to_string(), Box::new(tool::ToolExecutor));
         executors.insert("approval".to_string(), Box::new(approval::ApprovalExecutor));
+        // Phase 4A
+        executors.insert("subworkflow".to_string(), Box::new(subworkflow::SubworkflowExecutor));
+        executors.insert("http_request".to_string(), Box::new(http_request::HttpRequestExecutor));
+        executors.insert("file_read".to_string(), Box::new(file_read::FileReadExecutor));
+        executors.insert("file_write".to_string(), Box::new(file_write::FileWriteExecutor));
+        executors.insert("shell_exec".to_string(), Box::new(shell_exec::ShellExecExecutor));
+        executors.insert("validator".to_string(), Box::new(validator::ValidatorExecutor));
         Self { executors }
     }
 

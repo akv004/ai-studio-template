@@ -218,7 +218,7 @@ def create_provider_for_request(
         )
     elif name == "local":
         return LocalOpenAIProvider(
-            base_url=base_url or cfg.get("base_url", "http://localhost:11434/v1"),
+            base_url=base_url or cfg.get("base_url", "http://localhost:8003/v1"),
             api_key=api_key or "",
             model_name=cfg.get("model_name", ""),
         )

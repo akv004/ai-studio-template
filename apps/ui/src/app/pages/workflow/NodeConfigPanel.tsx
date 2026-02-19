@@ -82,6 +82,7 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                             <option value="google">Google</option>
                             <option value="azure_openai">Azure OpenAI</option>
                             <option value="ollama">Ollama (local)</option>
+                            <option value="local">Local (OpenAI-Compatible)</option>
                         </select>
                     </label>
                     <label className="block">
@@ -206,6 +207,189 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                         <textarea className="config-input min-h-[60px] font-mono text-xs"
                             value={(data.template as string) || ''}
                             onChange={(e) => update('template', e.target.value)} />
+                    </label>
+                </>
+            )}
+
+            {type === 'subworkflow' && (
+                <label className="block">
+                    <span className="text-xs text-[var(--text-muted)]">Workflow Name</span>
+                    <input className="config-input" value={(data.workflowName as string) || ''}
+                        onChange={(e) => update('workflowName', e.target.value)}
+                        placeholder="workflow name" />
+                </label>
+            )}
+
+            {type === 'http_request' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">URL</span>
+                        <input className="config-input" value={(data.url as string) || ''}
+                            onChange={(e) => update('url', e.target.value)}
+                            placeholder="https://api.example.com" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Method</span>
+                        <select className="config-input" value={(data.method as string) || 'GET'}
+                            onChange={(e) => update('method', e.target.value)}>
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="PATCH">PATCH</option>
+                            <option value="DELETE">DELETE</option>
+                            <option value="HEAD">HEAD</option>
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Timeout (seconds)</span>
+                        <input type="number" className="config-input" value={(data.timeout as number) ?? 30}
+                            onChange={(e) => update('timeout', parseInt(e.target.value) || 30)} />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Auth</span>
+                        <select className="config-input" value={(data.auth as string) || 'none'}
+                            onChange={(e) => update('auth', e.target.value)}>
+                            <option value="none">None</option>
+                            <option value="bearer">Bearer Token</option>
+                            <option value="basic">Basic Auth</option>
+                            <option value="api_key">API Key</option>
+                        </select>
+                    </label>
+                    {(data.auth as string) !== 'none' && (data.auth as string) && (
+                        <label className="block">
+                            <span className="text-xs text-[var(--text-muted)]">Auth Token Settings Key</span>
+                            <input className="config-input" value={(data.authTokenSettingsKey as string) || ''}
+                                onChange={(e) => update('authTokenSettingsKey', e.target.value)}
+                                placeholder="provider.github.api_key" />
+                        </label>
+                    )}
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Request Body</span>
+                        <textarea className="config-input min-h-[60px] font-mono text-xs"
+                            value={(data.body as string) || ''}
+                            onChange={(e) => update('body', e.target.value)}
+                            placeholder='{"key": "value"}' />
+                    </label>
+                </>
+            )}
+
+            {type === 'file_read' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">File Path</span>
+                        <input className="config-input" value={(data.path as string) || ''}
+                            onChange={(e) => update('path', e.target.value)}
+                            placeholder="/path/to/file.txt" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Mode</span>
+                        <select className="config-input" value={(data.mode as string) || 'text'}
+                            onChange={(e) => update('mode', e.target.value)}>
+                            <option value="text">Text</option>
+                            <option value="json">JSON</option>
+                            <option value="csv">CSV</option>
+                            <option value="binary">Binary</option>
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Max Size (MB)</span>
+                        <input type="number" className="config-input" value={(data.maxSize as number) ?? 10}
+                            onChange={(e) => update('maxSize', parseFloat(e.target.value) || 10)} />
+                    </label>
+                    {(data.mode === 'csv') && (
+                        <>
+                            <label className="block">
+                                <span className="text-xs text-[var(--text-muted)]">CSV Delimiter</span>
+                                <input className="config-input" value={(data.csvDelimiter as string) || ','}
+                                    onChange={(e) => update('csvDelimiter', e.target.value)} maxLength={1} />
+                            </label>
+                            <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                                <input type="checkbox" checked={(data.csvHasHeader as boolean) ?? true}
+                                    onChange={(e) => update('csvHasHeader', e.target.checked)} />
+                                First row is header
+                            </label>
+                        </>
+                    )}
+                </>
+            )}
+
+            {type === 'file_write' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">File Path</span>
+                        <input className="config-input" value={(data.path as string) || ''}
+                            onChange={(e) => update('path', e.target.value)}
+                            placeholder="/path/to/output.json" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Mode</span>
+                        <select className="config-input" value={(data.mode as string) || 'text'}
+                            onChange={(e) => update('mode', e.target.value)}>
+                            <option value="text">Text</option>
+                            <option value="json">JSON</option>
+                            <option value="csv">CSV</option>
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Write Mode</span>
+                        <select className="config-input" value={(data.writeMode as string) || 'overwrite'}
+                            onChange={(e) => update('writeMode', e.target.value)}>
+                            <option value="overwrite">Overwrite</option>
+                            <option value="append">Append</option>
+                        </select>
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <input type="checkbox" checked={(data.createDirs as boolean) ?? true}
+                            onChange={(e) => update('createDirs', e.target.checked)} />
+                        Create parent directories
+                    </label>
+                </>
+            )}
+
+            {type === 'shell_exec' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Command</span>
+                        <input className="config-input font-mono" value={(data.command as string) || ''}
+                            onChange={(e) => update('command', e.target.value)}
+                            placeholder="echo hello" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Shell</span>
+                        <select className="config-input" value={(data.shell as string) || 'bash'}
+                            onChange={(e) => update('shell', e.target.value)}>
+                            <option value="bash">bash</option>
+                            <option value="sh">sh</option>
+                            <option value="zsh">zsh</option>
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Working Directory</span>
+                        <input className="config-input" value={(data.workingDir as string) || ''}
+                            onChange={(e) => update('workingDir', e.target.value)}
+                            placeholder="/home/user" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Timeout (seconds)</span>
+                        <input type="number" className="config-input" value={(data.timeout as number) ?? 30}
+                            onChange={(e) => update('timeout', parseInt(e.target.value) || 30)} />
+                    </label>
+                </>
+            )}
+
+            {type === 'validator' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">JSON Schema</span>
+                        <textarea className="config-input min-h-[100px] font-mono text-xs"
+                            value={(data.schema as string) || '{}'}
+                            onChange={(e) => update('schema', e.target.value)}
+                            placeholder='{"type":"object","required":["name"]}' />
+                    </label>
+                    <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+                        <input type="checkbox" checked={(data.failOnError as boolean) ?? false}
+                            onChange={(e) => update('failOnError', e.target.checked)} />
+                        Fail on validation error
                     </label>
                 </>
             )}

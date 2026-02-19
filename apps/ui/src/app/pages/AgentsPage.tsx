@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, RefreshCw, Bot, Trash2, Loader2, Shield, Server, Zap } from 'lucide-react';
+import { Plus, RefreshCw, Bot, Trash2, Loader2, Shield, Server, Zap, Pencil } from 'lucide-react';
 import { useAppStore } from '../../state/store';
 import type { ToolsMode, RoutingMode } from '@ai-studio/shared';
 
@@ -19,14 +19,16 @@ const MODELS_BY_PROVIDER: Record<string, string[]> = {
  */
 export function AgentsPage() {
     const {
-        agents, agentsLoading, fetchAgents, createAgent, deleteAgent, error,
+        agents, agentsLoading, fetchAgents, createAgent, updateAgent, deleteAgent, error,
         mcpServers, fetchMcpServers,
     } = useAppStore();
     const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>();
     const [showCreate, setShowCreate] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [saving, setSaving] = useState(false);
 
-    // Form state
+    // Form state (shared between create and edit)
     const [name, setName] = useState('');
     const [provider, setProvider] = useState('anthropic');
     const [model, setModel] = useState('claude-sonnet-4-20250514');
@@ -85,6 +87,33 @@ export function AgentsPage() {
                 setSelectedAgentId(agents.find(a => a.id !== id)?.id);
             }
         } catch { /* error handled by store */ }
+    };
+
+    const startEditing = () => {
+        if (!selectedAgent) return;
+        setName(selectedAgent.name);
+        setProvider(selectedAgent.provider);
+        setModel(selectedAgent.model);
+        setCustomModel(!(MODELS_BY_PROVIDER[selectedAgent.provider] || []).includes(selectedAgent.model));
+        setSystemPrompt(selectedAgent.systemPrompt);
+        setToolsMode(selectedAgent.toolsMode);
+        setRoutingMode(selectedAgent.routingMode);
+        setSelectedMcpServers([...selectedAgent.mcpServers]);
+        setEditing(true);
+        setShowCreate(false);
+    };
+
+    const handleSaveEdit = async () => {
+        if (!selectedAgent) return;
+        setSaving(true);
+        try {
+            await updateAgent(selectedAgent.id, {
+                name, provider, model, systemPrompt, toolsMode,
+                routingMode, mcpServers: selectedMcpServers,
+            });
+            setEditing(false);
+        } catch { /* error handled by store */ }
+        setSaving(false);
     };
 
     return (
@@ -163,11 +192,11 @@ export function AgentsPage() {
 
                 {/* Agent Detail / Create Form */}
                 <div className="flex-1 panel flex flex-col">
-                    {showCreate ? (
+                    {(showCreate || editing) ? (
                         <>
                             <div className="panel-header">
-                                <span className="panel-title">New Agent</span>
-                                <button className="btn btn-secondary btn-sm" onClick={() => setShowCreate(false)}>Cancel</button>
+                                <span className="panel-title">{editing ? 'Edit Agent' : 'New Agent'}</span>
+                                <button className="btn btn-secondary btn-sm" onClick={() => { setShowCreate(false); setEditing(false); }}>Cancel</button>
                             </div>
                             <div className="panel-content space-y-4">
                                 <div>
@@ -294,9 +323,15 @@ export function AgentsPage() {
                                         </div>
                                     </div>
                                 )}
-                                <button className="btn btn-primary w-full" onClick={handleCreate} disabled={creating || !name.trim()}>
-                                    {creating ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : 'Create Agent'}
-                                </button>
+                                {editing ? (
+                                    <button className="btn btn-primary w-full" onClick={handleSaveEdit} disabled={saving || !name.trim()}>
+                                        {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Saving...</> : 'Save Changes'}
+                                    </button>
+                                ) : (
+                                    <button className="btn btn-primary w-full" onClick={handleCreate} disabled={creating || !name.trim()}>
+                                        {creating ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : 'Create Agent'}
+                                    </button>
+                                )}
                             </div>
                         </>
                     ) : selectedAgent ? (
@@ -306,6 +341,10 @@ export function AgentsPage() {
                                     <Bot className="w-5 h-5 text-[var(--accent-primary)]" />
                                     <span className="panel-title">{selectedAgent.name}</span>
                                 </div>
+                                <button className="btn btn-secondary btn-sm" onClick={startEditing}>
+                                    <Pencil className="w-3.5 h-3.5" />
+                                    Edit
+                                </button>
                             </div>
                             <div className="panel-content space-y-6">
                                 <div>

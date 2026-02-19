@@ -28,7 +28,7 @@
 ## Current Phase: 4 (Universal Automation Canvas)
 
 **Goal**: Graduate node editor from AI workflow builder to universal automation platform. Data I/O nodes, control flow, engine refactoring, canvas UX.
-**Status**: IN PROGRESS — 4A complete, 4B next
+**Status**: IN PROGRESS — 4A + 4B complete, UX polish ongoing
 **Specs in scope**: `phase4-automation-canvas.md` (primary), `eip-data-io-nodes.md` (data I/O), `node-editor.md` (reference)
 
 ### Phase 4A — Canvas + Node Types (DONE)
@@ -54,6 +54,9 @@
 | **4B.2 Iterator + 4B.3 Aggregator** | DONE | Subgraph extraction, synthetic workflow execution per item, 3 aggregation strategies, 23 tests |
 | **4B.4 LLM Session mode** | DONE | Stateful multi-turn conversations via sidecar session accumulation, 5 tests |
 | **Codex review fixes** | DONE | UTF-8 safe truncation, File Glob containment, multi-aggregator detection, maxHistory clamp, cycle detection |
+| **Agent edit mode** | DONE | Edit provider, model, prompt after agent creation (4f49165) |
+| **Click-to-place nodes** | DONE | macOS WebKit drag-and-drop fix — click palette then click canvas (335f166) |
+| **Custom node labels** | DONE | Double-click header to name any node (e.g. "LLM · Summarizer"), config panel field (11a166a) |
 
 ---
 
@@ -143,18 +146,12 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-19 (session 27)
+**Date**: 2026-02-19 (session 28)
 **What happened**:
-- **EIP peer reviews**: Both Gemini (architecture) and Codex (code quality) reviewed EIP implementation
-  - Gemini: 7 findings — 3 fixed (spec updates, nested iterator warning), 1 deferred, 3 PASS
-  - Codex: 12 findings — 5 fixed, 7 deferred to Phase 5
-- **Codex review fixes implemented**:
-  - UTF-8 safe truncation: Added `truncate()` helper using `char_indices`, replaced 11 byte-index slices in llm.rs + engine.rs
-  - File Glob directory containment: `canonical.starts_with(canonical_base)` prevents `../../` escape
-  - Multi-aggregator detection: Iterator fails fast if >1 aggregator reachable (was silently picking last one)
-  - maxHistory clamp: clamped to [1, 100] in Rust (prevents 0-means-20 sidecar bug and unbounded values)
-  - Cycle detection: engine returns error if topo sort doesn't cover all nodes (was silently skipping cyclic nodes)
-- All 115 Rust tests pass
+- **Agent edit mode**: Added edit button to agent detail panel — can now change provider, model, system prompt after creation (4f49165)
+- **macOS drag-and-drop fix**: Click-to-place nodes as alternative to HTML5 drag-and-drop (unreliable on macOS WKWebView). Click palette item → click canvas. Crosshair cursor, blue banner indicator, ESC to cancel (335f166)
+- **Custom node labels**: All 16 node types support naming via double-click header (e.g. "LLM · Summarizer"). Also editable in config panel. Labels persist in graph JSON. Empty labels filtered from input name resolution (11a166a)
+- All 115 Rust tests pass, clean TypeScript + Vite build
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -167,6 +164,7 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 24: Output truncation fix, vision pipeline, EIP spec, Playwright E2E (15 tests)
 - Session 25: v0.1.0 tag, Transform jsonpath+script, File Glob, Iterator+Aggregator
 - Session 26: LLM Session mode (4B.4), 5 tests, Playwright verification
+- Session 27: EIP peer reviews (Gemini+Codex), 5 code fixes (UTF-8, containment, cycle detection)
 
 **Next session should**:
 1. Build compelling demo workflow (batch CSV analysis with session LLM)

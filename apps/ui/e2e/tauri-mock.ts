@@ -113,6 +113,10 @@ const MOCK_HANDLERS: Record<string, (args?: any) => any> = {
 
     // Database
     wipe_database: () => undefined,
+
+    // Tauri plugin commands (event system, etc.)
+    'plugin:event|listen': () => undefined,
+    'plugin:event|unlisten': () => undefined,
 };
 
 /**

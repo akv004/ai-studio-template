@@ -1,25 +1,47 @@
 import { test, expect } from '@playwright/test';
 import * as fs from 'fs';
-import * as path from 'path';
+import * as http from 'http';
 
 const SIDECAR_URL = process.env.SIDECAR_URL || 'http://localhost:8765';
+const SIDECAR_TOKEN = process.env.AI_STUDIO_TOKEN || '';
+
+// Common headers for authenticated sidecar requests
+const headers = (): Record<string, string> => {
+    const h: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (SIDECAR_TOKEN) h['x-ai-studio-token'] = SIDECAR_TOKEN;
+    return h;
+};
+
+// Check if sidecar is reachable (fast TCP check)
+async function isSidecarUp(): Promise<boolean> {
+    const url = new URL(SIDECAR_URL);
+    return new Promise((resolve) => {
+        const req = http.get(`${SIDECAR_URL}/health`, { timeout: 2000 }, (res) => {
+            resolve(res.statusCode === 200);
+        });
+        req.on('error', () => resolve(false));
+        req.on('timeout', () => { req.destroy(); resolve(false); });
+    });
+}
 
 test.describe('Sidecar API Tests', () => {
 
+    test.beforeEach(async () => {
+        if (!(await isSidecarUp())) {
+            test.skip(true, 'Sidecar not running');
+        }
+    });
+
     test('health endpoint responds', async ({ request }) => {
         const resp = await request.get(`${SIDECAR_URL}/health`);
-        if (resp.ok()) {
-            const body = await resp.json();
-            expect(body.status).toBeDefined();
-            console.log('[sidecar] Health:', JSON.stringify(body));
-        } else {
-            console.warn('[sidecar] Health check failed — sidecar may not be running');
-            test.skip();
-        }
+        const body = await resp.json();
+        expect(body.status).toBe('healthy');
+        console.log('[sidecar] Health:', JSON.stringify(body));
     });
 
     test('chat/direct with text prompt returns response', async ({ request }) => {
         const resp = await request.post(`${SIDECAR_URL}/chat/direct`, {
+            headers: headers(),
             data: {
                 messages: [{ role: 'user', content: 'What is 2+2? Answer with just the number.' }],
                 provider: 'local',
@@ -30,8 +52,8 @@ test.describe('Sidecar API Tests', () => {
         });
 
         if (!resp.ok()) {
-            console.warn('[sidecar] chat/direct failed — provider may not be available');
-            test.skip();
+            console.warn('[sidecar] chat/direct failed:', resp.status(), (await resp.text()).slice(0, 200));
+            test.skip(true, 'Provider not available');
             return;
         }
 
@@ -40,17 +62,13 @@ test.describe('Sidecar API Tests', () => {
         expect(typeof body.content).toBe('string');
         expect(body.content.length).toBeGreaterThan(0);
         console.log('[sidecar] Chat response:', body.content.slice(0, 100));
-
-        // Verify usage stats are returned
         expect(body.usage).toBeDefined();
     });
 
     test('chat/direct with vision (single image) sends multimodal', async ({ request }) => {
-        // Read the test image
         const imagePath = '/tmp/ai-studio-samples/dashboard-chart.png';
         if (!fs.existsSync(imagePath)) {
-            console.warn('[sidecar] Test image not found at', imagePath);
-            test.skip();
+            test.skip(true, 'Test image not found');
             return;
         }
 
@@ -58,6 +76,7 @@ test.describe('Sidecar API Tests', () => {
         const base64Data = imageBuffer.toString('base64');
 
         const resp = await request.post(`${SIDECAR_URL}/chat/direct`, {
+            headers: headers(),
             data: {
                 messages: [{ role: 'user', content: 'Describe what you see in this image briefly.' }],
                 provider: 'local',
@@ -72,9 +91,8 @@ test.describe('Sidecar API Tests', () => {
         });
 
         if (!resp.ok()) {
-            const errorText = await resp.text();
-            console.warn('[sidecar] Vision chat failed:', resp.status(), errorText.slice(0, 200));
-            test.skip();
+            console.warn('[sidecar] Vision chat failed:', resp.status());
+            test.skip(true, 'Vision provider not available');
             return;
         }
 
@@ -83,8 +101,6 @@ test.describe('Sidecar API Tests', () => {
         expect(body.content.length).toBeGreaterThan(10);
         console.log('[sidecar] Vision response:', body.content.slice(0, 200));
 
-        // The response should mention something about the image content
-        // (sales, costs, profit, chart, dashboard, etc.)
         const lowerContent = body.content.toLowerCase();
         const mentionsVisual = ['sales', 'cost', 'profit', 'chart', 'box', 'image', 'blue', 'red', 'green']
             .some(keyword => lowerContent.includes(keyword));
@@ -94,7 +110,7 @@ test.describe('Sidecar API Tests', () => {
     test('chat/direct with multiple images', async ({ request }) => {
         const imagePath = '/tmp/ai-studio-samples/dashboard-chart.png';
         if (!fs.existsSync(imagePath)) {
-            test.skip();
+            test.skip(true, 'Test image not found');
             return;
         }
 
@@ -102,6 +118,7 @@ test.describe('Sidecar API Tests', () => {
         const base64Data = imageBuffer.toString('base64');
 
         const resp = await request.post(`${SIDECAR_URL}/chat/direct`, {
+            headers: headers(),
             data: {
                 messages: [{ role: 'user', content: 'How many images do you see? Describe each briefly.' }],
                 provider: 'local',
@@ -116,8 +133,8 @@ test.describe('Sidecar API Tests', () => {
         });
 
         if (!resp.ok()) {
-            console.warn('[sidecar] Multi-image test failed — may not support multiple images');
-            test.skip();
+            console.warn('[sidecar] Multi-image test failed');
+            test.skip(true, 'Multi-image not available');
             return;
         }
 
@@ -129,6 +146,7 @@ test.describe('Sidecar API Tests', () => {
 
     test('chat/direct rejects empty messages', async ({ request }) => {
         const resp = await request.post(`${SIDECAR_URL}/chat/direct`, {
+            headers: headers(),
             data: {
                 messages: [],
                 provider: 'local',
@@ -136,7 +154,6 @@ test.describe('Sidecar API Tests', () => {
             },
         });
 
-        // Should return 4xx or 5xx error
         if (resp.ok()) {
             console.log('[sidecar] Empty messages was accepted (unexpected but not critical)');
         } else {
@@ -147,16 +164,23 @@ test.describe('Sidecar API Tests', () => {
 
 test.describe('File Read → LLM Integration', () => {
 
+    test.beforeEach(async () => {
+        if (!(await isSidecarUp())) {
+            test.skip(true, 'Sidecar not running');
+        }
+    });
+
     test('read text file and send to LLM', async ({ request }) => {
         const filePath = '/tmp/ai-studio-samples/bug-report.txt';
         if (!fs.existsSync(filePath)) {
-            test.skip();
+            test.skip(true, 'Test file not found');
             return;
         }
 
         const content = fs.readFileSync(filePath, 'utf-8');
 
         const resp = await request.post(`${SIDECAR_URL}/chat/direct`, {
+            headers: headers(),
             data: {
                 messages: [{ role: 'user', content: content }],
                 provider: 'local',
@@ -168,7 +192,7 @@ test.describe('File Read → LLM Integration', () => {
         });
 
         if (!resp.ok()) {
-            test.skip();
+            test.skip(true, 'Provider not available');
             return;
         }
 
@@ -181,13 +205,14 @@ test.describe('File Read → LLM Integration', () => {
     test('read CSV and analyze with LLM', async ({ request }) => {
         const filePath = '/tmp/ai-studio-samples/sales-data.csv';
         if (!fs.existsSync(filePath)) {
-            test.skip();
+            test.skip(true, 'Test file not found');
             return;
         }
 
         const content = fs.readFileSync(filePath, 'utf-8');
 
         const resp = await request.post(`${SIDECAR_URL}/chat/direct`, {
+            headers: headers(),
             data: {
                 messages: [{ role: 'user', content: content }],
                 provider: 'local',
@@ -199,7 +224,7 @@ test.describe('File Read → LLM Integration', () => {
         });
 
         if (!resp.ok()) {
-            test.skip();
+            test.skip(true, 'Provider not available');
             return;
         }
 

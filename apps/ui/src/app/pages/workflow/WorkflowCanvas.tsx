@@ -92,6 +92,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; nodeId?: string } | null>(null);
     const [editingName, setEditingName] = useState(false);
     const [nameDraft, setNameDraft] = useState(workflow.name);
+    const [pendingNodeType, setPendingNodeType] = useState<string | null>(null);
     const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
     const reactFlowRef = useRef<HTMLDivElement>(null);
     const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -236,10 +237,28 @@ export function WorkflowCanvas({ workflow, onBack }: {
         setSelectedNodeId(node.id);
     }, []);
 
-    const onPaneClick = useCallback(() => {
-        setSelectedNodeId(null);
+    const onPaneClick = useCallback((event: React.MouseEvent) => {
         setContextMenu(null);
-    }, []);
+
+        // Click-to-place: if a palette item is selected, place it at click position
+        if (pendingNodeType) {
+            const position = rfInstanceRef.current
+                ? rfInstanceRef.current.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+                : { x: 100, y: 100 };
+
+            const newNode: Node = {
+                id: generateNodeId(pendingNodeType),
+                type: pendingNodeType,
+                position,
+                data: defaultDataForType(pendingNodeType),
+            };
+            setNodes((nds) => [...nds, newNode]);
+            setPendingNodeType(null);
+            return;
+        }
+
+        setSelectedNodeId(null);
+    }, [pendingNodeType, setNodes]);
 
     const onDragOver = useCallback((event: React.DragEvent) => {
         event.preventDefault();
@@ -413,6 +432,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
 
             if (e.key === 'Escape') {
                 setContextMenu(null);
+                setPendingNodeType(null);
                 return;
             }
 
@@ -632,12 +652,13 @@ export function WorkflowCanvas({ workflow, onBack }: {
                                 {cat.types.map((t) => (
                                     <div
                                         key={t.type}
-                                        className="flex items-center gap-2 px-2 py-1.5 rounded cursor-grab hover:bg-[var(--bg-tertiary)] text-sm"
+                                        className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-grab hover:bg-[var(--bg-tertiary)] text-sm ${pendingNodeType === t.type ? 'ring-1 ring-blue-500 bg-[var(--bg-tertiary)]' : ''}`}
                                         draggable
                                         onDragStart={(e) => {
                                             e.dataTransfer.setData('application/reactflow', t.type);
                                             e.dataTransfer.effectAllowed = 'move';
                                         }}
+                                        onClick={() => setPendingNodeType(pendingNodeType === t.type ? null : t.type)}
                                     >
                                         <div className="w-3 h-3 rounded-sm" style={{ background: nodeColors[t.type] }} />
                                         <span>{t.label}</span>
@@ -649,7 +670,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
                 </div>
 
                 {/* React Flow Canvas */}
-                <div className="flex-1" ref={reactFlowRef}>
+                <div className={`flex-1 ${pendingNodeType ? 'cursor-crosshair' : ''}`} ref={reactFlowRef}>
                     <ReactFlow
                         nodes={nodes}
                         edges={edges}
@@ -687,10 +708,21 @@ export function WorkflowCanvas({ workflow, onBack }: {
                             maskColor="rgba(0,0,0,0.6)"
                             className="react-flow-minimap"
                         />
-                        {nodes.length === 0 && (
+                        {pendingNodeType && (
+                            <Panel position="top-center">
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-blue-600/90 text-white text-xs mt-2">
+                                    <div className="w-2.5 h-2.5 rounded-sm" style={{ background: nodeColors[pendingNodeType] }} />
+                                    Click on canvas to place {pendingNodeType} node
+                                    <button className="ml-1 hover:text-blue-200" onClick={() => setPendingNodeType(null)}>
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            </Panel>
+                        )}
+                        {nodes.length === 0 && !pendingNodeType && (
                             <Panel position="top-center">
                                 <div className="text-sm text-[var(--text-muted)] mt-20 text-center">
-                                    Drag nodes from the palette to get started
+                                    Drag or click nodes from the palette, then click on canvas to place
                                 </div>
                             </Panel>
                         )}

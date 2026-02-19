@@ -58,6 +58,8 @@
 | **Click-to-place nodes** | DONE | macOS WebKit drag-and-drop fix — click palette then click canvas (335f166) |
 | **Custom node labels** | DONE | Double-click header to name any node (e.g. "LLM · Summarizer"), config panel field (11a166a) |
 | **Toolbar + list UI polish** | DONE | Dividers, node count badge, hover card actions, btn-icon-sm utility (8f4906a) |
+| **Node editor guide** | DONE | Step-by-step guide for all 16 nodes, 7 patterns, LLM picker (82795b8) |
+| **Rename Node Editor → Workflows** | DONE | Sidebar label + Workflow icon + page title + command palette (18648b5) |
 
 ---
 
@@ -163,8 +165,13 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 **Date**: 2026-02-19 (session 29)
 **What happened**:
-- **Toolbar + list UI polish**: Vertical dividers between button groups, node count as styled badge, export button as icon-only, workflow card actions appear on hover, smaller utility icons (Refresh/Upload → 28px), `.btn-icon-sm` + `.toolbar-divider` CSS utilities (8f4906a)
-- Clean TypeScript + Vite build
+- **Toolbar + list UI polish**: Vertical dividers, node count badge, hover card actions, btn-icon-sm + toolbar-divider CSS utilities (8f4906a)
+- **Node editor guide**: `docs/node-editor-guide.md` — step-by-step for all 16 nodes, 7 common patterns, LLM picker guide (82795b8)
+- **Phase 5+ backlog**: Added 5 killer features — A/B Eval, Time-Travel Debug, Auto-Pipeline Generator, Guardrails, RAG nodes (718cbae)
+- **v0.1.1 tagged**: Phase 4B + UX polish milestone
+- **Rename Node Editor → Workflows**: Sidebar label, Workflow icon (lucide), page title, command palette (18648b5)
+- Product vision discussion: Agent-Workflow unification planned for Phase 5 (Agent = a workflow that defines its behavior)
+- GitHub Actions deploy template saved to claude-config (generic, no org references)
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -183,4 +190,5 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 **Next session should**:
 1. Build compelling demo workflow (batch CSV analysis with session LLM)
 2. Phase 4C planning (streaming, containers, UX polish)
-3. Consider v0.2.0 tag for Phase 4B completion
+3. Agent-Workflow unification spec (Phase 5 — Agent = workflow)
+4. Consider v0.2.0 tag

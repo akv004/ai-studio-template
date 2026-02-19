@@ -1,76 +1,57 @@
 import { test, expect } from '@playwright/test';
 import { setupTauriMock } from './tauri-mock';
 
+// Helper: wait for app to fully render, then navigate to Node Editor
+async function navigateToNodeEditor(page: import('@playwright/test').Page) {
+    await page.goto('/');
+    // Wait for sidebar to render (proves React + Tauri mock loaded)
+    await expect(page.getByText('Modules')).toBeVisible({ timeout: 10000 });
+    // Click Node Editor in sidebar
+    await page.getByText('Node Editor').click();
+    // Wait for the workflow list or editor to appear
+    await page.waitForTimeout(500);
+}
+
 test.describe('Workflow Canvas', () => {
     test.beforeEach(async ({ page }) => {
         await setupTauriMock(page);
     });
 
     test('workflow list page renders', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForTimeout(1000);
-        // Navigate to workflows — click sidebar item containing "Workflow" or "Node Editor"
-        const workflowNav = page.getByText(/workflow|node editor/i).first();
-        if (await workflowNav.isVisible()) {
-            await workflowNav.click();
-            await page.waitForTimeout(500);
-        }
+        await navigateToNodeEditor(page);
+        // Should see the test workflow from our mock
+        await expect(page.getByText('Test Workflow', { exact: true })).toBeVisible({ timeout: 5000 });
         await page.screenshot({ path: 'e2e/screenshots/workflow-list.png', fullPage: true });
     });
 
     test('workflow canvas loads with nodes', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForTimeout(1000);
-        // Navigate to workflows
-        const workflowNav = page.getByText(/workflow|node editor/i).first();
-        if (await workflowNav.isVisible()) {
-            await workflowNav.click();
-            await page.waitForTimeout(500);
-        }
-        // Click on test workflow if list is visible
+        await navigateToNodeEditor(page);
+        // Click the test workflow to open it
         const workflowCard = page.getByText('Test Workflow').first();
-        if (await workflowCard.isVisible()) {
-            await workflowCard.click();
-            await page.waitForTimeout(1000);
-        }
+        await expect(workflowCard).toBeVisible({ timeout: 5000 });
+        await workflowCard.click();
+        // Wait for canvas to load (React Flow renders)
+        await expect(page.locator('.react-flow')).toBeVisible({ timeout: 10000 });
         await page.screenshot({ path: 'e2e/screenshots/workflow-canvas.png', fullPage: true });
     });
 
     test('node palette is visible on canvas page', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForTimeout(1000);
-        const workflowNav = page.getByText(/workflow|node editor/i).first();
-        if (await workflowNav.isVisible()) {
-            await workflowNav.click();
-            await page.waitForTimeout(500);
-        }
+        await navigateToNodeEditor(page);
         const workflowCard = page.getByText('Test Workflow').first();
-        if (await workflowCard.isVisible()) {
-            await workflowCard.click();
-            await page.waitForTimeout(1000);
-        }
-        // Check for node palette
-        const palette = page.getByText(/node palette/i).first();
+        await expect(workflowCard).toBeVisible({ timeout: 5000 });
+        await workflowCard.click();
+        await expect(page.locator('.react-flow')).toBeVisible({ timeout: 10000 });
         await page.screenshot({ path: 'e2e/screenshots/node-palette.png', fullPage: true });
     });
 
     test('custom nodes render with correct labels', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForTimeout(1000);
-        const workflowNav = page.getByText(/workflow|node editor/i).first();
-        if (await workflowNav.isVisible()) {
-            await workflowNav.click();
-            await page.waitForTimeout(500);
-        }
+        await navigateToNodeEditor(page);
         const workflowCard = page.getByText('Test Workflow').first();
-        if (await workflowCard.isVisible()) {
-            await workflowCard.click();
-            await page.waitForTimeout(1500);
-        }
-        // Look for node type labels
-        const inputNode = page.getByText('INPUT').first();
-        const llmNode = page.getByText('LLM').first();
-        const outputNode = page.getByText('OUTPUT').first();
+        await expect(workflowCard).toBeVisible({ timeout: 5000 });
+        await workflowCard.click();
+        await expect(page.locator('.react-flow')).toBeVisible({ timeout: 10000 });
+        // Wait a bit for nodes to render inside React Flow
+        await page.waitForTimeout(1000);
         await page.screenshot({ path: 'e2e/screenshots/nodes-rendered.png', fullPage: true });
     });
 });

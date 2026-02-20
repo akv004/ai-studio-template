@@ -74,11 +74,25 @@ class GoogleProvider(AgentProvider):
                         "parts": [{"text": m.content}]
                     })
                 elif isinstance(m.content, list):
-                    # Structured content (e.g., function call parts from previous response)
-                    contents.append({
-                        "role": role,
-                        "parts": m.content,
-                    })
+                    # Convert OpenAI-style content blocks to Gemini parts
+                    parts = []
+                    for block in m.content:
+                        if isinstance(block, dict) and block.get("type") == "image_url":
+                            url = block.get("image_url", {}).get("url", "")
+                            if url.startswith("data:"):
+                                # Parse data URI: data:image/png;base64,iVBOR...
+                                header, b64_data = url.split(",", 1)
+                                mime = header.split(":")[1].split(";")[0]
+                                parts.append({"inlineData": {"mimeType": mime, "data": b64_data}})
+                            else:
+                                parts.append({"text": f"[image: {url}]"})
+                        elif isinstance(block, dict) and block.get("type") == "text":
+                            parts.append({"text": block.get("text", "")})
+                        elif isinstance(block, dict) and "functionCall" in block:
+                            parts.append(block)
+                        else:
+                            parts.append(block)
+                    contents.append({"role": role, "parts": parts})
                 else:
                     contents.append({
                         "role": role,

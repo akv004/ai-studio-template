@@ -42,12 +42,35 @@ class OllamaProvider(AgentProvider):
         """Send chat request to Ollama"""
         model = model or self.default_model
         
+        # Convert messages — extract images for Ollama vision format
+        ollama_messages = []
+        for m in messages:
+            msg = {"role": m.role}
+            if isinstance(m.content, list):
+                # OpenAI-style content blocks → Ollama images field
+                text_parts = []
+                images = []
+                for block in m.content:
+                    if isinstance(block, dict) and block.get("type") == "image_url":
+                        url = block.get("image_url", {}).get("url", "")
+                        if url.startswith("data:"):
+                            b64_data = url.split(",", 1)[1]
+                            images.append(b64_data)
+                    elif isinstance(block, dict) and block.get("type") == "text":
+                        text_parts.append(block.get("text", ""))
+                msg["content"] = "\n".join(text_parts) if text_parts else ""
+                if images:
+                    msg["images"] = images
+            else:
+                msg["content"] = m.content
+            ollama_messages.append(msg)
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
                 f"{self.base_url}/api/chat",
                 json={
                     "model": model,
-                    "messages": [{"role": m.role, "content": m.content} for m in messages],
+                    "messages": ollama_messages,
                     "stream": False,
                     "options": {
                         "temperature": temperature,

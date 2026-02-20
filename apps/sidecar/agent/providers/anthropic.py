@@ -51,6 +51,26 @@ class AnthropicProvider(AgentProvider):
         for m in messages:
             if m.role == "system":
                 system_content = m.content if isinstance(m.content, str) else str(m.content)
+            elif isinstance(m.content, list):
+                # Convert OpenAI-style content blocks to Anthropic format
+                blocks = []
+                for block in m.content:
+                    if isinstance(block, dict) and block.get("type") == "image_url":
+                        url = block.get("image_url", {}).get("url", "")
+                        if url.startswith("data:"):
+                            header, b64_data = url.split(",", 1)
+                            media_type = header.split(":")[1].split(";")[0]
+                            blocks.append({
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": media_type, "data": b64_data},
+                            })
+                        else:
+                            blocks.append({"type": "text", "text": f"[image: {url}]"})
+                    elif isinstance(block, dict) and block.get("type") == "text":
+                        blocks.append({"type": "text", "text": block.get("text", "")})
+                    else:
+                        blocks.append(block)
+                chat_messages.append({"role": m.role, "content": blocks})
             else:
                 chat_messages.append({"role": m.role, "content": m.content})
 

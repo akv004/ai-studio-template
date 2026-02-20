@@ -55,16 +55,28 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
             )}
 
             {type === 'input' && (
-                <label className="block">
-                    <span className="text-xs text-[var(--text-muted)]">Data Type</span>
-                    <select className="config-input" value={(data.dataType as string) || 'text'}
-                        onChange={(e) => update('dataType', e.target.value)}>
-                        <option value="text">Text</option>
-                        <option value="json">JSON</option>
-                        <option value="boolean">Boolean</option>
-                        <option value="file">File</option>
-                    </select>
-                </label>
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Data Type</span>
+                        <select className="config-input" value={(data.dataType as string) || 'text'}
+                            onChange={(e) => update('dataType', e.target.value)}>
+                            <option value="text">Text</option>
+                            <option value="json">JSON</option>
+                            <option value="boolean">Boolean</option>
+                            <option value="file">File</option>
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Default Value</span>
+                        <textarea
+                            className="config-input resize-y font-mono text-xs"
+                            rows={3}
+                            value={(data.defaultValue as string) || ''}
+                            placeholder="Enter default value..."
+                            onChange={(e) => update('defaultValue', e.target.value)}
+                        />
+                    </label>
+                </>
             )}
 
             {type === 'output' && (
@@ -176,7 +188,7 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                             onChange={(e) => update('mode', e.target.value)}>
                             <option value="template">Template</option>
                             <option value="jsonpath">JSONPath</option>
-                            <option value="script">Script</option>
+                            <option value="script">Expression</option>
                         </select>
                     </label>
 

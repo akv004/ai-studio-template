@@ -83,10 +83,25 @@ pub fn resolve_template(
                     return extract_primary_text(val);
                 }
                 if let Some(obj) = val.as_object() {
-                    if let Some(field_val) = obj.get(field) {
-                        return match field_val.as_str() {
+                    // Handle array index: "services[0]" → field="services", index=0
+                    let (actual_field, index) = if field.contains('[') {
+                        let parts: Vec<&str> = field.splitn(2, '[').collect();
+                        let idx: Option<usize> = parts.get(1)
+                            .and_then(|s| s.trim_end_matches(']').parse().ok());
+                        (parts[0], idx)
+                    } else {
+                        (field, None)
+                    };
+                    if let Some(field_val) = obj.get(actual_field) {
+                        let resolved = match (field_val, index) {
+                            (serde_json::Value::Array(arr), Some(i)) => {
+                                arr.get(i).cloned().unwrap_or(serde_json::Value::Null)
+                            }
+                            _ => field_val.clone(),
+                        };
+                        return match resolved.as_str() {
                             Some(s) => s.to_string(),
-                            None => field_val.to_string(),
+                            None => resolved.to_string(),
                         };
                     }
                 }
@@ -706,6 +721,36 @@ mod tests {
         assert_eq!(
             resolve_template("{{llm_1}}", &node_outputs, &inputs),
             "The answer is 42"
+        );
+    }
+
+    #[test]
+    fn test_resolve_array_index() {
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("transform_1".to_string(), serde_json::json!({
+            "services": ["web-app", "auth-api", "gateway"],
+            "tag": "latest",
+        }));
+        let inputs = HashMap::new();
+        // {{transform_1.services[0]}} → first element
+        assert_eq!(
+            resolve_template("{{transform_1.services[0]}}", &node_outputs, &inputs),
+            "web-app"
+        );
+        // {{transform_1.services[2]}} → third element
+        assert_eq!(
+            resolve_template("{{transform_1.services[2]}}", &node_outputs, &inputs),
+            "gateway"
+        );
+        // {{transform_1.services[99]}} → out of bounds → null
+        assert_eq!(
+            resolve_template("{{transform_1.services[99]}}", &node_outputs, &inputs),
+            "null"
+        );
+        // Non-array field with index → returns whole value
+        assert_eq!(
+            resolve_template("{{transform_1.tag}}", &node_outputs, &inputs),
+            "latest"
         );
     }
 

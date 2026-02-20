@@ -27,7 +27,17 @@ impl NodeExecutor for ShellExecExecutor {
         } else {
             config_cmd.to_string()
         };
-        let command = resolve_template(&command, ctx.node_outputs, ctx.inputs);
+        // Merge incoming object fields into inputs for template resolution
+        // (same pattern as TransformExecutor)
+        let mut local_inputs = ctx.inputs.clone();
+        if let Some(inc) = incoming {
+            if let Some(obj) = inc.as_object() {
+                for (k, v) in obj {
+                    local_inputs.insert(k.clone(), v.clone());
+                }
+            }
+        }
+        let command = resolve_template(&command, ctx.node_outputs, &local_inputs);
 
         if command.is_empty() {
             return Err("Shell Exec: command is empty".into());

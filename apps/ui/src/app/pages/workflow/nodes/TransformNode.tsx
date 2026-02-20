@@ -22,7 +22,7 @@ export function TransformNode({ id, data, selected }: { id: string; data: Record
                     onMouseDown={e => e.stopPropagation()}>
                     <option value="template">Template</option>
                     <option value="jsonpath">JSONPath</option>
-                    <option value="script">Script</option>
+                    <option value="script">Expression</option>
                 </select>
             </div>
             {Boolean(data.template) && (

@@ -11,6 +11,7 @@ import type {
     BudgetStatus,
     Plugin, ScanResult, PluginConnectResult, PluginStartupResult,
 } from '@ai-studio/shared';
+import { sidecarRequest } from '../lib/sidecar';
 
 // ============================================
 // APP STATE STORE
@@ -128,6 +129,7 @@ interface AppState {
     addMcpServer: (req: CreateMcpServerRequest) => Promise<McpServer>;
     updateMcpServer: (id: string, req: UpdateMcpServerRequest) => Promise<void>;
     removeMcpServer: (id: string) => Promise<void>;
+    connectEnabledMcpServers: () => Promise<void>;
 
     // Approval Rules
     approvalRules: ApprovalRule[];
@@ -467,9 +469,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     },
     addMcpServer: async (req) => {
         try {
-            const server = await invoke<McpServer>('add_mcp_server', { server: req });
+            const server = await invoke<McpServer>('add_mcp_server', { config: req });
             set((s) => ({ mcpServers: [...s.mcpServers, server] }));
-            get().addToast('MCP server added', 'success');
+            // Auto-connect to sidecar so tools are available immediately
+            try {
+                await sidecarRequest('POST', '/mcp/connect', {
+                    name: server.name,
+                    transport: server.transport,
+                    command: server.command,
+                    args: server.args,
+                    url: server.url || null,
+                    env: server.env || {},
+                });
+                get().addToast(`MCP server "${server.name}" connected`, 'success');
+            } catch (connectErr) {
+                get().addToast(`Server saved but failed to connect: ${connectErr}`, 'error');
+            }
             return server;
         } catch (e) {
             const msg = `Failed to add MCP server: ${e}`;
@@ -480,7 +495,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     },
     updateMcpServer: async (id, req) => {
         try {
-            await invoke<void>('update_mcp_server', { id, update: req });
+            await invoke<void>('update_mcp_server', { id, updates: req });
             get().fetchMcpServers();
         } catch (e) {
             const msg = `Failed to update MCP server: ${e}`;
@@ -497,6 +512,28 @@ export const useAppStore = create<AppState>((set, get) => ({
             const msg = `Failed to remove MCP server: ${e}`;
             set({ error: msg });
             get().addToast(msg, 'error');
+        }
+    },
+    connectEnabledMcpServers: async () => {
+        const servers = get().mcpServers.filter((s) => s.enabled);
+        let connected = 0;
+        for (const server of servers) {
+            try {
+                await sidecarRequest('POST', '/mcp/connect', {
+                    name: server.name,
+                    transport: server.transport,
+                    command: server.command,
+                    args: server.args,
+                    url: server.url || null,
+                    env: server.env || {},
+                });
+                connected++;
+            } catch {
+                // Silent — server might be unavailable
+            }
+        }
+        if (connected > 0) {
+            get().addToast(`Connected ${connected} MCP server(s)`, 'success');
         }
     },
 

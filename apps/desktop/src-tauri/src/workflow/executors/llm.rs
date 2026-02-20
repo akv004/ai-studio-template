@@ -23,8 +23,14 @@ impl NodeExecutor for LlmExecutor {
         node_data: &serde_json::Value,
         incoming: &Option<serde_json::Value>,
     ) -> Result<NodeOutput, String> {
-        let provider_name = node_data.get("provider").and_then(|v| v.as_str()).unwrap_or("ollama");
-        let model = node_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
+        let provider_name = node_data.get("provider").and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| ctx.all_settings.get("default.provider").map(|s| s.trim_matches('"')))
+            .unwrap_or("ollama");
+        let model = node_data.get("model").and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .or_else(|| ctx.all_settings.get("default.model").map(|s| s.trim_matches('"')))
+            .unwrap_or("");
         let temperature = node_data.get("temperature").and_then(|v| v.as_f64()).unwrap_or(0.7);
         let session_mode = node_data.get("sessionMode").and_then(|v| v.as_str()).unwrap_or("stateless");
         let max_history = node_data.get("maxHistory").and_then(|v| v.as_i64()).unwrap_or(20).clamp(1, 100);
@@ -60,9 +66,16 @@ impl NodeExecutor for LlmExecutor {
 
         let incoming_prompt = incoming.as_ref()
             .and_then(|inc| inc.get("prompt"))
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-            .map(|s| s.to_string());
+            .and_then(|v| {
+                if let Some(s) = v.as_str() {
+                    if s.is_empty() { None } else { Some(s.to_string()) }
+                } else if v.is_null() {
+                    None
+                } else {
+                    // Stringify objects/arrays arriving on the prompt handle
+                    Some(serde_json::to_string_pretty(v).unwrap_or_default())
+                }
+            });
 
         let incoming_bare = incoming.as_ref()
             .and_then(|inc| inc.as_str())

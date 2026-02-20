@@ -26,12 +26,32 @@ impl NodeExecutor for ToolExecutor {
             return Err(format!("Tool node '{}' has approval set to 'deny' — execution blocked", node_id));
         }
 
-        let tool_input = if let Some(configured_input) = node_data.get("toolInput") {
+        let raw_input = if let Some(configured_input) = node_data.get("toolInput") {
             configured_input.clone()
         } else if let Some(inc) = incoming {
             inc.clone()
         } else {
             serde_json::json!({})
+        };
+
+        // Sidecar requires tool_input to be a JSON object.
+        // If incoming is not an object, give a clear error pointing to the fix.
+        let tool_input = if raw_input.is_object() {
+            raw_input
+        } else if raw_input.is_null() {
+            serde_json::json!({})
+        } else {
+            return Err(format!(
+                "Tool node '{}' received a non-object input (got {}). \
+                 Tool nodes require JSON object input matching the tool's parameters. \
+                 Add a Transform node before this Tool to reshape the data, e.g. \
+                 template mode: {{\"command\": \"{{{{input}}}}\"}}",
+                node_id,
+                if raw_input.is_string() { "a string" }
+                else if raw_input.is_number() { "a number" }
+                else if raw_input.is_array() { "an array" }
+                else { "a non-object value" }
+            ));
         };
 
         if approval_mode == "ask" {

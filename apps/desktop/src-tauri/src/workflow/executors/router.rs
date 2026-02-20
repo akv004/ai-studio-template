@@ -39,44 +39,61 @@ impl NodeExecutor for RouterExecutor {
             None => serde_json::to_string(v).unwrap_or_default(),
         }).unwrap_or_default();
 
-        let classify_prompt = format!(
-            "Classify the following input into exactly one of these categories: {}.\n\n\
-             Input: {}\n\n\
-             Respond with ONLY the category name, nothing else.",
-            branch_names.join(", "),
-            incoming_text,
-        );
+        let mode = node_data.get("mode").and_then(|v| v.as_str()).unwrap_or("pattern");
 
-        let provider_name = node_data.get("provider").and_then(|v| v.as_str()).unwrap_or("ollama");
-        let model = node_data.get("model").and_then(|v| v.as_str()).unwrap_or("");
+        let selected = if mode == "llm" {
+            // LLM classification mode — ask an LLM to pick the branch
+            let classify_prompt = format!(
+                "Classify the following input into exactly one of these categories: {}.\n\n\
+                 Input: {}\n\n\
+                 Respond with ONLY the category name, nothing else.",
+                branch_names.join(", "),
+                incoming_text,
+            );
 
-        let mut body = serde_json::json!({
-            "messages": [{ "role": "user", "content": classify_prompt }],
-            "provider": provider_name,
-            "model": model,
-            "temperature": 0.0,
-        });
+            let provider_name = node_data.get("provider").and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .or_else(|| ctx.all_settings.get("default.provider").map(|s| s.trim_matches('"')))
+                .unwrap_or("ollama");
+            let model = node_data.get("model").and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .or_else(|| ctx.all_settings.get("default.model").map(|s| s.trim_matches('"')))
+                .unwrap_or("");
 
-        let prefix = format!("provider.{}.", provider_name);
-        for (k, v) in ctx.all_settings {
-            if let Some(field) = k.strip_prefix(&prefix) {
-                let clean_val = v.trim_matches('"').to_string();
-                match field {
-                    "api_key" => { body["api_key"] = serde_json::Value::String(clean_val); }
-                    "base_url" | "endpoint" => { body["base_url"] = serde_json::Value::String(clean_val); }
-                    _ => {}
+            let mut body = serde_json::json!({
+                "messages": [{ "role": "user", "content": classify_prompt }],
+                "provider": provider_name,
+                "model": model,
+                "temperature": 0.0,
+            });
+
+            let prefix = format!("provider.{}.", provider_name);
+            for (k, v) in ctx.all_settings {
+                if let Some(field) = k.strip_prefix(&prefix) {
+                    let clean_val = v.trim_matches('"').to_string();
+                    match field {
+                        "api_key" => { body["api_key"] = serde_json::Value::String(clean_val); }
+                        "base_url" | "endpoint" => { body["base_url"] = serde_json::Value::String(clean_val); }
+                        _ => {}
+                    }
                 }
             }
-        }
 
-        let resp = ctx.sidecar.proxy_request("POST", "/chat/direct", Some(body)).await
-            .map_err(|e| format!("Router LLM call failed: {}", e))?;
+            let resp = ctx.sidecar.proxy_request("POST", "/chat/direct", Some(body)).await
+                .map_err(|e| format!("Router LLM call failed: {}", e))?;
 
-        let classification = resp.get("content").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
+            let classification = resp.get("content").and_then(|v| v.as_str()).unwrap_or("").trim().to_string();
 
-        let selected = branch_names.iter().find(|name| {
-            name.eq_ignore_ascii_case(&classification)
-        }).cloned().unwrap_or_else(|| branch_names[0].clone());
+            branch_names.iter().find(|name| {
+                name.eq_ignore_ascii_case(&classification)
+            }).cloned().unwrap_or_else(|| branch_names[0].clone())
+        } else {
+            // Pattern matching mode — check if input text contains each branch name
+            let input_lower = incoming_text.to_lowercase();
+            branch_names.iter().find(|name| {
+                input_lower.contains(&name.to_lowercase())
+            }).cloned().unwrap_or_else(|| branch_names.last().cloned().unwrap_or_default())
+        };
 
         let selected_idx = branch_names.iter().position(|n| n == &selected);
         let mut skip_nodes = Vec::new();
@@ -98,7 +115,7 @@ impl NodeExecutor for RouterExecutor {
         let _ = record_event(ctx.db, ctx.session_id, "workflow.node.completed", "desktop.workflow",
             serde_json::json!({
                 "node_id": node_id, "node_type": "router",
-                "classification": &classification, "selected_branch": &selected,
+                "mode": mode, "selected_branch": &selected,
             }));
 
         Ok(NodeOutput::with_skips(

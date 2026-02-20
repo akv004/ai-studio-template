@@ -23,7 +23,7 @@ import { WelcomePage } from './app/pages/WelcomePage';
  * Implements global keyboard shortcuts and command palette.
  */
 function App() {
-  const { activeModule, isCommandPaletteOpen, agents, agentsLoading, fetchAgents, settings, fetchSettings, connectEnabledPlugins } = useAppStore();
+  const { activeModule, isCommandPaletteOpen, agents, agentsLoading, fetchAgents, settings, fetchSettings, connectEnabledPlugins, fetchMcpServers, connectEnabledMcpServers } = useAppStore();
   const [toolApprovalQueue, setToolApprovalQueue] = useState<
     Array<{ id: string; method: string; path: string; body?: unknown }>
   >([]);
@@ -39,12 +39,13 @@ function App() {
 
   // Load agents + settings on mount to detect first-run, then connect enabled plugins
   useEffect(() => {
-    Promise.all([fetchAgents(), fetchSettings()]).then(() => {
+    Promise.all([fetchAgents(), fetchSettings(), fetchMcpServers()]).then(() => {
       setInitialLoadDone(true);
-      // Auto-connect enabled plugins to sidecar after initial load
+      // Auto-connect enabled plugins and MCP servers to sidecar after initial load
       connectEnabledPlugins().catch(() => {});
+      connectEnabledMcpServers().catch(() => {});
     });
-  }, [fetchAgents, fetchSettings, connectEnabledPlugins]);
+  }, [fetchAgents, fetchSettings, fetchMcpServers, connectEnabledPlugins, connectEnabledMcpServers]);
 
   // Detect first-run: no agents AND onboarding not yet completed
   useEffect(() => {

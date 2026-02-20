@@ -35,6 +35,9 @@ class ChatResult:
     total_output_tokens: int = 0
 
 
+CONVERSATION_TTL_SECONDS = 3600  # Auto-evict conversations idle for 1 hour
+
+
 @dataclass
 class Conversation:
     """Represents a conversation with history"""
@@ -42,6 +45,7 @@ class Conversation:
     messages: list[Message] = field(default_factory=list)
     provider_name: str = "ollama"
     model: Optional[str] = None
+    last_accessed: float = field(default_factory=time.time)
 
 
 MAX_TOOL_TURNS = 10  # Safety limit to prevent infinite loops
@@ -98,10 +102,23 @@ class ChatService:
         conversation_id: str,
         **kwargs,
     ) -> Conversation:
-        """Get existing conversation or create new one"""
+        """Get existing conversation or create new one. Evicts stale conversations."""
+        self._evict_stale_conversations()
         if conversation_id not in self.conversations:
             return self.create_conversation(conversation_id, **kwargs)
-        return self.conversations[conversation_id]
+        conv = self.conversations[conversation_id]
+        conv.last_accessed = time.time()
+        return conv
+
+    def _evict_stale_conversations(self):
+        """Remove conversations idle longer than TTL."""
+        now = time.time()
+        stale = [cid for cid, c in self.conversations.items()
+                 if now - c.last_accessed > CONVERSATION_TTL_SECONDS]
+        for cid in stale:
+            del self.conversations[cid]
+        if stale:
+            print(f'[chat] Evicted {len(stale)} stale conversations (>{CONVERSATION_TTL_SECONDS}s idle)')
 
     async def chat(
         self,

@@ -1,0 +1,16 @@
+{
+  "nodes": [
+    { "id": "tool_1", "type": "tool", "position": { "x": 50, "y": 200 }, "data": { "toolName": "vision__webcam_detect", "serverName": "vision", "approval": "auto", "label": "Webcam Detect" } },
+    { "id": "router_1", "type": "router", "position": { "x": 400, "y": 200 }, "data": { "mode": "pattern", "branches": ["person", "empty"], "label": "Person Detected?" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 750, "y": 100 }, "data": { "provider": "", "model": "", "systemPrompt": "You are a security camera analyst. You received object detection results from a webcam frame. Describe what was detected: how many people, their approximate positions, any other objects. Be concise and factual. If the detection data includes bounding boxes, describe the spatial layout (left/right/center of frame).", "temperature": 0.3, "maxTokens": 512, "label": "Describe Scene" } },
+    { "id": "output_1", "type": "output", "position": { "x": 1100, "y": 100 }, "data": { "name": "alert", "format": "markdown" } },
+    { "id": "output_2", "type": "output", "position": { "x": 750, "y": 350 }, "data": { "name": "skip", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-tool_1-router_1", "source": "tool_1", "target": "router_1", "sourceHandle": "result" },
+    { "id": "e-router_1-llm_1", "source": "router_1", "target": "llm_1", "sourceHandle": "branch-0", "targetHandle": "prompt" },
+    { "id": "e-router_1-output_2", "source": "router_1", "target": "output_2", "sourceHandle": "branch-1" },
+    { "id": "e-llm_1-output_1", "source": "llm_1", "target": "output_1", "sourceHandle": "response" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

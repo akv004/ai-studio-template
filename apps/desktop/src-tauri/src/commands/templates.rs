@@ -33,6 +33,9 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
         include_str!("../../templates/meeting-notes.json")),
     ("rag-search", "RAG Search", "Search for information with a tool, then answer using retrieved context",
         include_str!("../../templates/rag-search.json")),
+    // Hardware + AI templates
+    ("webcam-monitor", "Webcam Monitor", "Capture webcam frame with YOLO detection, route on person detected, LLM describes scene",
+        include_str!("../../templates/webcam-monitor.json")),
 ];
 
 #[tauri::command]

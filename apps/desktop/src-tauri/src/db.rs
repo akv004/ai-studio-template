@@ -34,6 +34,7 @@ impl Database {
 
         let db = Self { conn: Arc::new(Mutex::new(conn)) };
         db.migrate()?;
+        db.cleanup_old_workflow_sessions(7)?;
         Ok(db)
     }
 
@@ -377,6 +378,26 @@ impl Database {
         ).map_err(|e| format!("Migration v7 failed: {e}"))?;
 
         println!("[db] Migrated to schema v7 (plugins table)");
+        Ok(())
+    }
+
+    /// Auto-cleanup: delete workflow run sessions older than `retention_days`.
+    /// Events cascade-delete via ON DELETE CASCADE.
+    fn cleanup_old_workflow_sessions(&self, retention_days: i64) -> Result<(), String> {
+        let conn = self.conn.lock().map_err(|e| e.to_string())?;
+        let cutoff = (chrono::Utc::now() - chrono::Duration::days(retention_days))
+            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+
+        let deleted: usize = conn
+            .execute(
+                "DELETE FROM sessions WHERE title LIKE 'Workflow:%' AND created_at < ?1",
+                rusqlite::params![cutoff],
+            )
+            .map_err(|e| format!("Cleanup failed: {e}"))?;
+
+        if deleted > 0 {
+            println!("[db] Cleanup: removed {} workflow sessions older than {} days", deleted, retention_days);
+        }
         Ok(())
     }
 }

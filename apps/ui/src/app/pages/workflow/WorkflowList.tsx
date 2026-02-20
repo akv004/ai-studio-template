@@ -10,6 +10,7 @@ interface TemplateSummary {
     name: string;
     description: string;
     nodeCount: number;
+    source: string;
 }
 
 export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
@@ -98,20 +99,48 @@ export function WorkflowList({ onSelect, onCreate, onCreateFromTemplate }: {
                             <LayoutTemplate size={16} /> Templates
                         </button>
                         {showTemplates && templates.length > 0 && (
-                            <div className="absolute right-0 top-full mt-1 w-72 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-xl z-50">
+                            <div className="absolute right-0 top-full mt-1 w-80 bg-[var(--bg-secondary)] border border-[var(--border)] rounded-lg shadow-xl z-50 max-h-[60vh] overflow-y-auto">
                                 {templates.map((t) => (
-                                    <button
+                                    <div
                                         key={t.id}
-                                        className="w-full text-left px-3 py-2 hover:bg-[var(--bg-tertiary)] first:rounded-t-lg last:rounded-b-lg"
-                                        onClick={() => {
-                                            setShowTemplates(false);
-                                            onCreateFromTemplate(t.id);
-                                        }}
+                                        className="group/tpl flex items-center px-3 py-2 hover:bg-[var(--bg-tertiary)] first:rounded-t-lg last:rounded-b-lg"
                                     >
-                                        <div className="text-sm font-medium">{t.name}</div>
-                                        <div className="text-xs text-[var(--text-muted)]">{t.description}</div>
-                                        <div className="text-xs text-[var(--text-muted)] mt-0.5">{t.nodeCount} nodes</div>
-                                    </button>
+                                        <button
+                                            className="flex-1 text-left min-w-0"
+                                            onClick={() => {
+                                                setShowTemplates(false);
+                                                onCreateFromTemplate(t.id);
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-sm font-medium truncate">{t.name}</span>
+                                                {t.source === 'user' && (
+                                                    <span className="shrink-0 px-1.5 py-0 rounded text-[10px] bg-blue-500/20 text-blue-300">saved</span>
+                                                )}
+                                            </div>
+                                            <div className="text-xs text-[var(--text-muted)] truncate">{t.description}</div>
+                                            <div className="text-xs text-[var(--text-muted)] mt-0.5">{t.nodeCount} nodes</div>
+                                        </button>
+                                        {t.source === 'user' && (
+                                            <button
+                                                className="shrink-0 ml-2 p-1 rounded text-red-400 opacity-0 group-hover/tpl:opacity-100 hover:bg-red-500/20 transition-opacity"
+                                                title="Delete template"
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    try {
+                                                        const { invoke } = await import('@tauri-apps/api/core');
+                                                        await invoke('delete_user_template', { templateId: t.id });
+                                                        setTemplates((prev) => prev.filter((x) => x.id !== t.id));
+                                                        addToast('Template deleted', 'success');
+                                                    } catch {
+                                                        addToast('Failed to delete template', 'error');
+                                                    }
+                                                }}
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
+                                    </div>
                                 ))}
                             </div>
                         )}

@@ -70,6 +70,7 @@
 | Webcam Monitor live demo | DONE | Verified webcam → Qwen3-VL pipeline working end-to-end |
 | **Node variable interpolation fixes** | DONE | Shell Exec incoming JSON merge, resolve_template array indexing, Transform "Script"→"Expression" rename (81b42d9) |
 | **Input node auto-resize textarea** | DONE | Auto-expanding textarea (1→5 lines), config panel Default Value field (81b42d9) |
+| **User Templates (Save & Load)** | DONE | Save workflow as reusable template, filesystem-based `~/.ai-studio/templates/`, merged into Templates dropdown with badge + delete |
 | Streaming node output | TODO | SSE streaming for LLM responses |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
@@ -181,15 +182,12 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-20 (session 32)
+**Date**: 2026-02-20 (session 33)
 **What happened**:
-- **Node variable interpolation fixes** (81b42d9): Triaged review of 5 data flow gaps, fixed top 3:
-  - Gap 1 (P0): Shell Exec now merges incoming JSON fields into template context — `{{services}}`, `{{tag}}` resolve directly from upstream Transform (same pattern Transform already uses)
-  - Gap 2 (P1): `resolve_template()` supports `{{node.field[N]}}` array indexing — 1 new test (123 total)
-  - Gap 3 (P1): Transform "Script" mode renamed to "Expression" in both node and config panel
-- **Input node auto-resize textarea** (81b42d9): Replaced single-line `<input>` with auto-expanding `<textarea>` (1→5 lines). Added Default Value textarea to config panel (was missing).
-- **Git history cleanup**: Purged `docs/review/node_variable_interpolation.md` from all history (contained office-specific references). Used `git-filter-repo` + squash + gc. Cleaned replace refs.
-- **Repo cleanup** (f4be5e5): Deleted stale review prompt, 4 untracked PNGs, test-results/, unused doc files.
+- **User Templates (Save & Load)**: Filesystem-based user templates at `~/.ai-studio/templates/*.json`.
+  - Rust: `save_as_template` + `delete_user_template` commands, `list_templates` merges bundled + user, `load_template` handles `user:` prefix
+  - UI: BookmarkPlus toolbar button + modal in WorkflowCanvas, "saved" badge + Trash2 delete in WorkflowList dropdown
+  - 123 Rust tests pass, TypeScript clean
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -207,6 +205,8 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 29: Toolbar polish, node editor guide, Phase 5+ backlog, v0.1.1 tag, rename → Workflows
 - Session 30: Live Workflow execution, vision pipeline fix, multi-provider vision support
 - Session 31: Vision OOM fix (image dedup + prompt safety net for Qwen3-VL)
+- Session 32: Node variable interpolation fixes, Input node textarea, repo cleanup
+- Session 33: User templates (Save & Load)
 
 **Next session should**:
 1. Streaming node output (SSE for LLM responses)

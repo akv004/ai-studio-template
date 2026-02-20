@@ -18,7 +18,7 @@ import '@xyflow/react/dist/style.css';
 import {
     Save, Play, Copy, ChevronLeft,
     Loader2, Check, X, Download, ShieldCheck,
-    Square, Radio, Settings2,
+    Square, Radio, Settings2, BookmarkPlus,
 } from 'lucide-react';
 import { useAppStore } from '../../../state/store';
 import type { Workflow, LiveFeedItem } from '@ai-studio/shared';
@@ -103,6 +103,9 @@ export function WorkflowCanvas({ workflow, onBack }: {
     const [nameDraft, setNameDraft] = useState(workflow.name);
     const [pendingNodeType, setPendingNodeType] = useState<string | null>(null);
     const [showLiveSettings, setShowLiveSettings] = useState(false);
+    const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+    const [templateName, setTemplateName] = useState('');
+    const [templateDesc, setTemplateDesc] = useState('');
     const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
     const reactFlowRef = useRef<HTMLDivElement>(null);
     const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -429,6 +432,23 @@ export function WorkflowCanvas({ workflow, onBack }: {
         await stopLiveWorkflow(workflow.id);
     }, [workflow.id, stopLiveWorkflow]);
 
+    const handleSaveAsTemplate = useCallback(async () => {
+        if (!templateName.trim()) return;
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            const graphJson = JSON.stringify({ nodes, edges, viewport: { x: 0, y: 0, zoom: 1 } });
+            await invoke('save_as_template', {
+                request: { name: templateName.trim(), description: templateDesc.trim(), graphJson },
+            });
+            addToast('Saved as template', 'success');
+            setShowSaveTemplate(false);
+            setTemplateName('');
+            setTemplateDesc('');
+        } catch {
+            addToast('Failed to save template', 'error');
+        }
+    }, [templateName, templateDesc, nodes, edges, addToast]);
+
     const handleCopyDebugLog = useCallback(async () => {
         if (!lastRunDebug) return;
         const failedNodes = Object.values(workflowNodeStates)
@@ -614,6 +634,13 @@ export function WorkflowCanvas({ workflow, onBack }: {
                         URL.revokeObjectURL(url);
                     }}>
                         <Download size={14} />
+                    </button>
+                    <button className="btn-icon btn-secondary" title="Save as template" onClick={() => {
+                        setTemplateName(workflow.name);
+                        setTemplateDesc(workflow.description || '');
+                        setShowSaveTemplate(true);
+                    }}>
+                        <BookmarkPlus size={14} />
                     </button>
                     <div className="toolbar-divider" />
                     <button
@@ -964,6 +991,46 @@ export function WorkflowCanvas({ workflow, onBack }: {
                             <button className="btn-secondary" onClick={() => setShowRunModal(false)}>Cancel</button>
                             <button className="btn-primary" onClick={handleRunSubmit}>
                                 <Play size={14} /> Run
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Save as Template Modal */}
+            {showSaveTemplate && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowSaveTemplate(false)}>
+                    <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-6 w-[420px]"
+                        onClick={(e) => e.stopPropagation()}>
+                        <h2 className="text-lg font-semibold mb-4">Save as Template</h2>
+                        <div className="space-y-3 mb-4">
+                            <label className="block">
+                                <span className="text-xs text-[var(--text-muted)] uppercase">Name</span>
+                                <input
+                                    className="config-input"
+                                    value={templateName}
+                                    onChange={(e) => setTemplateName(e.target.value)}
+                                    placeholder="My Pipeline"
+                                    autoFocus
+                                />
+                            </label>
+                            <label className="block">
+                                <span className="text-xs text-[var(--text-muted)] uppercase">Description</span>
+                                <input
+                                    className="config-input"
+                                    value={templateDesc}
+                                    onChange={(e) => setTemplateDesc(e.target.value)}
+                                    placeholder="What this template does..."
+                                />
+                            </label>
+                        </div>
+                        <div className="text-xs text-[var(--text-muted)] mb-4">
+                            {nodes.length} nodes will be saved. Template will appear in the Templates dropdown.
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <button className="btn-secondary" onClick={() => setShowSaveTemplate(false)}>Cancel</button>
+                            <button className="btn-primary" onClick={handleSaveAsTemplate} disabled={!templateName.trim()}>
+                                <BookmarkPlus size={14} /> Save Template
                             </button>
                         </div>
                     </div>

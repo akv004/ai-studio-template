@@ -115,6 +115,8 @@ pub fn run() {
             // Workflow Templates (Phase 3C)
             list_templates,
             load_template,
+            save_as_template,
+            delete_user_template,
             // Plugins
             list_plugins,
             scan_plugins,

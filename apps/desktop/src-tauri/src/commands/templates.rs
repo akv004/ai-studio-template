@@ -1,5 +1,6 @@
 use crate::error::AppError;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -8,6 +9,15 @@ pub struct TemplateSummary {
     pub name: String,
     pub description: String,
     pub node_count: usize,
+    pub source: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveTemplateRequest {
+    pub name: String,
+    pub description: String,
+    pub graph_json: String,
 }
 
 pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
@@ -38,9 +48,83 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
         include_str!("../../templates/webcam-monitor.json")),
 ];
 
+fn templates_directory() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".ai-studio")
+        .join("templates")
+}
+
+fn slugify(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+        .collect::<String>()
+        .split('-')
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+fn load_user_templates() -> Vec<TemplateSummary> {
+    let dir = templates_directory();
+    let entries = match std::fs::read_dir(&dir) {
+        Ok(e) => e,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut results = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let content = match std::fs::read_to_string(&path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Warning: skipping invalid template {:?}: {}", path, e);
+                continue;
+            }
+        };
+        let parsed: serde_json::Value = match serde_json::from_str(&content) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Warning: skipping invalid JSON in {:?}: {}", path, e);
+                continue;
+            }
+        };
+
+        let slug = path.file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+        let name = parsed.get("name")
+            .and_then(|v| v.as_str())
+            .unwrap_or(&slug)
+            .to_string();
+        let description = parsed.get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let node_count = parsed.get("nodes")
+            .and_then(|n| n.as_array())
+            .map(|a| a.len())
+            .unwrap_or(0);
+
+        results.push(TemplateSummary {
+            id: format!("user:{slug}"),
+            name,
+            description,
+            node_count,
+            source: "user".to_string(),
+        });
+    }
+    results.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    results
+}
+
 #[tauri::command]
 pub fn list_templates() -> Vec<TemplateSummary> {
-    TEMPLATES.iter().map(|(id, name, desc, json)| {
+    let mut all: Vec<TemplateSummary> = TEMPLATES.iter().map(|(id, name, desc, json)| {
         let node_count = serde_json::from_str::<serde_json::Value>(json)
             .ok()
             .and_then(|v| v.get("nodes").and_then(|n| n.as_array()).map(|a| a.len()))
@@ -50,14 +134,100 @@ pub fn list_templates() -> Vec<TemplateSummary> {
             name: name.to_string(),
             description: desc.to_string(),
             node_count,
+            source: "bundled".to_string(),
         }
-    }).collect()
+    }).collect();
+
+    all.extend(load_user_templates());
+    all
 }
 
 #[tauri::command]
 pub fn load_template(template_id: String) -> Result<String, AppError> {
+    // User template: read from disk, strip metadata
+    if let Some(slug) = template_id.strip_prefix("user:") {
+        let path = templates_directory().join(format!("{slug}.json"));
+        let content = std::fs::read_to_string(&path)
+            .map_err(|e| AppError::NotFound(format!("User template '{slug}': {e}")))?;
+        let mut parsed: serde_json::Value = serde_json::from_str(&content)?;
+
+        // Strip metadata, return only graph data
+        let obj = parsed.as_object_mut()
+            .ok_or_else(|| AppError::Internal("Template is not a JSON object".into()))?;
+        obj.remove("name");
+        obj.remove("description");
+        obj.remove("created_at");
+
+        return Ok(serde_json::to_string(&parsed)?);
+    }
+
+    // Bundled template
     TEMPLATES.iter()
         .find(|(id, _, _, _)| *id == template_id)
         .map(|(_, _, _, json)| json.to_string())
         .ok_or_else(|| AppError::NotFound(format!("Template '{template_id}' not found")))
+}
+
+#[tauri::command]
+pub fn save_as_template(request: SaveTemplateRequest) -> Result<TemplateSummary, AppError> {
+    let graph: serde_json::Value = serde_json::from_str(&request.graph_json)
+        .map_err(|e| AppError::Validation(format!("Invalid graph JSON: {e}")))?;
+
+    let node_count = graph.get("nodes")
+        .and_then(|n| n.as_array())
+        .map(|a| a.len())
+        .unwrap_or(0);
+
+    let slug = slugify(&request.name);
+    if slug.is_empty() {
+        return Err(AppError::Validation("Template name must contain at least one alphanumeric character".into()));
+    }
+
+    // Build template file: metadata + graph data
+    let mut template = serde_json::Map::new();
+    template.insert("name".into(), serde_json::Value::String(request.name.clone()));
+    template.insert("description".into(), serde_json::Value::String(request.description.clone()));
+    template.insert("created_at".into(), serde_json::Value::String(
+        chrono::Utc::now().to_rfc3339()
+    ));
+
+    // Merge graph fields (nodes, edges, viewport) into template
+    if let Some(obj) = graph.as_object() {
+        for (k, v) in obj {
+            template.insert(k.clone(), v.clone());
+        }
+    }
+
+    let dir = templates_directory();
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| AppError::Internal(format!("Failed to create templates directory: {e}")))?;
+
+    let path = dir.join(format!("{slug}.json"));
+    let content = serde_json::to_string_pretty(&template)?;
+    std::fs::write(&path, content)
+        .map_err(|e| AppError::Internal(format!("Failed to write template: {e}")))?;
+
+    Ok(TemplateSummary {
+        id: format!("user:{slug}"),
+        name: request.name,
+        description: request.description,
+        node_count,
+        source: "user".to_string(),
+    })
+}
+
+#[tauri::command]
+pub fn delete_user_template(template_id: String) -> Result<(), AppError> {
+    let slug = template_id.strip_prefix("user:")
+        .ok_or_else(|| AppError::Validation("Can only delete user templates".into()))?;
+
+    let path = templates_directory().join(format!("{slug}.json"));
+    if !path.exists() {
+        return Err(AppError::NotFound(format!("Template '{slug}' not found")));
+    }
+
+    std::fs::remove_file(&path)
+        .map_err(|e| AppError::Internal(format!("Failed to delete template: {e}")))?;
+
+    Ok(())
 }

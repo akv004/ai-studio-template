@@ -68,6 +68,8 @@
 | **Vision pipeline fix** | DONE | MCP client preserves image data (was dropping with placeholder), webcam template uses `webcam_capture` (raw frame), LLM vision prompt safety net for unresolved templates |
 | **Vision OOM fix** | DONE | Image dedup + better prompt safety net — fixes 500 OOM on Qwen3-VL (6178cd9) |
 | Webcam Monitor live demo | DONE | Verified webcam → Qwen3-VL pipeline working end-to-end |
+| **Node variable interpolation fixes** | DONE | Shell Exec incoming JSON merge, resolve_template array indexing, Transform "Script"→"Expression" rename (81b42d9) |
+| **Input node auto-resize textarea** | DONE | Auto-expanding textarea (1→5 lines), config panel Default Value field (81b42d9) |
 | Streaming node output | TODO | SSE streaming for LLM responses |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
@@ -179,13 +181,15 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-20 (session 31)
+**Date**: 2026-02-20 (session 32)
 **What happened**:
-- **Vision OOM fix** (6178cd9): Webcam → Qwen3-VL pipeline was returning 500 (OOM)
-  - Root cause: duplicate images (same frame on input+prompt handles) + base64 JSON leaking as prompt text = 900KB+ payload
-  - Fix 1: Image deduplication using first-64-char key before sending
-  - Fix 2: Better prompt safety net — detects stringified image JSON, raw JPEG/PNG base64, noise
-  - 3 new unit tests (122 total), verified end-to-end with Qwen3-VL at port 8003
+- **Node variable interpolation fixes** (81b42d9): Triaged review of 5 data flow gaps, fixed top 3:
+  - Gap 1 (P0): Shell Exec now merges incoming JSON fields into template context — `{{services}}`, `{{tag}}` resolve directly from upstream Transform (same pattern Transform already uses)
+  - Gap 2 (P1): `resolve_template()` supports `{{node.field[N]}}` array indexing — 1 new test (123 total)
+  - Gap 3 (P1): Transform "Script" mode renamed to "Expression" in both node and config panel
+- **Input node auto-resize textarea** (81b42d9): Replaced single-line `<input>` with auto-expanding `<textarea>` (1→5 lines). Added Default Value textarea to config panel (was missing).
+- **Git history cleanup**: Purged `docs/review/node_variable_interpolation.md` from all history (contained office-specific references). Used `git-filter-repo` + squash + gc. Cleaned replace refs.
+- **Repo cleanup** (f4be5e5): Deleted stale review prompt, 4 untracked PNGs, test-results/, unused doc files.
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -202,6 +206,7 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 28: Agent edit mode, click-to-place nodes, custom node labels
 - Session 29: Toolbar polish, node editor guide, Phase 5+ backlog, v0.1.1 tag, rename → Workflows
 - Session 30: Live Workflow execution, vision pipeline fix, multi-provider vision support
+- Session 31: Vision OOM fix (image dedup + prompt safety net for Qwen3-VL)
 
 **Next session should**:
 1. Streaming node output (SSE for LLM responses)

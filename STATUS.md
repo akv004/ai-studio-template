@@ -66,7 +66,8 @@
 |------|--------|-------------|
 | **Live Workflow execution** | DONE | Continuous loop mode with cooperative cancellation, ephemeral execution (skip DB), LiveFeedPanel, Go Live/Stop toolbar, settings popover, 119 Rust tests passing |
 | **Vision pipeline fix** | DONE | MCP client preserves image data (was dropping with placeholder), webcam template uses `webcam_capture` (raw frame), LLM vision prompt safety net for unresolved templates |
-| Webcam Monitor live demo | TODO | Test live mode with webcam pipeline for 30+ seconds |
+| **Vision OOM fix** | DONE | Image dedup + better prompt safety net — fixes 500 OOM on Qwen3-VL (6178cd9) |
+| Webcam Monitor live demo | DONE | Verified webcam → Qwen3-VL pipeline working end-to-end |
 | Streaming node output | TODO | SSE streaming for LLM responses |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
@@ -172,32 +173,19 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - **Tauri v2 IPC args are camelCase**: Rust `agent_id` → JS `{ agentId }`. NOT snake_case! This caused "missing required key" errors.
 - Store errors: Every store action that calls `invoke` should set `error` state on failure, not swallow silently
 - Sidecar provider config: Values stored as JSON strings with quotes — strip with `trim_matches('"')` in Rust
+- **Vision OOM**: When same image arrives on multiple LLM handles (input+prompt), dedup is needed. Also, stringified image JSON as prompt text (`{"encoding":"base64",...}`) bypasses the old `!contains(' ')` safety net — pretty-printed JSON has spaces. Fixed in 6178cd9.
 
 ---
 
 ## Last Session Notes
 
-**Date**: 2026-02-19 (session 30)
+**Date**: 2026-02-20 (session 31)
 **What happened**:
-- **Live Workflow execution**: Full implementation of continuous loop mode ("Otter.ai for AI workflows")
-  - Rust: `LiveWorkflowManager` with cooperative cancellation (AtomicBool), start/stop/stop_all
-  - Rust: Ephemeral execution mode — `ExecutionContext.ephemeral` flag guards all `record_event()` calls
-  - Rust: `start_live_workflow` / `stop_live_workflow` IPC commands
-  - Rust: Live loop with configurable interval, max iterations, error policy (skip/stop), 5-consecutive-error auto-stop
-  - Rust: App close handler calls `stop_all()` for cleanup
-  - UI: Zustand store — liveMode, liveRunId, liveFeedItems (500 cap), liveConfig, actions
-  - UI: `LiveFeedPanel` — collapsible bottom panel with auto-scroll, running totals, error highlighting
-  - UI: "Go Live" (green) / "Stop" (red) toolbar buttons, settings popover (interval, max iterations, error policy)
-  - UI: `live_workflow_feed` Tauri event listener
-  - Spec: `docs/specs/live-workflow.md`
-  - Tests: 119 Rust tests passing (4 new for LiveWorkflowManager), TypeScript clean
-  - Shared types: `LiveFeedItem`, `LiveConfig` interfaces
-- **Vision pipeline fix**: MCP client was dropping image data with "[image data]" placeholder
-  - Fixed `call_tool()` to preserve base64 image data as structured dict `{content, encoding, mime_type}`
-  - Webcam template: simplified to 3-node (Capture→LLM→Output), uses `webcam_capture` (raw frame) instead of `webcam_detect` (YOLO metadata only)
-  - LLM executor: added safety net for unresolved templates/empty prompts when images detected
-  - End-to-end flow verified: MCP tool → sidecar → Rust tool executor → LLM image detection → OpenAI vision API
-  - Known limitation: Google/Anthropic providers don't convert OpenAI image_url format (works for OpenAI-compatible APIs like Qwen3-VL)
+- **Vision OOM fix** (6178cd9): Webcam → Qwen3-VL pipeline was returning 500 (OOM)
+  - Root cause: duplicate images (same frame on input+prompt handles) + base64 JSON leaking as prompt text = 900KB+ payload
+  - Fix 1: Image deduplication using first-64-char key before sending
+  - Fix 2: Better prompt safety net — detects stringified image JSON, raw JPEG/PNG base64, noise
+  - 3 new unit tests (122 total), verified end-to-end with Qwen3-VL at port 8003
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -213,9 +201,9 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 27: EIP peer reviews (Gemini+Codex), 5 code fixes (UTF-8, containment, cycle detection)
 - Session 28: Agent edit mode, click-to-place nodes, custom node labels
 - Session 29: Toolbar polish, node editor guide, Phase 5+ backlog, v0.1.1 tag, rename → Workflows
+- Session 30: Live Workflow execution, vision pipeline fix, multi-provider vision support
 
 **Next session should**:
-1. Manual test: Webcam Monitor live for 30+ seconds — verify feed updates
-2. Streaming node output (SSE for LLM responses)
-3. Agent-Workflow unification spec (Phase 5 — Agent = workflow)
-4. Consider v0.2.0 tag
+1. Streaming node output (SSE for LLM responses)
+2. Agent-Workflow unification spec (Phase 5 — Agent = workflow)
+3. Consider v0.2.0 tag

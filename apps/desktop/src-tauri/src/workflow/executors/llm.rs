@@ -139,7 +139,7 @@ impl NodeExecutor for LlmExecutor {
         // Collect image data from upstream nodes (File Read binary mode, future File Glob)
         // resolve_source_handle strips metadata (encoding, mime_type) when extracting
         // a specific handle field, so we also scan ctx.node_outputs for the full output.
-        let images: Vec<(String, String)> = {
+        let mut images: Vec<(String, String)> = {
             let extract_image = |obj: &serde_json::Map<String, serde_json::Value>| -> Option<(String, String)> {
                 let encoding = obj.get("encoding").and_then(|v| v.as_str()).unwrap_or("");
                 let mime = obj.get("mime_type").and_then(|v| v.as_str()).unwrap_or("");
@@ -206,12 +206,28 @@ impl NodeExecutor for LlmExecutor {
             found
         };
 
+        // Deduplicate images (same data arriving on multiple handles)
+        if images.len() > 1 {
+            let before = images.len();
+            let mut seen = std::collections::HashSet::new();
+            images.retain(|(data, _mime)| {
+                // Use first 64 chars of data as dedup key (full compare too expensive)
+                let key = truncate(data, 64).to_string();
+                seen.insert(key)
+            });
+            if images.len() < before {
+                eprintln!("[workflow] LLM node '{}': deduped {} → {} image(s)", node_id, before, images.len());
+            }
+        }
+
         // When images detected: fix the prompt if it's unusable (base64 leak or unresolved template).
         if !images.is_empty() {
             eprintln!("[workflow] LLM node '{}': detected {} image(s), building multimodal message", node_id, images.len());
-            let needs_fix = (prompt.len() > 100 && !prompt.contains(' '))  // base64 data leaked
+            let needs_fix = prompt.is_empty()
                 || prompt.contains("{{")                                    // unresolved template
-                || prompt.is_empty();                                       // empty prompt
+                || (prompt.len() > 200 && !prompt.chars().any(|c| c.is_alphabetic() && c.is_ascii_lowercase()))  // pure base64/noise
+                || (prompt.len() > 200 && (prompt.contains("/9j/") || prompt.contains("iVBOR")))  // raw JPEG/PNG base64
+                || (prompt.contains("\"encoding\"") && prompt.contains("\"base64\""));            // stringified image JSON
             if needs_fix {
                 let config_prompt = node_data.get("prompt").and_then(|v| v.as_str()).unwrap_or("");
                 prompt = if !config_prompt.is_empty() && config_prompt != "{{input}}" && !config_prompt.contains("{{") {
@@ -378,5 +394,46 @@ mod tests {
         }
         assert_eq!(body["conversation_id"].as_str().unwrap(), "wf-run123-llm_1");
         assert_eq!(body["max_history"].as_i64().unwrap(), 15);
+    }
+
+    #[test]
+    fn test_image_dedup() {
+        use std::collections::HashSet;
+        use super::truncate;
+
+        let mut images: Vec<(String, String)> = vec![
+            ("/9j/4AAQSkZJRgABAQAAAQABAAD".to_string(), "image/jpeg".to_string()),
+            ("/9j/4AAQSkZJRgABAQAAAQABAAD".to_string(), "image/jpeg".to_string()), // duplicate
+            ("iVBORw0KGgoAAAANSUhEUgAAAAo".to_string(), "image/png".to_string()),  // different
+        ];
+        let before = images.len();
+        let mut seen = HashSet::new();
+        images.retain(|(data, _mime)| {
+            let key = truncate(data, 64).to_string();
+            seen.insert(key)
+        });
+        assert_eq!(before, 3);
+        assert_eq!(images.len(), 2); // duplicate removed
+    }
+
+    #[test]
+    fn test_prompt_safety_net_detects_base64_json() {
+        // Stringified JSON with base64 image data (the bug case)
+        let prompt = "{\n  \"content\": \"/9j/4AAQSkZJRg...\",\n  \"encoding\": \"base64\",\n  \"mime_type\": \"image/jpeg\"\n}";
+        let needs_fix = prompt.is_empty()
+            || prompt.contains("{{")
+            || (prompt.len() > 200 && (prompt.contains("/9j/") || prompt.contains("iVBOR")))
+            || (prompt.contains("\"encoding\"") && prompt.contains("\"base64\""));
+        assert!(needs_fix, "should detect stringified image JSON as unusable prompt");
+    }
+
+    #[test]
+    fn test_prompt_safety_net_allows_normal_prompt() {
+        let prompt = "Analyze this webcam frame and describe what you see.";
+        let needs_fix = prompt.is_empty()
+            || prompt.contains("{{")
+            || (prompt.len() > 200 && (prompt.contains("/9j/") || prompt.contains("iVBOR")))
+            || (prompt.contains("\"encoding\"") && prompt.contains("\"base64\""));
+        assert!(!needs_fix, "should allow normal text prompt");
     }
 }

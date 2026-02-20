@@ -623,15 +623,29 @@ export function WorkflowCanvas({ workflow, onBack }: {
                         {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
                         Save
                     </button>
-                    <button className="btn-icon btn-secondary" title="Export workflow as JSON" onClick={() => {
+                    <button className="btn-icon btn-secondary" title="Export workflow as JSON" onClick={async () => {
                         const graph = JSON.stringify({ nodes, edges, viewport: { x: 0, y: 0, zoom: 1 } }, null, 2);
-                        const blob = new Blob([graph], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `${workflow.name.replace(/\s+/g, '-').toLowerCase()}.json`;
-                        a.click();
-                        URL.revokeObjectURL(url);
+                        try {
+                            const { save } = await import('@tauri-apps/plugin-dialog');
+                            const { writeTextFile } = await import('@tauri-apps/plugin-fs');
+                            const path = await save({
+                                defaultPath: `${workflow.name.replace(/\s+/g, '-').toLowerCase()}.json`,
+                                filters: [{ name: 'JSON', extensions: ['json'] }],
+                            });
+                            if (path) {
+                                await writeTextFile(path, graph);
+                                addToast('Workflow exported', 'success');
+                            }
+                        } catch {
+                            // Fallback for browser dev mode
+                            const blob = new Blob([graph], { type: 'application/json' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `${workflow.name.replace(/\s+/g, '-').toLowerCase()}.json`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        }
                     }}>
                         <Download size={14} />
                     </button>

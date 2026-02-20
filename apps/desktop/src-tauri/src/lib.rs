@@ -35,6 +35,8 @@ pub fn run() {
         .manage(ApprovalManager::default())
         .manage(workflow::live::LiveWorkflowManager::default())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             let app_handle = app.handle().clone();
             let sidecar = app.state::<SidecarManager>().inner().clone();

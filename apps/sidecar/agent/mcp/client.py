@@ -142,8 +142,10 @@ class McpClientManager:
         self.registry.unregister_server(name)
         print(f"[mcp] Disconnected from '{name}'")
 
-    async def call_tool(self, server_name: str, tool_name: str, arguments: dict) -> str:
-        """Execute a tool on an MCP server. Returns the result as a string."""
+    async def call_tool(self, server_name: str, tool_name: str, arguments: dict):
+        """Execute a tool on an MCP server.
+        Returns a string for text-only results, or a dict with image data for vision tools.
+        """
         conn = self._connections.get(server_name)
         if not conn or not conn.process:
             return f"Error: MCP server '{server_name}' not connected"
@@ -157,13 +159,29 @@ class McpClientManager:
             # MCP tools return content array
             content = result.get("content", [])
             texts = []
+            images = []
             for item in content:
                 if item.get("type") == "text":
                     texts.append(item.get("text", ""))
                 elif item.get("type") == "image":
-                    texts.append("[image data]")
+                    # Preserve image data for vision LLM pipelines
+                    images.append({
+                        "content": item.get("data", ""),
+                        "encoding": "base64",
+                        "mime_type": item.get("mimeType", "image/png"),
+                    })
                 else:
                     texts.append(json.dumps(item))
+
+            # If images present, return structured result for downstream vision nodes
+            if images:
+                result_obj = {"text": "\n".join(texts) if texts else ""}
+                if len(images) == 1:
+                    result_obj.update(images[0])
+                else:
+                    result_obj["images"] = images
+                return result_obj
+
             return "\n".join(texts) or "(no output)"
 
         except Exception as e:

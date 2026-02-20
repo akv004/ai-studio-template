@@ -10,6 +10,7 @@ import type {
     ValidationResult, WorkflowRunResult, NodeExecutionState, NodeExecutionStatus,
     BudgetStatus,
     Plugin, ScanResult, PluginConnectResult, PluginStartupResult,
+    LiveFeedItem, LiveConfig,
 } from '@ai-studio/shared';
 import { sidecarRequest } from '../lib/sidecar';
 
@@ -180,6 +181,19 @@ interface AppState {
     disablePlugin: (id: string) => Promise<void>;
     removePlugin: (id: string) => Promise<void>;
     connectEnabledPlugins: () => Promise<PluginStartupResult>;
+
+    // Live Workflow
+    liveMode: boolean;
+    liveRunId: string | null;
+    liveSessionId: string | null;
+    liveFeedItems: LiveFeedItem[];
+    liveConfig: LiveConfig;
+    liveStartedAt: number | null;
+    startLiveWorkflow: (workflowId: string, inputs: Record<string, unknown>) => Promise<void>;
+    stopLiveWorkflow: (workflowId: string) => Promise<void>;
+    pushLiveFeedItem: (item: LiveFeedItem) => void;
+    clearLiveFeed: () => void;
+    setLiveConfig: (config: Partial<LiveConfig>) => void;
 
     // Error tracking
     error: string | null;
@@ -850,6 +864,69 @@ export const useAppStore = create<AppState>((set, get) => ({
     inspectorSessionId: null,
     openInspector: (sessionId) => set({ inspectorSessionId: sessionId, activeModule: 'inspector' }),
     clearInspectorSession: () => set({ inspectorSessionId: null }),
+
+    // Live Workflow
+    liveMode: false,
+    liveRunId: null,
+    liveSessionId: null,
+    liveFeedItems: [],
+    liveConfig: { intervalMs: 5000, errorPolicy: 'skip', maxIterations: 1000 },
+    liveStartedAt: null,
+    startLiveWorkflow: async (workflowId, inputs) => {
+        const config = get().liveConfig;
+        try {
+            const result = await invoke<{ liveRunId: string; sessionId: string }>('start_live_workflow', {
+                request: {
+                    workflowId,
+                    inputs,
+                    intervalMs: config.intervalMs,
+                    maxIterations: config.maxIterations,
+                    errorPolicy: config.errorPolicy,
+                },
+            });
+            set({
+                liveMode: true,
+                liveRunId: result.liveRunId,
+                liveSessionId: result.sessionId,
+                liveFeedItems: [],
+                liveStartedAt: Date.now(),
+            });
+            get().addToast('Live workflow started', 'success');
+        } catch (e) {
+            const msg = `Failed to start live workflow: ${formatInvokeError(e)}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
+    },
+    stopLiveWorkflow: async (workflowId) => {
+        try {
+            await invoke<void>('stop_live_workflow', { workflowId });
+            set({ liveMode: false });
+            get().addToast('Live workflow stopped', 'info');
+        } catch (e) {
+            const msg = `Failed to stop live workflow: ${formatInvokeError(e)}`;
+            set({ error: msg });
+            get().addToast(msg, 'error');
+        }
+    },
+    pushLiveFeedItem: (item) => {
+        set((s) => {
+            const items = [...s.liveFeedItems, item];
+            // Cap at 500 items (ring buffer)
+            if (items.length > 500) {
+                return { liveFeedItems: items.slice(items.length - 500) };
+            }
+            return { liveFeedItems: items };
+        });
+        // Auto-stop on live.stopped event
+        if (item.type === 'live.stopped') {
+            set({ liveMode: false });
+        }
+    },
+    clearLiveFeed: () => set({ liveFeedItems: [], liveStartedAt: null }),
+    setLiveConfig: (config) => set((s) => ({
+        liveConfig: { ...s.liveConfig, ...config },
+    })),
 
     // Error
     error: null,

@@ -42,7 +42,7 @@ fn resolve_source_handle(
 /// Extract the primary text from a node output value.
 /// Used for template resolution ({{node.output}}, {{node}}) and event preview strings.
 /// Tries: string → object.response → object.content → object.result → JSON serialized.
-fn extract_primary_text(val: &serde_json::Value) -> String {
+pub fn extract_primary_text(val: &serde_json::Value) -> String {
     if let Some(s) = val.as_str() {
         return s.to_string();
     }
@@ -158,9 +158,23 @@ pub async fn execute_workflow(
     inputs: &HashMap<String, serde_json::Value>,
     all_settings: &HashMap<String, String>,
 ) -> Result<WorkflowRunResult, String> {
+    execute_workflow_ephemeral(db, sidecar, app, session_id, graph_json, inputs, all_settings, false).await
+}
+
+/// Core workflow execution with ephemeral flag (skips DB writes when true).
+pub async fn execute_workflow_ephemeral(
+    db: &Database,
+    sidecar: &crate::sidecar::SidecarManager,
+    app: &tauri::AppHandle,
+    session_id: &str,
+    graph_json: &str,
+    inputs: &HashMap<String, serde_json::Value>,
+    all_settings: &HashMap<String, String>,
+    ephemeral: bool,
+) -> Result<WorkflowRunResult, String> {
     let visited = HashSet::new();
     let workflow_run_id = Uuid::new_v4().to_string();
-    execute_workflow_with_visited(db, sidecar, app, session_id, graph_json, inputs, all_settings, &visited, &workflow_run_id).await
+    execute_workflow_with_visited(db, sidecar, app, session_id, graph_json, inputs, all_settings, &visited, &workflow_run_id, ephemeral).await
 }
 
 /// Execute workflow with circular reference tracking (for subworkflow support).
@@ -174,6 +188,7 @@ pub async fn execute_workflow_with_visited(
     all_settings: &HashMap<String, String>,
     visited_workflows: &HashSet<String>,
     workflow_run_id: &str,
+    ephemeral: bool,
 ) -> Result<WorkflowRunResult, String> {
     let start_time = std::time::Instant::now();
     let seq_counter = AtomicI64::new(1);
@@ -186,8 +201,10 @@ pub async fn execute_workflow_with_visited(
         .cloned().unwrap_or_default();
 
     // Emit workflow.started
-    let _ = record_event(db, session_id, "workflow.started", "desktop.workflow",
-        serde_json::json!({ "node_count": nodes.len(), "edge_count": edges.len() }));
+    if !ephemeral {
+        let _ = record_event(db, session_id, "workflow.started", "desktop.workflow",
+            serde_json::json!({ "node_count": nodes.len(), "edge_count": edges.len() }));
+    }
     emit_workflow_event(app, session_id, "workflow.started",
         serde_json::json!({ "node_count": nodes.len(), "edge_count": edges.len() }),
         &seq_counter);
@@ -270,8 +287,10 @@ pub async fn execute_workflow_with_visited(
         }
 
         if skipped_nodes.contains(node_id) {
-            let _ = record_event(db, session_id, "workflow.node.skipped", "desktop.workflow",
-                serde_json::json!({ "node_id": node_id, "reason": "downstream of skipped branch" }));
+            if !ephemeral {
+                let _ = record_event(db, session_id, "workflow.node.skipped", "desktop.workflow",
+                    serde_json::json!({ "node_id": node_id, "reason": "downstream of skipped branch" }));
+            }
             emit_workflow_event(app, session_id, "workflow.node.skipped",
                 serde_json::json!({ "node_id": node_id }),
                 &seq_counter);
@@ -285,8 +304,10 @@ pub async fn execute_workflow_with_visited(
         let node_type = node.get("type").and_then(|v| v.as_str()).unwrap_or("");
         let node_data = node.get("data").unwrap_or(&serde_json::Value::Null);
 
-        let _ = record_event(db, session_id, "workflow.node.started", "desktop.workflow",
-            serde_json::json!({ "node_id": node_id, "node_type": node_type }));
+        if !ephemeral {
+            let _ = record_event(db, session_id, "workflow.node.started", "desktop.workflow",
+                serde_json::json!({ "node_id": node_id, "node_type": node_type }));
+        }
         emit_workflow_event(app, session_id, "workflow.node.started",
             serde_json::json!({ "node_id": node_id, "node_type": node_type }),
             &seq_counter);
@@ -329,11 +350,14 @@ pub async fn execute_workflow_with_visited(
                 visited_workflows,
                 graph_json,
                 workflow_run_id,
+                ephemeral,
             };
             executor.execute(&ctx, node_id, node_data, &incoming_value).await
         } else {
-            let _ = record_event(db, session_id, "workflow.node.skipped", "desktop.workflow",
-                serde_json::json!({ "node_id": node_id, "node_type": node_type, "reason": "unsupported type" }));
+            if !ephemeral {
+                let _ = record_event(db, session_id, "workflow.node.skipped", "desktop.workflow",
+                    serde_json::json!({ "node_id": node_id, "node_type": node_type, "reason": "unsupported type" }));
+            }
             emit_workflow_event(app, session_id, "workflow.node.skipped",
                 serde_json::json!({ "node_id": node_id, "node_type": node_type }),
                 &seq_counter);
@@ -384,11 +408,13 @@ pub async fn execute_workflow_with_visited(
                 let full_text = extract_primary_text(&clean_output);
                 let output_preview = truncate(&full_text, 200).to_string();
                 // DB event gets preview only (storage), UI event gets full output (display)
-                let _ = record_event(db, session_id, "workflow.node.completed", "desktop.workflow",
-                    serde_json::json!({
-                        "node_id": node_id, "node_type": node_type,
-                        "output_preview": output_preview, "duration_ms": node_duration,
-                    }));
+                if !ephemeral {
+                    let _ = record_event(db, session_id, "workflow.node.completed", "desktop.workflow",
+                        serde_json::json!({
+                            "node_id": node_id, "node_type": node_type,
+                            "output_preview": output_preview, "duration_ms": node_duration,
+                        }));
+                }
                 emit_workflow_event(app, session_id, "workflow.node.completed",
                     serde_json::json!({
                         "node_id": node_id, "node_type": node_type,
@@ -403,21 +429,25 @@ pub async fn execute_workflow_with_visited(
                     "[workflow.node.error] session_id={} node_id={} node_type={} error={}",
                     session_id, node_id, node_type, err
                 );
-                let _ = record_event(db, session_id, "workflow.node.error", "desktop.workflow",
-                    serde_json::json!({
-                        "node_id": node_id, "node_type": node_type,
-                        "error": err, "duration_ms": node_duration,
-                    }));
+                if !ephemeral {
+                    let _ = record_event(db, session_id, "workflow.node.error", "desktop.workflow",
+                        serde_json::json!({
+                            "node_id": node_id, "node_type": node_type,
+                            "error": err, "duration_ms": node_duration,
+                        }));
+                }
                 emit_workflow_event(app, session_id, "workflow.node.error",
                     serde_json::json!({ "node_id": node_id, "error": &err }),
                     &seq_counter);
 
                 let total_duration = start_time.elapsed().as_millis() as i64;
-                let _ = record_event(db, session_id, "workflow.failed", "desktop.workflow",
-                    serde_json::json!({
-                        "node_id": node_id, "error": err,
-                        "duration_ms": total_duration,
-                    }));
+                if !ephemeral {
+                    let _ = record_event(db, session_id, "workflow.failed", "desktop.workflow",
+                        serde_json::json!({
+                            "node_id": node_id, "error": err,
+                            "duration_ms": total_duration,
+                        }));
+                }
                 emit_workflow_event(app, session_id, "workflow.failed",
                     serde_json::json!({ "node_id": node_id, "error": &err }),
                     &seq_counter);
@@ -437,11 +467,13 @@ pub async fn execute_workflow_with_visited(
     }
 
     let total_duration = start_time.elapsed().as_millis() as i64;
-    let _ = record_event(db, session_id, "workflow.completed", "desktop.workflow",
-        serde_json::json!({
-            "duration_ms": total_duration, "total_tokens": total_tokens,
-            "total_cost_usd": total_cost, "node_count": topo_order.len(),
-        }));
+    if !ephemeral {
+        let _ = record_event(db, session_id, "workflow.completed", "desktop.workflow",
+            serde_json::json!({
+                "duration_ms": total_duration, "total_tokens": total_tokens,
+                "total_cost_usd": total_cost, "node_count": topo_order.len(),
+            }));
+    }
     emit_workflow_event(app, session_id, "workflow.completed",
         serde_json::json!({
             "duration_ms": total_duration, "total_tokens": total_tokens,

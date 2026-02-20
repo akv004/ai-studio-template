@@ -33,6 +33,7 @@ pub fn run() {
         .manage(database)
         .manage(SidecarManager::default())
         .manage(ApprovalManager::default())
+        .manage(workflow::live::LiveWorkflowManager::default())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -108,6 +109,9 @@ pub fn run() {
             // Workflow Execution (Phase 3B)
             workflow::validate_workflow,
             workflow::run_workflow,
+            // Live Workflow (Phase 4C)
+            workflow::live::start_live_workflow,
+            workflow::live::stop_live_workflow,
             // Workflow Templates (Phase 3C)
             list_templates,
             load_template,
@@ -128,6 +132,10 @@ pub fn run() {
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 let app_handle = window.app_handle().clone();
+                // Stop all live workflows
+                let live_mgr = app_handle.state::<workflow::live::LiveWorkflowManager>();
+                live_mgr.stop_all();
+                // Stop sidecar
                 let sidecar = app_handle.state::<SidecarManager>().inner().clone();
                 tauri::async_runtime::spawn(async move {
                     let _ = sidecar.stop().await;

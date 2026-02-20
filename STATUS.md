@@ -28,8 +28,8 @@
 ## Current Phase: 4 (Universal Automation Canvas)
 
 **Goal**: Graduate node editor from AI workflow builder to universal automation platform. Data I/O nodes, control flow, engine refactoring, canvas UX.
-**Status**: IN PROGRESS — 4A + 4B complete, UX polish in progress
-**Specs in scope**: `phase4-automation-canvas.md` (primary), `eip-data-io-nodes.md` (data I/O), `node-editor.md` (reference)
+**Status**: IN PROGRESS — 4A + 4B complete, 4C started (Live Workflow)
+**Specs in scope**: `phase4-automation-canvas.md` (primary), `eip-data-io-nodes.md` (data I/O), `live-workflow.md` (4C), `node-editor.md` (reference)
 
 ### Phase 4A — Canvas + Node Types (DONE)
 | Step | Status | Commit |
@@ -60,6 +60,15 @@
 | **Toolbar + list UI polish** | DONE | Dividers, node count badge, hover card actions, btn-icon-sm utility (8f4906a) |
 | **Node editor guide** | DONE | Step-by-step guide for all 16 nodes, 7 patterns, LLM picker (82795b8) |
 | **Rename Node Editor → Workflows** | DONE | Sidebar label + Workflow icon + page title + command palette (18648b5) |
+
+### Phase 4C — Streaming, Live Mode, UX (IN PROGRESS)
+| Step | Status | Description |
+|------|--------|-------------|
+| **Live Workflow execution** | DONE | Continuous loop mode with cooperative cancellation, ephemeral execution (skip DB), LiveFeedPanel, Go Live/Stop toolbar, settings popover, 119 Rust tests passing |
+| **Vision pipeline fix** | DONE | MCP client preserves image data (was dropping with placeholder), webcam template uses `webcam_capture` (raw frame), LLM vision prompt safety net for unresolved templates |
+| Webcam Monitor live demo | TODO | Test live mode with webcam pipeline for 30+ seconds |
+| Streaming node output | TODO | SSE streaming for LLM responses |
+| Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
 
@@ -168,15 +177,27 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-19 (session 29)
+**Date**: 2026-02-19 (session 30)
 **What happened**:
-- **Toolbar + list UI polish**: Vertical dividers, node count badge, hover card actions, btn-icon-sm + toolbar-divider CSS utilities (8f4906a)
-- **Node editor guide**: `docs/node-editor-guide.md` — step-by-step for all 16 nodes, 7 common patterns, LLM picker guide (82795b8)
-- **Phase 5+ backlog**: Added 5 killer features — A/B Eval, Time-Travel Debug, Auto-Pipeline Generator, Guardrails, RAG nodes (718cbae)
-- **v0.1.1 tagged**: Phase 4B + UX polish milestone
-- **Rename Node Editor → Workflows**: Sidebar label, Workflow icon (lucide), page title, command palette (18648b5)
-- Product vision discussion: Agent-Workflow unification planned for Phase 5 (Agent = a workflow that defines its behavior)
-- GitHub Actions deploy template saved to claude-config (generic, no org references)
+- **Live Workflow execution**: Full implementation of continuous loop mode ("Otter.ai for AI workflows")
+  - Rust: `LiveWorkflowManager` with cooperative cancellation (AtomicBool), start/stop/stop_all
+  - Rust: Ephemeral execution mode — `ExecutionContext.ephemeral` flag guards all `record_event()` calls
+  - Rust: `start_live_workflow` / `stop_live_workflow` IPC commands
+  - Rust: Live loop with configurable interval, max iterations, error policy (skip/stop), 5-consecutive-error auto-stop
+  - Rust: App close handler calls `stop_all()` for cleanup
+  - UI: Zustand store — liveMode, liveRunId, liveFeedItems (500 cap), liveConfig, actions
+  - UI: `LiveFeedPanel` — collapsible bottom panel with auto-scroll, running totals, error highlighting
+  - UI: "Go Live" (green) / "Stop" (red) toolbar buttons, settings popover (interval, max iterations, error policy)
+  - UI: `live_workflow_feed` Tauri event listener
+  - Spec: `docs/specs/live-workflow.md`
+  - Tests: 119 Rust tests passing (4 new for LiveWorkflowManager), TypeScript clean
+  - Shared types: `LiveFeedItem`, `LiveConfig` interfaces
+- **Vision pipeline fix**: MCP client was dropping image data with "[image data]" placeholder
+  - Fixed `call_tool()` to preserve base64 image data as structured dict `{content, encoding, mime_type}`
+  - Webcam template: simplified to 3-node (Capture→LLM→Output), uses `webcam_capture` (raw frame) instead of `webcam_detect` (YOLO metadata only)
+  - LLM executor: added safety net for unresolved templates/empty prompts when images detected
+  - End-to-end flow verified: MCP tool → sidecar → Rust tool executor → LLM image detection → OpenAI vision API
+  - Known limitation: Google/Anthropic providers don't convert OpenAI image_url format (works for OpenAI-compatible APIs like Qwen3-VL)
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -191,9 +212,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 26: LLM Session mode (4B.4), 5 tests, Playwright verification
 - Session 27: EIP peer reviews (Gemini+Codex), 5 code fixes (UTF-8, containment, cycle detection)
 - Session 28: Agent edit mode, click-to-place nodes, custom node labels
+- Session 29: Toolbar polish, node editor guide, Phase 5+ backlog, v0.1.1 tag, rename → Workflows
 
 **Next session should**:
-1. Build compelling demo workflow (batch CSV analysis with session LLM)
-2. Phase 4C planning (streaming, containers, UX polish)
+1. Manual test: Webcam Monitor live for 30+ seconds — verify feed updates
+2. Streaming node output (SSE for LLM responses)
 3. Agent-Workflow unification spec (Phase 5 — Agent = workflow)
 4. Consider v0.2.0 tag

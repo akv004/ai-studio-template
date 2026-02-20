@@ -18,9 +18,10 @@ import '@xyflow/react/dist/style.css';
 import {
     Save, Play, Copy, ChevronLeft,
     Loader2, Check, X, Download, ShieldCheck,
+    Square, Radio, Settings2,
 } from 'lucide-react';
 import { useAppStore } from '../../../state/store';
-import type { Workflow } from '@ai-studio/shared';
+import type { Workflow, LiveFeedItem } from '@ai-studio/shared';
 import { customNodeTypes } from './nodeTypes';
 import { NODE_CATEGORIES } from './nodeCategories';
 import { nodeColors } from './nodeColors';
@@ -30,6 +31,7 @@ import { RichOutput } from './components/RichOutput';
 import { generateNodeId, formatRuntimeError } from './utils';
 import { TypedEdge } from './edges/TypedEdge';
 import { TypedConnectionLine } from './edges/TypedConnectionLine';
+import { LiveFeedPanel } from './LiveFeedPanel';
 
 const edgeTypes = { typed: TypedEdge };
 
@@ -63,6 +65,13 @@ export function WorkflowCanvas({ workflow, onBack }: {
         workflowRunning,
         workflowNodeStates,
         openInspector,
+        liveMode,
+        startLiveWorkflow,
+        stopLiveWorkflow,
+        pushLiveFeedItem,
+        liveConfig,
+        setLiveConfig,
+        liveFeedItems,
     } = useAppStore();
 
     // Parse graph from workflow
@@ -93,6 +102,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
     const [editingName, setEditingName] = useState(false);
     const [nameDraft, setNameDraft] = useState(workflow.name);
     const [pendingNodeType, setPendingNodeType] = useState<string | null>(null);
+    const [showLiveSettings, setShowLiveSettings] = useState(false);
     const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
     const reactFlowRef = useRef<HTMLDivElement>(null);
     const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -126,10 +136,16 @@ export function WorkflowCanvas({ workflow, onBack }: {
     useEffect(() => {
         let unlistenEvents: (() => void) | undefined;
         let unlistenApproval: (() => void) | undefined;
+        let unlistenLive: (() => void) | undefined;
 
         (async () => {
             try {
                 const { listen } = await import('@tauri-apps/api/event');
+
+                // Live workflow feed events
+                unlistenLive = await listen<LiveFeedItem>('live_workflow_feed', (event) => {
+                    pushLiveFeedItem(event.payload);
+                });
 
                 unlistenEvents = await listen<{
                     type: string;
@@ -176,8 +192,9 @@ export function WorkflowCanvas({ workflow, onBack }: {
         return () => {
             unlistenEvents?.();
             unlistenApproval?.();
+            unlistenLive?.();
         };
-    }, [setNodeState]);
+    }, [setNodeState, pushLiveFeedItem]);
 
     // Handle type compatibility for connection validation
     const getHandleType = useCallback((nodeId: string, handleId: string | null, isSource: boolean): string => {
@@ -379,6 +396,39 @@ export function WorkflowCanvas({ workflow, onBack }: {
         }
     }, [workflow.id, nodes, edges, runInputs, runWorkflow, resetNodeStates, updateWorkflow, addToast]);
 
+    const handleGoLive = useCallback(async () => {
+        // Auto-save before going live
+        try {
+            const graphJson = JSON.stringify({
+                nodes,
+                edges,
+                viewport: { x: 0, y: 0, zoom: 1 },
+            });
+            await updateWorkflow(workflow.id, { graphJson });
+            setHasChanges(false);
+        } catch {
+            addToast('Failed to save workflow before going live', 'error');
+            return;
+        }
+
+        // Collect inputs from Input nodes
+        const defaults: Record<string, unknown> = {};
+        nodes.forEach((n) => {
+            if (n.type === 'input') {
+                const name = (n.data.name as string) || 'input';
+                const defaultVal = (n.data.defaultValue as string) ?? (n.data.default as string) ?? '';
+                defaults[name] = defaultVal;
+            }
+        });
+
+        resetNodeStates();
+        await startLiveWorkflow(workflow.id, defaults);
+    }, [workflow.id, nodes, edges, updateWorkflow, addToast, resetNodeStates, startLiveWorkflow]);
+
+    const handleStopLive = useCallback(async () => {
+        await stopLiveWorkflow(workflow.id);
+    }, [workflow.id, stopLiveWorkflow]);
+
     const handleCopyDebugLog = useCallback(async () => {
         if (!lastRunDebug) return;
         const failedNodes = Object.values(workflowNodeStates)
@@ -568,13 +618,87 @@ export function WorkflowCanvas({ workflow, onBack }: {
                     <div className="toolbar-divider" />
                     <button
                         className="btn-primary"
-                        disabled={workflowRunning || nodes.length === 0}
+                        disabled={workflowRunning || liveMode || nodes.length === 0}
                         onClick={handleRunClick}
                         title={workflowRunning ? 'Workflow running...' : 'Run workflow'}
                     >
                         {workflowRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
                         {workflowRunning ? 'Running...' : 'Run'}
                     </button>
+                    <div className="toolbar-divider" />
+                    {liveMode ? (
+                        <button
+                            className="btn-primary bg-red-600 hover:bg-red-700"
+                            onClick={handleStopLive}
+                            title="Stop live workflow"
+                        >
+                            <Square size={14} />
+                            Stop
+                        </button>
+                    ) : (
+                        <button
+                            className="btn-primary bg-green-700 hover:bg-green-600"
+                            disabled={workflowRunning || nodes.length === 0}
+                            onClick={handleGoLive}
+                            title="Start continuous execution"
+                        >
+                            <Radio size={14} />
+                            Go Live
+                        </button>
+                    )}
+                    <div className="relative">
+                        <button
+                            className="btn-icon-sm"
+                            onClick={() => setShowLiveSettings(!showLiveSettings)}
+                            title="Live settings"
+                        >
+                            <Settings2 size={14} />
+                        </button>
+                        {showLiveSettings && (
+                            <div
+                                className="absolute right-0 top-full mt-1 w-64 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-3 shadow-lg z-50"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <div className="text-xs font-semibold text-[var(--text-muted)] uppercase mb-2">Live Settings</div>
+                                <label className="block mb-2">
+                                    <span className="text-xs text-[var(--text-muted)]">
+                                        Interval: {(liveConfig.intervalMs / 1000).toFixed(0)}s
+                                    </span>
+                                    <input
+                                        type="range"
+                                        min={1000}
+                                        max={60000}
+                                        step={1000}
+                                        value={liveConfig.intervalMs}
+                                        onChange={(e) => setLiveConfig({ intervalMs: Number(e.target.value) })}
+                                        className="w-full mt-1"
+                                        disabled={liveMode}
+                                    />
+                                </label>
+                                <label className="block mb-2">
+                                    <span className="text-xs text-[var(--text-muted)]">Max iterations</span>
+                                    <input
+                                        type="number"
+                                        className="config-input mt-1"
+                                        value={liveConfig.maxIterations}
+                                        onChange={(e) => setLiveConfig({ maxIterations: Number(e.target.value) || 1000 })}
+                                        min={1}
+                                        max={10000}
+                                        disabled={liveMode}
+                                    />
+                                </label>
+                                <label className="flex items-center gap-2 text-xs">
+                                    <input
+                                        type="checkbox"
+                                        checked={liveConfig.errorPolicy === 'stop'}
+                                        onChange={(e) => setLiveConfig({ errorPolicy: e.target.checked ? 'stop' : 'skip' })}
+                                        disabled={liveMode}
+                                    />
+                                    <span className="text-[var(--text-muted)]">Stop on error</span>
+                                </label>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -786,6 +910,9 @@ export function WorkflowCanvas({ workflow, onBack }: {
                     </div>
                 )}
             </div>
+
+            {/* Live Feed Panel */}
+            {(liveMode || liveFeedItems.length > 0) && <LiveFeedPanel />}
 
             {/* Run Input Modal */}
             {showRunModal && (

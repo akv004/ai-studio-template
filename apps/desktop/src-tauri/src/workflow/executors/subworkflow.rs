@@ -59,6 +59,7 @@ impl NodeExecutor for SubworkflowExecutor {
             ctx.db, ctx.sidecar, ctx.app,
             ctx.session_id, &graph_json, &sub_inputs, ctx.all_settings,
             &visited, ctx.workflow_run_id,
+            ctx.ephemeral,
         ).await?;
 
         // Extract the sub-workflow output

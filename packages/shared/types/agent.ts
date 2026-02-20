@@ -330,6 +330,33 @@ export interface WorkflowRunResult {
 }
 
 // ============================================
+// LIVE WORKFLOW TYPES
+// ============================================
+
+export interface LiveFeedItem {
+    type: 'live.iteration.completed' | 'live.iteration.error' | 'live.started' | 'live.stopped';
+    liveRunId: string;
+    iteration?: number;
+    timestamp: string;
+    outputSummary?: string;
+    tokens?: number;
+    costUsd?: number;
+    durationMs?: number;
+    error?: string;
+    status?: string;
+    totalIterations?: number;
+    totalTokens?: number;
+    totalCostUsd?: number;
+    reason?: string;
+}
+
+export interface LiveConfig {
+    intervalMs: number;
+    errorPolicy: 'skip' | 'stop';
+    maxIterations: number;
+}
+
+// ============================================
 // PLUGIN TYPES
 // ============================================
 

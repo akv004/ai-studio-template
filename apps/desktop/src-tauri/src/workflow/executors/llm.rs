@@ -206,18 +206,20 @@ impl NodeExecutor for LlmExecutor {
             found
         };
 
-        // When images detected: if the prompt IS base64 data (leaked through from File Read
-        // content → prompt wire), replace with the config prompt or default vision prompt.
+        // When images detected: fix the prompt if it's unusable (base64 leak or unresolved template).
         if !images.is_empty() {
             eprintln!("[workflow] LLM node '{}': detected {} image(s), building multimodal message", node_id, images.len());
-            if prompt.len() > 100 && !prompt.contains(' ') {
+            let needs_fix = (prompt.len() > 100 && !prompt.contains(' '))  // base64 data leaked
+                || prompt.contains("{{")                                    // unresolved template
+                || prompt.is_empty();                                       // empty prompt
+            if needs_fix {
                 let config_prompt = node_data.get("prompt").and_then(|v| v.as_str()).unwrap_or("");
-                prompt = if !config_prompt.is_empty() && config_prompt != "{{input}}" {
+                prompt = if !config_prompt.is_empty() && config_prompt != "{{input}}" && !config_prompt.contains("{{") {
                     config_prompt.to_string()
                 } else {
                     "Describe what you see in this image in detail.".to_string()
                 };
-                eprintln!("[workflow] LLM node '{}': replaced base64 prompt with text: '{}'",
+                eprintln!("[workflow] LLM node '{}': replaced unusable prompt with: '{}'",
                     node_id, truncate(&prompt, 80));
             }
         }

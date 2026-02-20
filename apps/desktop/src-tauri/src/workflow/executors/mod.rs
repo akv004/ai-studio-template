@@ -34,6 +34,8 @@ pub struct ExecutionContext<'a> {
     pub graph_json: &'a str,
     /// Unique per workflow run — used for LLM session conversation IDs
     pub workflow_run_id: &'a str,
+    /// When true, skip DB writes (record_event) — used by live workflow mode
+    pub ephemeral: bool,
 }
 
 pub struct NodeOutput {

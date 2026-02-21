@@ -742,12 +742,20 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
     },
     setNodeState: (nodeId, status, extra) => {
-        set((s) => ({
-            workflowNodeStates: {
-                ...s.workflowNodeStates,
-                [nodeId]: { nodeId, status, ...extra },
-            },
-        }));
+        set((s) => {
+            const existing = s.workflowNodeStates[nodeId];
+            // Streaming: append new tokens to accumulated text
+            const streamingText = status === 'streaming' && existing?.streamingText
+                ? existing.streamingText + (extra?.streamingText || '')
+                : (status === 'streaming' ? (extra?.streamingText || '') : undefined);
+
+            return {
+                workflowNodeStates: {
+                    ...s.workflowNodeStates,
+                    [nodeId]: { nodeId, status, ...extra, streamingText },
+                },
+            };
+        });
     },
     resetNodeStates: () => set({ workflowNodeStates: {}, workflowRunSessionId: null }),
 

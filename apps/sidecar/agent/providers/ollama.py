@@ -5,22 +5,23 @@ Local LLM provider using Ollama.
 Runs on your local machine with GPU acceleration.
 """
 
+import json
 import httpx
-from typing import Optional
+from typing import AsyncGenerator, Optional
 from .base import AgentProvider, Message, ChatResponse
 
 
 class OllamaProvider(AgentProvider):
     """
     Ollama provider for local LLM inference.
-    
+
     Requires Ollama running locally or via Docker:
     - Local: `ollama serve`
     - Docker: `docker run -d --gpus all -p 11434:11434 ollama/ollama`
     """
-    
+
     name = "ollama"
-    
+
     def __init__(
         self,
         base_url: str = "http://localhost:11434",
@@ -30,19 +31,9 @@ class OllamaProvider(AgentProvider):
         self.base_url = base_url.rstrip("/")
         self.default_model = default_model
         self.timeout = timeout
-    
-    async def chat(
-        self,
-        messages: list[Message],
-        model: Optional[str] = None,
-        temperature: float = 0.7,
-        max_tokens: int = 2048,
-        tools: Optional[list[dict]] = None,
-    ) -> ChatResponse:
-        """Send chat request to Ollama"""
-        model = model or self.default_model
-        
-        # Convert messages — extract images for Ollama vision format
+
+    def _convert_messages(self, messages: list[Message]) -> list[dict]:
+        """Convert messages to Ollama format, extracting images for vision."""
         ollama_messages = []
         for m in messages:
             msg = {"role": m.role}
@@ -64,6 +55,19 @@ class OllamaProvider(AgentProvider):
             else:
                 msg["content"] = m.content
             ollama_messages.append(msg)
+        return ollama_messages
+
+    async def chat(
+        self,
+        messages: list[Message],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        tools: Optional[list[dict]] = None,
+    ) -> ChatResponse:
+        """Send chat request to Ollama"""
+        model = model or self.default_model
+        ollama_messages = self._convert_messages(messages)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
@@ -80,7 +84,7 @@ class OllamaProvider(AgentProvider):
             )
             response.raise_for_status()
             data = response.json()
-            
+
             return ChatResponse(
                 content=data["message"]["content"],
                 model=model,
@@ -90,7 +94,55 @@ class OllamaProvider(AgentProvider):
                     "completion_tokens": data.get("eval_count", 0),
                 },
             )
-    
+
+    async def chat_stream(
+        self,
+        messages: list[Message],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+    ) -> AsyncGenerator[dict, None]:
+        """Stream chat tokens from Ollama (NDJSON → SSE chunks)."""
+        model = model or self.default_model
+        ollama_messages = self._convert_messages(messages)
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/api/chat",
+                json={
+                    "model": model,
+                    "messages": ollama_messages,
+                    "stream": True,
+                    "options": {
+                        "temperature": temperature,
+                        "num_predict": max_tokens,
+                    },
+                },
+            ) as response:
+                response.raise_for_status()
+                accumulated = ""
+                index = 0
+                async for line in response.aiter_lines():
+                    if not line.strip():
+                        continue
+                    chunk = json.loads(line)
+                    if chunk.get("done"):
+                        yield {
+                            'type': 'done',
+                            'content': accumulated,
+                            'usage': {
+                                'prompt_tokens': chunk.get('prompt_eval_count', 0),
+                                'completion_tokens': chunk.get('eval_count', 0),
+                            },
+                        }
+                        return
+                    token = chunk.get("message", {}).get("content", "")
+                    if token:
+                        accumulated += token
+                        yield {'type': 'token', 'content': token, 'index': index}
+                        index += 1
+
     async def health(self) -> bool:
         """Check if Ollama is running"""
         try:
@@ -99,7 +151,7 @@ class OllamaProvider(AgentProvider):
                 return response.status_code == 200
         except Exception:
             return False
-    
+
     def list_models(self) -> list[str]:
         """List common Ollama models (async version would query API)"""
         return [
@@ -112,7 +164,7 @@ class OllamaProvider(AgentProvider):
             "deepseek-r1",
             "phi3",
         ]
-    
+
     async def pull_model(self, model: str) -> bool:
         """Pull a model from Ollama registry"""
         try:

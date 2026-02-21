@@ -8,6 +8,7 @@ import type { NodeExecutionStatus } from '@ai-studio/shared';
 const execBadgeConfig: Record<NodeExecutionStatus, { icon: React.ElementType | null; label: string }> = {
     idle: { icon: null, label: '' },
     running: { icon: Loader2, label: 'Running' },
+    streaming: { icon: Loader2, label: 'Streaming' },
     completed: { icon: Check, label: 'Done' },
     error: { icon: X, label: 'Error' },
     waiting: { icon: Clock, label: 'Waiting' },
@@ -29,7 +30,21 @@ export function ExecutionBadge({ nodeId }: { nodeId: string }) {
 
 export function OutputPreview({ nodeId }: { nodeId: string }) {
     const state = useAppStore((s) => s.workflowNodeStates[nodeId]);
-    if (!state || state.status !== 'completed' || !state.output) return null;
+    if (!state) return null;
+
+    if (state.status === 'streaming' && state.streamingText) {
+        return (
+            <div
+                className="mt-1 text-[10px] text-[#ccc] max-w-[180px] max-h-[80px] overflow-y-auto font-mono leading-tight whitespace-pre-wrap break-words cursor-default"
+                onMouseDown={e => e.stopPropagation()}
+            >
+                {state.streamingText}
+                <span className="animate-pulse text-blue-400">|</span>
+            </div>
+        );
+    }
+
+    if (state.status !== 'completed' || !state.output) return null;
     return (
         <div
             className="mt-1 text-[10px] text-[#999] max-w-[180px] max-h-[80px] overflow-y-auto font-mono leading-tight whitespace-pre-wrap break-words cursor-default"

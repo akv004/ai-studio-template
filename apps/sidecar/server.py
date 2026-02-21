@@ -20,7 +20,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from agent.chat import ChatService
@@ -464,64 +464,71 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
 
 
+def _prepare_chat_request(request: ChatMessageRequest):
+    """Shared setup for /chat/direct and /chat/stream: provider, messages, session."""
+    import json as _json
+    print(f"[chat] provider={request.provider} model={request.model} "
+          f"base_url={request.base_url} extra_config={request.extra_config} "
+          f"msgs={len(request.messages)} session={request.conversation_id or 'none'}")
+
+    # Register provider on-the-fly if config provided
+    if request.provider and (request.api_key or request.base_url or request.extra_config):
+        provider_inst = create_provider_for_request(
+            name=request.provider,
+            api_key=request.api_key,
+            base_url=request.base_url,
+            extra_config=request.extra_config,
+        )
+        chat_service.register_provider(provider_inst)
+    else:
+        print(f"[chat] WARN: No dynamic config — using default provider for '{request.provider}'")
+
+    messages = []
+    if request.system_prompt:
+        messages.append(Message(role="system", content=request.system_prompt))
+
+    # Session mode: inject history from previous turns
+    conv = None
+    if request.conversation_id:
+        conv = chat_service.get_or_create_conversation(
+            request.conversation_id,
+            provider_name=request.provider,
+            system_prompt=request.system_prompt,
+        )
+        history = [m for m in conv.messages if m.role != "system"]
+        max_h = request.max_history or 20
+        if len(history) > max_h:
+            history = history[-max_h:]
+        if history:
+            print(f"[chat] Session '{request.conversation_id}': injecting {len(history)} history messages")
+            messages.extend(history)
+
+    # Build current messages — inject images into multimodal content if present
+    if request.images:
+        print(f"[chat] Vision mode: {len(request.images)} image(s) attached")
+        for m in request.messages:
+            content_blocks = [{"type": "text", "text": m["content"]}]
+            for img in request.images:
+                data_uri = f"data:{img['mime_type']};base64,{img['data']}"
+                content_blocks.append({
+                    "type": "image_url",
+                    "image_url": {"url": data_uri},
+                })
+            messages.append(Message(role=m["role"], content=content_blocks))
+    else:
+        messages.extend(Message(role=m["role"], content=m["content"]) for m in request.messages)
+
+    provider = chat_service.get_provider(request.provider or "ollama")
+    return provider, messages, conv
+
+
 @app.post("/chat/direct")
 async def chat_direct(request: ChatMessageRequest):
     """Direct chat without conversation history. Used by workflow LLM nodes.
     When conversation_id is provided, accumulates history across calls (session mode).
     """
     try:
-        print(f"[chat/direct] provider={request.provider} model={request.model} "
-              f"base_url={request.base_url} extra_config={request.extra_config} "
-              f"msgs={len(request.messages)} session={request.conversation_id or 'none'}")
-
-        # Register provider on-the-fly if config provided
-        if request.provider and (request.api_key or request.base_url or request.extra_config):
-            provider_inst = create_provider_for_request(
-                name=request.provider,
-                api_key=request.api_key,
-                base_url=request.base_url,
-                extra_config=request.extra_config,
-            )
-            chat_service.register_provider(provider_inst)
-        else:
-            print(f"[chat/direct] WARN: No dynamic config — using default provider for '{request.provider}'")
-
-        messages = []
-        if request.system_prompt:
-            messages.append(Message(role="system", content=request.system_prompt))
-
-        # Session mode: inject history from previous turns
-        conv = None
-        if request.conversation_id:
-            conv = chat_service.get_or_create_conversation(
-                request.conversation_id,
-                provider_name=request.provider,
-                system_prompt=request.system_prompt,
-            )
-            history = [m for m in conv.messages if m.role != "system"]
-            max_h = request.max_history or 20
-            if len(history) > max_h:
-                history = history[-max_h:]
-            if history:
-                print(f"[chat/direct] Session '{request.conversation_id}': injecting {len(history)} history messages")
-                messages.extend(history)
-
-        # Build current messages — inject images into multimodal content if present
-        if request.images:
-            print(f"[chat/direct] Vision mode: {len(request.images)} image(s) attached")
-            for m in request.messages:
-                content_blocks = [{"type": "text", "text": m["content"]}]
-                for img in request.images:
-                    data_uri = f"data:{img['mime_type']};base64,{img['data']}"
-                    content_blocks.append({
-                        "type": "image_url",
-                        "image_url": {"url": data_uri},
-                    })
-                messages.append(Message(role=m["role"], content=content_blocks))
-        else:
-            messages.extend(Message(role=m["role"], content=m["content"]) for m in request.messages)
-
-        provider = chat_service.get_provider(request.provider or "ollama")
+        provider, messages, conv = _prepare_chat_request(request)
 
         response = await provider.chat(
             messages=messages,
@@ -546,6 +553,45 @@ async def chat_direct(request: ChatMessageRequest):
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Chat error: {str(e)}")
+
+
+@app.post("/chat/stream")
+async def chat_stream_endpoint(request: ChatMessageRequest):
+    """Streaming chat via SSE. Same request schema as /chat/direct.
+    Returns text/event-stream with token/done/error chunks.
+    """
+    import json as _json
+
+    try:
+        provider, messages, conv = _prepare_chat_request(request)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat setup error: {str(e)}")
+
+    async def generate():
+        accumulated = ""
+        try:
+            async for chunk in provider.chat_stream(
+                messages=messages,
+                model=request.model,
+                temperature=request.temperature,
+            ):
+                if chunk['type'] == 'token':
+                    accumulated += chunk['content']
+                elif chunk['type'] == 'done':
+                    accumulated = chunk.get('content', accumulated)
+                    # Session mode: store history after stream completes
+                    if conv is not None:
+                        for m in request.messages:
+                            conv.messages.append(Message(role=m["role"], content=m["content"]))
+                        conv.messages.append(Message(role="assistant", content=accumulated))
+                yield f"data: {_json.dumps(chunk)}\n\n"
+        except Exception as e:
+            print(f"[chat/stream] ERROR: {e}")
+            yield f"data: {_json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+
+    return StreamingResponse(generate(), media_type="text/event-stream")
 
 
 class ToolExecuteRequest(BaseModel):

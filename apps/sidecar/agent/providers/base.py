@@ -5,7 +5,7 @@ Abstract base class for all LLM providers.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Any
+from typing import AsyncGenerator, Optional, Any
 from pydantic import BaseModel
 
 
@@ -60,6 +60,18 @@ class AgentProvider(ABC):
             ChatResponse with the model's reply
         """
         pass
+
+    async def chat_stream(
+        self,
+        messages: list[Message],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+    ) -> AsyncGenerator[dict, None]:
+        """Stream chat tokens. Override for true streaming; default falls back to chat()."""
+        response = await self.chat(messages, model, temperature, max_tokens)
+        yield {'type': 'token', 'content': response.content, 'index': 0}
+        yield {'type': 'done', 'content': response.content, 'usage': response.usage}
 
     @abstractmethod
     async def health(self) -> bool:

@@ -35,6 +35,18 @@ pub struct ToolApprovalRequest {
     body: Option<serde_json::Value>,
 }
 
+/// SSE chunk from /chat/stream endpoint
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type")]
+pub enum StreamChunk {
+    #[serde(rename = "token")]
+    Token { content: String, index: i64 },
+    #[serde(rename = "done")]
+    Done { content: String, usage: serde_json::Value },
+    #[serde(rename = "error")]
+    Error { message: String },
+}
+
 #[derive(Default)]
 struct SidecarInner {
     child: Option<Child>,
@@ -281,6 +293,79 @@ impl SidecarManager {
 
         serde_json::from_slice(&bytes)
             .map_err(|e| format!("Failed to parse sidecar response: {e}"))
+    }
+
+    /// Streaming HTTP request to sidecar — consumes SSE line by line.
+    /// Calls `on_token` for each token chunk, returns (full_content, usage) on done.
+    pub(crate) async fn proxy_request_stream<F>(
+        &self,
+        path: &str,
+        body: serde_json::Value,
+        mut on_token: F,
+    ) -> Result<(String, serde_json::Value), String>
+    where
+        F: FnMut(&str, i64),
+    {
+        let base_url = {
+            let inner = self.inner.lock().await;
+            inner.base_url()
+        };
+        let url = format!("{base_url}{path}");
+        let token = self.token().await;
+
+        let client = reqwest::Client::new();
+        let mut builder = client.post(&url).json(&body);
+        if let Some(t) = token {
+            builder = builder.header("x-ai-studio-token", t);
+        }
+
+        let resp = builder
+            .send()
+            .await
+            .map_err(|e| format!("Stream request failed: {e}"))?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let text = resp.text().await.unwrap_or_default();
+            return Err(format!("Sidecar stream returned {status}: {text}"));
+        }
+
+        let mut stream = resp.bytes_stream();
+        let mut buffer = String::new();
+
+        while let Some(chunk) = stream.next().await {
+            let bytes = chunk.map_err(|e| format!("Stream read error: {e}"))?;
+            buffer.push_str(&String::from_utf8_lossy(&bytes));
+
+            // Process complete SSE lines
+            while let Some(pos) = buffer.find('\n') {
+                let line = buffer[..pos].trim().to_string();
+                buffer = buffer[pos + 1..].to_string();
+
+                if line.is_empty() {
+                    continue;
+                }
+
+                if let Some(data) = line.strip_prefix("data: ") {
+                    match serde_json::from_str::<StreamChunk>(data) {
+                        Ok(StreamChunk::Token { content, index }) => {
+                            on_token(&content, index);
+                        }
+                        Ok(StreamChunk::Done { content, usage }) => {
+                            return Ok((content, usage));
+                        }
+                        Ok(StreamChunk::Error { message }) => {
+                            return Err(format!("Stream error from sidecar: {message}"));
+                        }
+                        Err(_) => {
+                            eprintln!("[sidecar-stream] Unparseable SSE data: {}", data);
+                        }
+                    }
+                }
+            }
+        }
+
+        Err("Stream ended without done event".to_string())
     }
 }
 
@@ -574,4 +659,48 @@ pub async fn sidecar_request(
     };
 
     Ok(SidecarProxyResponse { status, json, text })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StreamChunk;
+
+    #[test]
+    fn test_stream_chunk_token() {
+        let data = r#"{"type":"token","content":"Hello","index":0}"#;
+        let chunk: StreamChunk = serde_json::from_str(data).unwrap();
+        match chunk {
+            StreamChunk::Token { content, index } => {
+                assert_eq!(content, "Hello");
+                assert_eq!(index, 0);
+            }
+            _ => panic!("Expected Token variant"),
+        }
+    }
+
+    #[test]
+    fn test_stream_chunk_done() {
+        let data = r#"{"type":"done","content":"Hello world","usage":{"prompt_tokens":10,"completion_tokens":5}}"#;
+        let chunk: StreamChunk = serde_json::from_str(data).unwrap();
+        match chunk {
+            StreamChunk::Done { content, usage } => {
+                assert_eq!(content, "Hello world");
+                assert_eq!(usage["prompt_tokens"].as_i64().unwrap(), 10);
+                assert_eq!(usage["completion_tokens"].as_i64().unwrap(), 5);
+            }
+            _ => panic!("Expected Done variant"),
+        }
+    }
+
+    #[test]
+    fn test_stream_chunk_error() {
+        let data = r#"{"type":"error","message":"Provider timeout"}"#;
+        let chunk: StreamChunk = serde_json::from_str(data).unwrap();
+        match chunk {
+            StreamChunk::Error { message } => {
+                assert_eq!(message, "Provider timeout");
+            }
+            _ => panic!("Expected Error variant"),
+        }
+    }
 }

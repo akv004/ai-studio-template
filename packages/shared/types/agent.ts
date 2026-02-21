@@ -300,12 +300,13 @@ export interface UpdateWorkflowRequest {
 // WORKFLOW EXECUTION TYPES (Phase 3B)
 // ============================================
 
-export type NodeExecutionStatus = 'idle' | 'running' | 'completed' | 'error' | 'waiting' | 'skipped';
+export type NodeExecutionStatus = 'idle' | 'running' | 'streaming' | 'completed' | 'error' | 'waiting' | 'skipped';
 
 export interface NodeExecutionState {
     nodeId: string;
     status: NodeExecutionStatus;
     output?: string;
+    streamingText?: string;
     error?: string;
     tokens?: number;
     costUsd?: number;

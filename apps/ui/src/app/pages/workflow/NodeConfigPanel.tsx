@@ -130,6 +130,12 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                             value={(data.temperature as number) ?? 0.7}
                             onChange={(e) => update('temperature', parseFloat(e.target.value))} />
                     </label>
+                    <label className="flex items-center gap-2">
+                        <input type="checkbox"
+                            checked={(data.streaming as boolean) ?? true}
+                            onChange={(e) => update('streaming', e.target.checked)} />
+                        <span className="text-xs text-[var(--text-muted)]">Enable streaming</span>
+                    </label>
                 </>
             )}
 

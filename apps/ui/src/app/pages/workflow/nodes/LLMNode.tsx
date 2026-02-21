@@ -80,6 +80,13 @@ export function LLMNode({ id, data, selected }: { id: string; data: Record<strin
                                 onMouseDown={e => e.stopPropagation()} />
                         </div>
                     )}
+                    <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-[#666] w-12">Stream</span>
+                        <input type="checkbox"
+                            checked={(data.streaming as boolean) ?? true}
+                            onChange={e => updateField('streaming', e.target.checked)}
+                            onMouseDown={e => e.stopPropagation()} />
+                    </div>
                 </div>
 
                 {/* Outputs */}

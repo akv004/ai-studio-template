@@ -1,6 +1,6 @@
 use super::{ExecutionContext, NodeExecutor, NodeOutput};
 use crate::events::record_event;
-use crate::workflow::engine::resolve_template;
+use crate::workflow::engine::{emit_workflow_event, resolve_template};
 
 /// Truncate a string to at most `max_chars` characters (UTF-8 safe).
 fn truncate(s: &str, max_chars: usize) -> &str {
@@ -275,31 +275,96 @@ impl NodeExecutor for LlmExecutor {
             body["extra_config"] = serde_json::Value::Object(extra_config);
         }
 
-        eprintln!("[workflow] LLM node '{}': POST /chat/direct body={}", node_id,
-            truncate(&body.to_string(), 300));
+        let streaming_enabled = node_data.get("streaming")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
 
         let _ = record_event(ctx.db, ctx.session_id, "llm.request.started", "desktop.workflow",
             serde_json::json!({ "node_id": node_id, "model": model, "provider": provider_name }));
 
-        let resp = ctx.sidecar.proxy_request("POST", "/chat/direct", Some(body)).await
-            .map_err(|e| {
-                eprintln!("[workflow] ERROR: LLM call failed for node '{}': {}", node_id, e);
-                format!("LLM call failed for node '{}': {}", node_id, e)
+        let (content, input_tokens, output_tokens) = if streaming_enabled && images.is_empty() {
+            // === Streaming path ===
+            eprintln!("[workflow] LLM node '{}': POST /chat/stream (streaming)", node_id);
+
+            let app = ctx.app.clone();
+            let sid = ctx.session_id.to_string();
+            let nid = node_id.to_string();
+            let seq = ctx.seq_counter;
+
+            let mut token_buf = String::new();
+            let mut token_count: i64 = 0;
+            let mut accumulated_len: i64 = 0;
+            let mut last_flush = std::time::Instant::now();
+
+            let (full_content, usage) = ctx.sidecar.proxy_request_stream(
+                "/chat/stream",
+                body,
+                |token_text, _index| {
+                    token_buf.push_str(token_text);
+                    token_count += 1;
+                    accumulated_len += token_text.len() as i64;
+
+                    // Flush every 3 tokens or 100ms
+                    if token_count % 3 == 0 || last_flush.elapsed().as_millis() >= 100 {
+                        emit_workflow_event(&app, &sid, "workflow.node.streaming",
+                            serde_json::json!({
+                                "node_id": &nid,
+                                "tokens": &token_buf,
+                                "accumulated_length": accumulated_len,
+                            }),
+                            seq);
+                        token_buf.clear();
+                        last_flush = std::time::Instant::now();
+                    }
+                },
+            ).await.map_err(|e| {
+                eprintln!("[workflow] ERROR: LLM streaming failed for node '{}': {}", node_id, e);
+                format!("LLM streaming failed for node '{}': {}", node_id, e)
             })?;
 
-        let content = resp.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let usage = resp.get("usage");
-        let input_tokens = usage.and_then(|u| u.get("prompt_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
-        let output_tokens = usage.and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
-        let resp_model = resp.get("model").and_then(|v| v.as_str()).unwrap_or(model).to_string();
+            // Flush remaining tokens in buffer
+            if !token_buf.is_empty() {
+                emit_workflow_event(&app, &sid, "workflow.node.streaming",
+                    serde_json::json!({
+                        "node_id": &nid,
+                        "tokens": &token_buf,
+                        "accumulated_length": accumulated_len,
+                    }),
+                    seq);
+            }
 
-        eprintln!("[workflow] LLM node '{}': response model={}, tokens={}/{}, content='{}'",
-            node_id, resp_model, input_tokens, output_tokens,
-            truncate(&content, 100));
+            let in_tok = usage.get("prompt_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+            let out_tok = usage.get("completion_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+
+            eprintln!("[workflow] LLM node '{}': stream complete, tokens={}/{}, content='{}'",
+                node_id, in_tok, out_tok, truncate(&full_content, 100));
+
+            (full_content, in_tok, out_tok)
+        } else {
+            // === Non-streaming path (unchanged) ===
+            eprintln!("[workflow] LLM node '{}': POST /chat/direct body={}", node_id,
+                truncate(&body.to_string(), 300));
+
+            let resp = ctx.sidecar.proxy_request("POST", "/chat/direct", Some(body)).await
+                .map_err(|e| {
+                    eprintln!("[workflow] ERROR: LLM call failed for node '{}': {}", node_id, e);
+                    format!("LLM call failed for node '{}': {}", node_id, e)
+                })?;
+
+            let c = resp.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            let usage = resp.get("usage");
+            let in_tok = usage.and_then(|u| u.get("prompt_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
+            let out_tok = usage.and_then(|u| u.get("completion_tokens")).and_then(|v| v.as_i64()).unwrap_or(0);
+
+            eprintln!("[workflow] LLM node '{}': response tokens={}/{}, content='{}'",
+                node_id, in_tok, out_tok, truncate(&c, 100));
+
+            (c, in_tok, out_tok)
+        };
 
         let _ = record_event(ctx.db, ctx.session_id, "llm.response.completed", "desktop.workflow",
             serde_json::json!({
-                "node_id": node_id, "model": resp_model, "provider": provider_name,
+                "node_id": node_id, "model": model, "provider": provider_name,
                 "input_tokens": input_tokens, "output_tokens": output_tokens,
             }));
 
@@ -435,5 +500,26 @@ mod tests {
             || (prompt.len() > 200 && (prompt.contains("/9j/") || prompt.contains("iVBOR")))
             || (prompt.contains("\"encoding\"") && prompt.contains("\"base64\""));
         assert!(!needs_fix, "should allow normal text prompt");
+    }
+
+    #[test]
+    fn test_streaming_default_enabled() {
+        let node_data = serde_json::json!({"provider": "ollama", "model": "llama3.2"});
+        let streaming = node_data.get("streaming").and_then(|v| v.as_bool()).unwrap_or(true);
+        assert!(streaming, "streaming should default to true when not specified");
+    }
+
+    #[test]
+    fn test_streaming_explicitly_disabled() {
+        let node_data = serde_json::json!({"provider": "ollama", "model": "llama3.2", "streaming": false});
+        let streaming = node_data.get("streaming").and_then(|v| v.as_bool()).unwrap_or(true);
+        assert!(!streaming, "streaming should be false when explicitly disabled");
+    }
+
+    #[test]
+    fn test_streaming_explicitly_enabled() {
+        let node_data = serde_json::json!({"provider": "ollama", "model": "llama3.2", "streaming": true});
+        let streaming = node_data.get("streaming").and_then(|v| v.as_bool()).unwrap_or(true);
+        assert!(streaming, "streaming should be true when explicitly enabled");
     }
 }

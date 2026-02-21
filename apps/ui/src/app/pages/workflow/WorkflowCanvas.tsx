@@ -162,6 +162,11 @@ export function WorkflowCanvas({ workflow, onBack }: {
 
                     if (type === 'workflow.node.started') {
                         setNodeState(nodeId, 'running');
+                    } else if (type === 'workflow.node.streaming') {
+                        setNodeState(nodeId, 'streaming', {
+                            streamingText: payload.tokens as string,
+                            tokens: payload.accumulated_length as number,
+                        });
                     } else if (type === 'workflow.node.completed') {
                         setNodeState(nodeId, 'completed', {
                             output: (payload.output_full || payload.output_preview || payload.output) as string | undefined,

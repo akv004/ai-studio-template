@@ -1145,6 +1145,12 @@ textarea.config-input {
   animation: pulse-border 1.5s ease-in-out infinite;
 }
 
+.custom-node.exec-streaming {
+  border-color: #8b5cf6;
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.4);
+  animation: pulse-border 1.5s ease-in-out infinite;
+}
+
 .custom-node.exec-completed {
   border-color: #22c55e;
 }

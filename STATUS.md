@@ -20,6 +20,13 @@
 | 11 | product-vision.md | — | — | REFERENCE | North star, positioning |
 | 12 | node-editor.md | P0 | 3 | DONE | Visual pipeline builder — 8 node types, DAG engine, templates |
 | 13 | plugin-system.md | P1 | 3 | DONE | Manifest, scanner, CRUD, Settings UI |
+| 14 | killer-features.md | P0 | 5 | PLANNED | A/B Eval, Time-Travel, Auto-Pipeline, Guardrails, RAG, SQL |
+| 15 | connections-manager.md | P0 | 5B | PLANNED | Unified credential store, encrypted at rest, DB/HTTP/SMTP/Webhook |
+| 16 | triggers-scheduling.md | P0 | 5B | PLANNED | Webhook, cron, file watch, event triggers |
+| 17 | streaming-output.md | P1 | 5A | PLANNED | SSE token streaming for LLM nodes |
+| 18 | batch-runs.md | P1 | 5B | PLANNED | Dataset import, batch execution, progress dashboard |
+| 19 | rich-output.md | P1 | 5A | PLANNED | Markdown, tables, charts, code, image rendering |
+| 20 | workflow-versioning.md | P2 | 5B | PLANNED | Version history, diff view, rollback, run comparison |
 
 **Status key**: DONE | IN PROGRESS | PLANNED | BLOCKED | REFERENCE (non-implementable)
 

@@ -74,6 +74,13 @@ This is a spec-driven, multi-session project. Every session follows this:
 | Phase plan, task ordering | `phase-plan.md` |
 | Product direction, positioning | `product-vision.md` |
 | Node editor, visual pipelines, workflows | `node-editor.md` |
+| Webhook, cron, file watch triggers | `triggers-scheduling.md` |
+| SSE streaming for LLM nodes | `streaming-output.md` |
+| Batch execution, dataset processing | `batch-runs.md` |
+| Output rendering: markdown, tables, charts | `rich-output.md` |
+| Version history, diff, rollback | `workflow-versioning.md` |
+| DB/API/SMTP credential management | `connections-manager.md` |
+| A/B Eval, Time-Travel, Auto-Pipeline, etc. | `killer-features.md` |
 
 ## Phase Plan (from `docs/specs/phase-plan.md`)
 

@@ -1,13 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { setupTauriMock } from './tauri-mock';
 
-// Helper: wait for app to fully render, then navigate to Node Editor
-async function navigateToNodeEditor(page: import('@playwright/test').Page) {
+// Helper: wait for app to fully render, then navigate to Workflows
+async function navigateToWorkflows(page: import('@playwright/test').Page) {
     await page.goto('/');
     // Wait for sidebar to render (proves React + Tauri mock loaded)
     await expect(page.getByText('Modules')).toBeVisible({ timeout: 10000 });
-    // Click Node Editor in sidebar
-    await page.getByText('Node Editor').click();
+    // Click Workflows in sidebar
+    await page.getByText('Workflows').click();
     // Wait for the workflow list or editor to appear
     await page.waitForTimeout(500);
 }
@@ -18,14 +18,14 @@ test.describe('Workflow Canvas', () => {
     });
 
     test('workflow list page renders', async ({ page }) => {
-        await navigateToNodeEditor(page);
+        await navigateToWorkflows(page);
         // Should see the test workflow from our mock
         await expect(page.getByText('Test Workflow', { exact: true })).toBeVisible({ timeout: 5000 });
         await page.screenshot({ path: 'e2e/screenshots/workflow-list.png', fullPage: true });
     });
 
     test('workflow canvas loads with nodes', async ({ page }) => {
-        await navigateToNodeEditor(page);
+        await navigateToWorkflows(page);
         // Click the test workflow to open it
         const workflowCard = page.getByText('Test Workflow').first();
         await expect(workflowCard).toBeVisible({ timeout: 5000 });
@@ -36,7 +36,7 @@ test.describe('Workflow Canvas', () => {
     });
 
     test('node palette is visible on canvas page', async ({ page }) => {
-        await navigateToNodeEditor(page);
+        await navigateToWorkflows(page);
         const workflowCard = page.getByText('Test Workflow').first();
         await expect(workflowCard).toBeVisible({ timeout: 5000 });
         await workflowCard.click();
@@ -45,7 +45,7 @@ test.describe('Workflow Canvas', () => {
     });
 
     test('custom nodes render with correct labels', async ({ page }) => {
-        await navigateToNodeEditor(page);
+        await navigateToWorkflows(page);
         const workflowCard = page.getByText('Test Workflow').first();
         await expect(workflowCard).toBeVisible({ timeout: 5000 });
         await workflowCard.click();

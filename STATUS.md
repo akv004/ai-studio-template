@@ -189,12 +189,19 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-20 (session 33)
+**Date**: 2026-02-21 (session 34)
 **What happened**:
-- **User Templates (Save & Load)**: Filesystem-based user templates at `~/.ai-studio/templates/*.json`.
-  - Rust: `save_as_template` + `delete_user_template` commands, `list_templates` merges bundled + user, `load_template` handles `user:` prefix
-  - UI: BookmarkPlus toolbar button + modal in WorkflowCanvas, "saved" badge + Trash2 delete in WorkflowList dropdown
-  - 123 Rust tests pass, TypeScript clean
+- **Competitive analysis**: Researched n8n, Langflow, Dify, Flowise, ComfyUI, Rivet, LangGraph Studio, Sim Studio. Identified 6 key competitive gaps.
+- **6 new Phase 5 specs written** (gap-filling features, no competitor names):
+  - `triggers-scheduling.md` — Webhook, cron, file watch, event triggers (P0)
+  - `streaming-output.md` — SSE token streaming for LLM nodes (P1)
+  - `batch-runs.md` — Dataset import, batch execution, progress dashboard (P1)
+  - `rich-output.md` — Markdown, tables, charts, code, image rendering (P1)
+  - `workflow-versioning.md` — Version history, diff view, rollback (P2)
+  - `connections-manager.md` — Unified credential store, AES-256-GCM encrypted, DB/HTTP/SMTP/Webhook (P0)
+- Updated STATUS.md spec roadmap (specs #14-20) and CLAUDE.md spec mapping
+- Added `docs/specs/README.md` (specs index)
+- Cleaned up 7 stale untracked framework specs and 3 modified files from earlier sessions
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -214,8 +221,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 31: Vision OOM fix (image dedup + prompt safety net for Qwen3-VL)
 - Session 32: Node variable interpolation fixes, Input node textarea, repo cleanup
 - Session 33: User templates (Save & Load)
+- Session 34: Competitive gap analysis + 6 Phase 5 specs
 
 **Next session should**:
-1. Streaming node output (SSE for LLM responses)
-2. Agent-Workflow unification spec (Phase 5 — Agent = workflow)
-3. Consider v0.2.0 tag
+1. Pick first implementation target — recommend **Phase 5A**: streaming-output or rich-output (demo polish)
+2. Or start **connections-manager** (P0 prerequisite for SQL, HTTP, webhook nodes)
+3. Consider v0.2.0 tag for Phase 4 completion
+4. Peer review the 6 new specs (Gemini for architecture, Codex for implementation gaps)

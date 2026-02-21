@@ -5,9 +5,10 @@ Cloud LLM provider using Anthropic's Claude API.
 Supports tool calling (function calling).
 """
 
+import json
 import os
 import httpx
-from typing import Optional
+from typing import AsyncGenerator, Optional
 from .base import AgentProvider, Message, ChatResponse
 
 
@@ -31,28 +32,14 @@ class AnthropicProvider(AgentProvider):
         self.timeout = timeout
         self.base_url = "https://api.anthropic.com"
 
-    async def chat(
-        self,
-        messages: list[Message],
-        model: Optional[str] = None,
-        temperature: float = 0.7,
-        max_tokens: int = 2048,
-        tools: Optional[list[dict]] = None,
-    ) -> ChatResponse:
-        """Send chat request to Anthropic, optionally with tools."""
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set")
-
-        model = model or self.default_model
-
-        # Extract system message if present
+    def _convert_messages(self, messages: list[Message]) -> tuple[list[dict], Optional[str]]:
+        """Convert messages to Anthropic format. Returns (chat_messages, system_content)."""
         system_content = None
         chat_messages = []
         for m in messages:
             if m.role == "system":
                 system_content = m.content if isinstance(m.content, str) else str(m.content)
             elif isinstance(m.content, list):
-                # Convert OpenAI-style content blocks to Anthropic format
                 blocks = []
                 for block in m.content:
                     if isinstance(block, dict) and block.get("type") == "image_url":
@@ -73,6 +60,22 @@ class AnthropicProvider(AgentProvider):
                 chat_messages.append({"role": m.role, "content": blocks})
             else:
                 chat_messages.append({"role": m.role, "content": m.content})
+        return chat_messages, system_content
+
+    async def chat(
+        self,
+        messages: list[Message],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        tools: Optional[list[dict]] = None,
+    ) -> ChatResponse:
+        """Send chat request to Anthropic, optionally with tools."""
+        if not self.api_key:
+            raise ValueError("ANTHROPIC_API_KEY not set")
+
+        model = model or self.default_model
+        chat_messages, system_content = self._convert_messages(messages)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             payload = {
@@ -126,6 +129,78 @@ class AnthropicProvider(AgentProvider):
                 stop_reason=stop_reason,
                 raw_content=content_blocks if tool_calls else None,
             )
+
+    async def chat_stream(
+        self,
+        messages: list[Message],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+    ) -> AsyncGenerator[dict, None]:
+        """Stream chat tokens from Anthropic (SSE with event types)."""
+        if not self.api_key:
+            raise ValueError("ANTHROPIC_API_KEY not set")
+
+        model = model or self.default_model
+        chat_messages, system_content = self._convert_messages(messages)
+
+        payload = {
+            "model": model,
+            "messages": chat_messages,
+            "max_tokens": max_tokens,
+            "temperature": temperature,
+            "stream": True,
+        }
+        if system_content:
+            payload["system"] = system_content
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/v1/messages",
+                headers={
+                    "x-api-key": self.api_key,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json=payload,
+            ) as response:
+                response.raise_for_status()
+                accumulated = ""
+                index = 0
+                input_tokens = 0
+                output_tokens = 0
+                async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line or line.startswith("event:"):
+                        continue
+                    if not line.startswith("data: "):
+                        continue
+                    chunk = json.loads(line[6:])
+                    chunk_type = chunk.get("type")
+                    if chunk_type == "message_start":
+                        msg_usage = chunk.get("message", {}).get("usage", {})
+                        input_tokens = msg_usage.get("input_tokens", 0)
+                    elif chunk_type == "content_block_delta":
+                        delta = chunk.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            token = delta.get("text", "")
+                            if token:
+                                accumulated += token
+                                yield {'type': 'token', 'content': token, 'index': index}
+                                index += 1
+                    elif chunk_type == "message_delta":
+                        output_tokens = chunk.get("usage", {}).get("output_tokens", 0)
+                    elif chunk_type == "message_stop":
+                        break
+                yield {
+                    'type': 'done',
+                    'content': accumulated,
+                    'usage': {
+                        'prompt_tokens': input_tokens,
+                        'completion_tokens': output_tokens,
+                    },
+                }
 
     async def health(self) -> bool:
         """Check if API key is valid by calling the models endpoint"""

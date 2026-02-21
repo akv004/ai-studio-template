@@ -5,9 +5,10 @@ Cloud LLM provider using Google AI Studio / Gemini API.
 Supports tool calling (function calling).
 """
 
+import json
 import os
 import httpx
-from typing import Optional
+from typing import AsyncGenerator, Optional
 from .base import AgentProvider, Message, ChatResponse
 
 
@@ -32,21 +33,8 @@ class GoogleProvider(AgentProvider):
         self.timeout = timeout
         self.base_url = "https://generativelanguage.googleapis.com/v1beta"
 
-    async def chat(
-        self,
-        messages: list[Message],
-        model: Optional[str] = None,
-        temperature: float = 0.7,
-        max_tokens: int = 2048,
-        tools: Optional[list[dict]] = None,
-    ) -> ChatResponse:
-        """Send chat request to Google AI, optionally with tools."""
-        if not self.api_key:
-            raise ValueError("GOOGLE_API_KEY not set")
-
-        model = model or self.default_model
-
-        # Convert messages to Gemini format
+    def _convert_messages(self, messages: list[Message]) -> tuple[list[dict], Optional[str]]:
+        """Convert messages to Gemini format. Returns (contents, system_instruction)."""
         contents = []
         system_instruction = None
 
@@ -54,13 +42,8 @@ class GoogleProvider(AgentProvider):
             if m.role == "system":
                 system_instruction = m.content if isinstance(m.content, str) else str(m.content)
             elif m.role == "tool":
-                # Tool results in Gemini format
                 if isinstance(m.content, list):
-                    # Already structured as function response parts
-                    contents.append({
-                        "role": "function",
-                        "parts": m.content,
-                    })
+                    contents.append({"role": "function", "parts": m.content})
                 else:
                     contents.append({
                         "role": "function",
@@ -69,18 +52,13 @@ class GoogleProvider(AgentProvider):
             else:
                 role = "model" if m.role == "assistant" else "user"
                 if isinstance(m.content, str):
-                    contents.append({
-                        "role": role,
-                        "parts": [{"text": m.content}]
-                    })
+                    contents.append({"role": role, "parts": [{"text": m.content}]})
                 elif isinstance(m.content, list):
-                    # Convert OpenAI-style content blocks to Gemini parts
                     parts = []
                     for block in m.content:
                         if isinstance(block, dict) and block.get("type") == "image_url":
                             url = block.get("image_url", {}).get("url", "")
                             if url.startswith("data:"):
-                                # Parse data URI: data:image/png;base64,iVBOR...
                                 header, b64_data = url.split(",", 1)
                                 mime = header.split(":")[1].split(";")[0]
                                 parts.append({"inlineData": {"mimeType": mime, "data": b64_data}})
@@ -94,10 +72,24 @@ class GoogleProvider(AgentProvider):
                             parts.append(block)
                     contents.append({"role": role, "parts": parts})
                 else:
-                    contents.append({
-                        "role": role,
-                        "parts": [{"text": str(m.content)}]
-                    })
+                    contents.append({"role": role, "parts": [{"text": str(m.content)}]})
+
+        return contents, system_instruction
+
+    async def chat(
+        self,
+        messages: list[Message],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+        tools: Optional[list[dict]] = None,
+    ) -> ChatResponse:
+        """Send chat request to Google AI, optionally with tools."""
+        if not self.api_key:
+            raise ValueError("GOOGLE_API_KEY not set")
+
+        model = model or self.default_model
+        contents, system_instruction = self._convert_messages(messages)
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             payload = {
@@ -163,6 +155,66 @@ class GoogleProvider(AgentProvider):
                 stop_reason="tool_use" if tool_calls else finish_reason,
                 raw_content=raw_parts if tool_calls else None,
             )
+
+    async def chat_stream(
+        self,
+        messages: list[Message],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+    ) -> AsyncGenerator[dict, None]:
+        """Stream chat tokens from Google Gemini (SSE via streamGenerateContent)."""
+        if not self.api_key:
+            raise ValueError("GOOGLE_API_KEY not set")
+
+        model = model or self.default_model
+        contents, system_instruction = self._convert_messages(messages)
+
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": max_tokens,
+            },
+        }
+        if system_instruction:
+            payload["systemInstruction"] = {"parts": [{"text": system_instruction}]}
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/models/{model}:streamGenerateContent",
+                params={"key": self.api_key, "alt": "sse"},
+                headers={"Content-Type": "application/json"},
+                json=payload,
+            ) as response:
+                response.raise_for_status()
+                accumulated = ""
+                index = 0
+                usage = {}
+                async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line or line.startswith(":"):
+                        continue
+                    if not line.startswith("data: "):
+                        continue
+                    chunk = json.loads(line[6:])
+                    # Extract usage from any chunk that has it
+                    if "usageMetadata" in chunk:
+                        usage = {
+                            "prompt_tokens": chunk["usageMetadata"].get("promptTokenCount", 0),
+                            "completion_tokens": chunk["usageMetadata"].get("candidatesTokenCount", 0),
+                        }
+                    candidates = chunk.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        for part in parts:
+                            token = part.get("text", "")
+                            if token:
+                                accumulated += token
+                                yield {'type': 'token', 'content': token, 'index': index}
+                                index += 1
+                yield {'type': 'done', 'content': accumulated, 'usage': usage}
 
     async def health(self) -> bool:
         """Check if API key is valid by listing models"""

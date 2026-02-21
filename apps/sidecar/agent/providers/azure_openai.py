@@ -4,8 +4,9 @@ Azure OpenAI Provider
 Cloud LLM provider using Azure's OpenAI Service.
 """
 
+import json
 import httpx
-from typing import Optional
+from typing import AsyncGenerator, Optional
 from .base import AgentProvider, Message, ChatResponse
 
 
@@ -75,6 +76,67 @@ class AzureOpenAIProvider(AgentProvider):
                     "completion_tokens": data["usage"]["completion_tokens"],
                 },
             )
+
+    async def chat_stream(
+        self,
+        messages: list[Message],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+    ) -> AsyncGenerator[dict, None]:
+        """Stream chat tokens from Azure OpenAI (SSE with delta content)."""
+        if not self.api_key or not self.endpoint:
+            raise ValueError("Azure OpenAI endpoint and api_key are required")
+
+        deployment = model or self.deployment
+        url = (
+            f"{self.endpoint}/openai/deployments/{deployment}"
+            f"/chat/completions?api-version={self.api_version}"
+        )
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with client.stream(
+                "POST",
+                url,
+                headers={
+                    "api-key": self.api_key,
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "messages": [{"role": m.role, "content": m.content} for m in messages],
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "stream": True,
+                    "stream_options": {"include_usage": True},
+                },
+            ) as response:
+                response.raise_for_status()
+                accumulated = ""
+                index = 0
+                usage = {}
+                async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line or line.startswith(":"):
+                        continue
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:]
+                    if data == "[DONE]":
+                        break
+                    chunk = json.loads(data)
+                    if chunk.get("usage"):
+                        usage = {
+                            "prompt_tokens": chunk["usage"].get("prompt_tokens", 0),
+                            "completion_tokens": chunk["usage"].get("completion_tokens", 0),
+                        }
+                    choices = chunk.get("choices", [])
+                    if choices:
+                        token = choices[0].get("delta", {}).get("content", "")
+                        if token:
+                            accumulated += token
+                            yield {'type': 'token', 'content': token, 'index': index}
+                            index += 1
+                yield {'type': 'done', 'content': accumulated, 'usage': usage}
 
     async def health(self) -> bool:
         """Check if endpoint is reachable with the given key"""

@@ -5,8 +5,9 @@ Generic provider for any server that speaks OpenAI's /v1/chat/completions API.
 Works with: Ollama, vLLM, LM Studio, text-generation-inference, local Qwen, etc.
 """
 
+import json
 import httpx
-from typing import Optional
+from typing import AsyncGenerator, Optional
 from .base import AgentProvider, Message, ChatResponse
 
 
@@ -81,6 +82,64 @@ class LocalOpenAIProvider(AgentProvider):
                     "completion_tokens": usage.get("completion_tokens", 0),
                 },
             )
+
+    async def chat_stream(
+        self,
+        messages: list[Message],
+        model: Optional[str] = None,
+        temperature: float = 0.7,
+        max_tokens: int = 2048,
+    ) -> AsyncGenerator[dict, None]:
+        """Stream chat tokens from OpenAI-compatible server (SSE with delta content)."""
+        if not self.base_url:
+            raise ValueError("base_url is required for local provider")
+
+        model = model or self.model_name
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json={
+                    "model": model,
+                    "messages": [{"role": m.role, "content": m.content} for m in messages],
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "stream": True,
+                },
+            ) as response:
+                response.raise_for_status()
+                accumulated = ""
+                index = 0
+                usage = {}
+                async for line in response.aiter_lines():
+                    line = line.strip()
+                    if not line or line.startswith(":"):
+                        continue
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:]
+                    if data == "[DONE]":
+                        break
+                    chunk = json.loads(data)
+                    # Some servers include usage in the last chunk
+                    if chunk.get("usage"):
+                        usage = {
+                            "prompt_tokens": chunk["usage"].get("prompt_tokens", 0),
+                            "completion_tokens": chunk["usage"].get("completion_tokens", 0),
+                        }
+                    choices = chunk.get("choices", [])
+                    if choices:
+                        token = choices[0].get("delta", {}).get("content", "")
+                        if token:
+                            accumulated += token
+                            yield {'type': 'token', 'content': token, 'index': index}
+                            index += 1
+                yield {'type': 'done', 'content': accumulated, 'usage': usage}
 
     async def health(self) -> bool:
         """Check if server is reachable"""

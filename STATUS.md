@@ -23,7 +23,7 @@
 | 14 | killer-features.md | P0 | 5 | PLANNED | A/B Eval, Time-Travel, Auto-Pipeline, Guardrails, RAG, SQL |
 | 15 | connections-manager.md | P0 | 5B | PLANNED | Unified credential store, encrypted at rest, DB/HTTP/SMTP/Webhook |
 | 16 | triggers-scheduling.md | P0 | 5B | PLANNED | Webhook, cron, file watch, event triggers |
-| 17 | streaming-output.md | P1 | 5A | PLANNED | SSE token streaming for LLM nodes |
+| 17 | streaming-output.md | P1 | 5A | IN PROGRESS | SSE token streaming — Ollama done, other providers TODO |
 | 18 | batch-runs.md | P1 | 5B | PLANNED | Dataset import, batch execution, progress dashboard |
 | 19 | rich-output.md | P1 | 5A | PLANNED | Markdown, tables, charts, code, image rendering |
 | 20 | workflow-versioning.md | P2 | 5B | PLANNED | Version history, diff view, rollback, run comparison |
@@ -78,7 +78,7 @@
 | **Node variable interpolation fixes** | DONE | Shell Exec incoming JSON merge, resolve_template array indexing, Transform "Script"→"Expression" rename (81b42d9) |
 | **Input node auto-resize textarea** | DONE | Auto-expanding textarea (1→5 lines), config panel Default Value field (81b42d9) |
 | **User Templates (Save & Load)** | DONE | Save workflow as reusable template, filesystem-based `~/.ai-studio/templates/`, merged into Templates dropdown with badge + delete |
-| Streaming node output | TODO | SSE streaming for LLM responses |
+| **Streaming node output** | DONE | SSE token streaming: sidecar /chat/stream, Rust proxy_request_stream with batching, UI live preview with cursor (cd3b84d) |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -189,19 +189,17 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-21 (session 34)
+**Date**: 2026-02-21 (session 35)
 **What happened**:
-- **Competitive analysis**: Researched n8n, Langflow, Dify, Flowise, ComfyUI, Rivet, LangGraph Studio, Sim Studio. Identified 6 key competitive gaps.
-- **6 new Phase 5 specs written** (gap-filling features, no competitor names):
-  - `triggers-scheduling.md` — Webhook, cron, file watch, event triggers (P0)
-  - `streaming-output.md` — SSE token streaming for LLM nodes (P1)
-  - `batch-runs.md` — Dataset import, batch execution, progress dashboard (P1)
-  - `rich-output.md` — Markdown, tables, charts, code, image rendering (P1)
-  - `workflow-versioning.md` — Version history, diff view, rollback (P2)
-  - `connections-manager.md` — Unified credential store, AES-256-GCM encrypted, DB/HTTP/SMTP/Webhook (P0)
-- Updated STATUS.md spec roadmap (specs #14-20) and CLAUDE.md spec mapping
-- Added `docs/specs/README.md` (specs index)
-- Cleaned up 7 stale untracked framework specs and 3 modified files from earlier sessions
+- **SSE token streaming** implemented end-to-end (cd3b84d):
+  - Sidecar: `chat_stream()` on provider base with Ollama implementation, `/chat/stream` SSE endpoint
+  - Rust: `StreamChunk` enum + `proxy_request_stream()` with token batching (3 tokens / 100ms)
+  - LLM executor: streaming branch (default on), vision fallback to non-streaming
+  - UI: `streaming` status + `streamingText` accumulation, purple exec-streaming border, live preview with cursor
+  - Streaming toggle on LLM node inline controls + config panel
+  - 129 Rust tests passing (6 new), 6 Playwright E2E passing
+- Fixed Playwright tests for "Node Editor" → "Workflows" rename (b1cb97d)
+- Pulled 3 commits from laptop session 34 (Phase 5 specs)
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -222,9 +220,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 32: Node variable interpolation fixes, Input node textarea, repo cleanup
 - Session 33: User templates (Save & Load)
 - Session 34: Competitive gap analysis + 6 Phase 5 specs
+- Session 35: SSE token streaming (Ollama), Playwright test fix
 
 **Next session should**:
-1. Pick first implementation target — recommend **Phase 5A**: streaming-output or rich-output (demo polish)
-2. Or start **connections-manager** (P0 prerequisite for SQL, HTTP, webhook nodes)
+1. **Add streaming to remaining providers** (Anthropic, OpenAI, Google, Azure, Local) — same `chat_stream()` pattern
+2. **Rich Output** (5A) — Markdown rendering in node output, pairs with streaming
 3. Consider v0.2.0 tag for Phase 4 completion
-4. Peer review the 6 new specs (Gemini for architecture, Codex for implementation gaps)
+4. Or start **connections-manager** (P0 prerequisite for SQL, HTTP, webhook nodes)

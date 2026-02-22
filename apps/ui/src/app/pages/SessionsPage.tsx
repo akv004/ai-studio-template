@@ -1,6 +1,7 @@
 import { Plus, MessageSquare, Send, Loader2, Trash2, Search, GitBranch } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '../../state/store';
+import { RichOutput } from './workflow/components/RichOutput';
 
 /**
  * Sessions Page
@@ -225,7 +226,10 @@ export function SessionsPage() {
                                         ? 'bg-[var(--accent-primary)] text-white'
                                         : 'bg-[var(--bg-tertiary)]'
                                 }`}>
-                                    <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                                    {msg.role === 'assistant'
+                                        ? <div className="text-sm"><RichOutput content={msg.content} /></div>
+                                        : <div className="text-sm whitespace-pre-wrap">{msg.content}</div>
+                                    }
                                     <div className={`text-xs mt-2 flex items-center gap-2 ${
                                         msg.role === 'user' ? 'text-white/70' : 'text-[var(--text-muted)]'
                                     }`}>

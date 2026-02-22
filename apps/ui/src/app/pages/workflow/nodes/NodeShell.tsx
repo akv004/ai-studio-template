@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Loader2, Check, X, Clock } from 'lucide-reac
 import { useAppStore } from '../../../../state/store';
 import { nodeColors } from '../nodeColors';
 import { useNodeData } from '../hooks/useNodeData';
+import { RichOutput } from '../components/RichOutput';
 import type { NodeExecutionStatus } from '@ai-studio/shared';
 
 const execBadgeConfig: Record<NodeExecutionStatus, { icon: React.ElementType | null; label: string }> = {
@@ -47,11 +48,11 @@ export function OutputPreview({ nodeId }: { nodeId: string }) {
     if (state.status !== 'completed' || !state.output) return null;
     return (
         <div
-            className="mt-1 text-[10px] text-[#999] max-w-[180px] max-h-[80px] overflow-y-auto font-mono leading-tight whitespace-pre-wrap break-words cursor-default"
+            className="mt-1 max-w-[180px] cursor-default"
             title={state.output.slice(0, 1000)}
             onMouseDown={e => e.stopPropagation()}
         >
-            {state.output}
+            <RichOutput content={state.output} compact maxHeight={80} />
         </div>
     );
 }

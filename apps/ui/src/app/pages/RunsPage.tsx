@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Play, Square, Clock, Check, Circle, Loader2, Bot, X, Search } from 'lucide-react';
 import { useAppStore } from '../../state/store';
+import { RichOutput } from './workflow/components/RichOutput';
 
 /**
  * Runs Page
@@ -255,7 +256,9 @@ export function RunsPage() {
                             {selectedRun.output && (
                                 <div>
                                     <label className="block text-xs font-medium text-[var(--text-muted)] mb-1">Output</label>
-                                    <div className="text-sm bg-[var(--bg-tertiary)] p-3 rounded-lg whitespace-pre-wrap">{selectedRun.output}</div>
+                                    <div className="text-sm bg-[var(--bg-tertiary)] p-3 rounded-lg">
+                                        <RichOutput content={selectedRun.output} />
+                                    </div>
                                 </div>
                             )}
                             {selectedRun.error && (

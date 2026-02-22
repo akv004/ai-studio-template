@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAppStore, type StudioEvent } from '../../state/store';
+import { RichOutput } from './workflow/components/RichOutput';
 
 // ============================================
 // COLOR SYSTEM (per agent-inspector.md spec)
@@ -366,12 +367,12 @@ function EventDetail({ event, sessionId, onBranch }: {
 function MessageDetail({ content, role, model }: { content: string; role: string; model?: string }) {
     return (
         <div className="space-y-3">
-            <div className={`p-4 rounded-lg text-sm whitespace-pre-wrap leading-relaxed ${
+            <div className={`p-4 rounded-lg text-sm leading-relaxed ${
                 role === 'user'
-                    ? 'bg-blue-500/10 border border-blue-500/20'
+                    ? 'bg-blue-500/10 border border-blue-500/20 whitespace-pre-wrap'
                     : 'bg-green-500/10 border border-green-500/20'
             }`}>
-                {content}
+                {role === 'assistant' ? <RichOutput content={content} /> : content}
             </div>
             {model && (
                 <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
@@ -460,9 +461,10 @@ function ToolDetail({ payload, type }: { payload: Record<string, unknown>; type:
             )}
             {toolOutput != null && (
                 <CollapsibleSection title="Output">
-                    <pre className="text-xs font-mono whitespace-pre-wrap">
-                        {typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput, null, 2)}
-                    </pre>
+                    <RichOutput
+                        content={typeof toolOutput === 'string' ? toolOutput : JSON.stringify(toolOutput, null, 2)}
+                        compact
+                    />
                 </CollapsibleSection>
             )}
             {payload.duration_ms != null && (

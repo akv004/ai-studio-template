@@ -47,7 +47,7 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
     ("webcam-monitor", "Webcam Monitor", "Capture webcam frame with YOLO detection, route on person detected, LLM describes scene",
         include_str!("../../templates/webcam-monitor.json")),
     // Hybrid intelligence
-    ("hybrid-intelligence", "Hybrid Intelligence", "Same query to local Ollama (free) and Google Gemini (cloud) in parallel — LLM judge scores both",
+    ("hybrid-intelligence", "Hybrid Intelligence", "Two models think differently — local Qwen (engineer) and Gemini (architect) in parallel, then a synthesizer merges the best of both",
         include_str!("../../templates/hybrid-intelligence.json")),
 ];
 

@@ -1,23 +1,19 @@
 {
   "nodes": [
-    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 250 }, "data": { "name": "query", "dataType": "text", "default": "Explain the difference between concurrency and parallelism with examples" } },
-    { "id": "llm_local", "type": "llm", "position": { "x": 400, "y": 50 }, "data": { "label": "Local Ollama", "provider": "ollama", "model": "llama3.2", "systemPrompt": "Answer the user query. Be concise and accurate.", "temperature": 0.3, "maxTokens": 1024 } },
-    { "id": "llm_cloud", "type": "llm", "position": { "x": 400, "y": 400 }, "data": { "label": "Google Gemini", "provider": "google", "model": "gemini-2.0-flash", "systemPrompt": "Answer the user query. Be thorough with reasoning and examples.", "temperature": 0.7, "maxTokens": 2048 } },
-    { "id": "llm_judge", "type": "llm", "position": { "x": 850, "y": 250 }, "data": { "label": "Judge", "provider": "ollama", "model": "llama3.2", "systemPrompt": "You are a quality evaluator. You will receive a user query and two AI responses (A and B). Rate each response on:\n- Accuracy (1-5)\n- Completeness (1-5)\n- Clarity (1-5)\n\nOutput a short markdown table with scores, then declare a winner or tie. Be objective.", "temperature": 0.0, "maxTokens": 512 } },
-    { "id": "transform_1", "type": "transform", "position": { "x": 850, "y": 0 }, "data": { "mode": "template", "template": "**Query**: {{input_1.query}}\n\n**Response A** (Local Ollama — $0.00):\n{{llm_local.response}}\n\n**Response B** (Google Gemini — cloud):\n{{llm_cloud.response}}" } },
-    { "id": "transform_final", "type": "transform", "position": { "x": 1250, "y": 200 }, "data": { "mode": "template", "template": "# Hybrid Intelligence Shootout\n\n{{transform_1.output}}\n\n---\n\n## Judge Verdict\n{{llm_judge.response}}\n\n---\n\n*Local model is free. Cloud model costs per token. Hybrid intelligence picks the right one per task — saving money without losing quality.*" } },
-    { "id": "output_1", "type": "output", "position": { "x": 1600, "y": 250 }, "data": { "name": "report", "format": "text" } }
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 250 }, "data": { "name": "query", "dataType": "text", "default": "Design a retry mechanism for a distributed task queue that handles both transient and permanent failures" } },
+    { "id": "llm_local", "type": "llm", "position": { "x": 420, "y": 50 }, "data": { "label": "Qwen (Practical)", "provider": "ollama", "model": "qwen3", "systemPrompt": "You are a hands-on engineer. Focus on practical implementation:\n- Working code patterns and concrete examples\n- Edge cases and failure modes you've seen in real systems\n- Performance implications and tradeoffs\n- What actually breaks in production\n\nBe specific and technical. Show code where it helps.", "temperature": 0.4, "maxTokens": 2048 } },
+    { "id": "llm_cloud", "type": "llm", "position": { "x": 420, "y": 420 }, "data": { "label": "Gemini (Architect)", "provider": "google", "model": "gemini-2.0-flash", "systemPrompt": "You are a systems architect. Focus on design thinking:\n- Architecture patterns and design principles\n- How this fits into larger system design\n- Scalability, reliability, and maintainability considerations\n- Industry best practices and standards (e.g., AWS, GCP patterns)\n- Comparisons between different approaches\n\nThink big picture. Reference established patterns.", "temperature": 0.7, "maxTokens": 2048 } },
+    { "id": "transform_combine", "type": "transform", "position": { "x": 850, "y": 230 }, "data": { "mode": "template", "template": "You have two expert perspectives on this question:\n\n**Question**: {{input_1.query}}\n\n---\n\n**Engineer (practical, code-focused)**:\n{{llm_local.response}}\n\n---\n\n**Architect (design, big-picture)**:\n{{llm_cloud.response}}" } },
+    { "id": "llm_synthesizer", "type": "llm", "position": { "x": 1200, "y": 230 }, "data": { "label": "Synthesizer", "provider": "google", "model": "gemini-2.0-flash", "systemPrompt": "You are an expert synthesizer. You receive two perspectives on the same question — one from a practical engineer and one from a systems architect.\n\nYour job:\n1. Identify the unique strengths of each response — what did each one get right that the other missed?\n2. Resolve any contradictions between them\n3. Produce a single, superior answer that combines the best of both: the architect's design clarity WITH the engineer's practical depth\n4. Structure your output as:\n   - **Summary** (2-3 sentences)\n   - **Combined Answer** (the synthesized best-of-both response)\n   - **What each model contributed** (brief — what came from the engineer vs the architect)\n\nThe result should be clearly better than either input alone.", "temperature": 0.3, "maxTokens": 3072 } },
+    { "id": "output_1", "type": "output", "position": { "x": 1570, "y": 280 }, "data": { "name": "answer", "format": "text" } }
   ],
   "edges": [
     { "id": "e-input-local", "source": "input_1", "target": "llm_local", "sourceHandle": "output", "targetHandle": "prompt" },
     { "id": "e-input-cloud", "source": "input_1", "target": "llm_cloud", "sourceHandle": "output", "targetHandle": "prompt" },
-    { "id": "e-local-transform", "source": "llm_local", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },
-    { "id": "e-cloud-transform", "source": "llm_cloud", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },
-    { "id": "e-transform-judge", "source": "transform_1", "target": "llm_judge", "sourceHandle": "output", "targetHandle": "prompt" },
-    { "id": "e-local-final", "source": "llm_local", "target": "transform_final", "sourceHandle": "response", "targetHandle": "input" },
-    { "id": "e-cloud-final", "source": "llm_cloud", "target": "transform_final", "sourceHandle": "response", "targetHandle": "input" },
-    { "id": "e-judge-final", "source": "llm_judge", "target": "transform_final", "sourceHandle": "response", "targetHandle": "input" },
-    { "id": "e-final-output", "source": "transform_final", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }
+    { "id": "e-local-combine", "source": "llm_local", "target": "transform_combine", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-cloud-combine", "source": "llm_cloud", "target": "transform_combine", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-combine-synth", "source": "transform_combine", "target": "llm_synthesizer", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-synth-output", "source": "llm_synthesizer", "target": "output_1", "sourceHandle": "response", "targetHandle": "value" }
   ],
-  "viewport": { "x": 0, "y": 0, "zoom": 0.8 }
+  "viewport": { "x": 0, "y": 0, "zoom": 0.85 }
 }

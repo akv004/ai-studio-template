@@ -1,23 +1,23 @@
 {
   "nodes": [
-    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 200 }, "data": { "name": "query", "dataType": "text", "default": "" } },
-    { "id": "llm_classify", "type": "llm", "position": { "x": 350, "y": 150 }, "data": { "label": "Classifier", "provider": "ollama", "model": "llama3.2", "systemPrompt": "Classify the user query into exactly one category based on complexity:\n- simple: factual lookups, definitions, yes/no questions, math, translations\n- complex: analysis, reasoning, creative writing, coding, multi-step tasks\n\nReply with ONLY the category name in lowercase, nothing else.", "temperature": 0.0, "maxTokens": 16 } },
-    { "id": "router_1", "type": "router", "position": { "x": 650, "y": 150 }, "data": { "mode": "pattern", "branches": ["simple", "complex"] } },
-    { "id": "llm_local", "type": "llm", "position": { "x": 1000, "y": 50 }, "data": { "label": "Local (Free)", "provider": "ollama", "model": "llama3.2", "systemPrompt": "Answer the user query concisely and accurately.", "temperature": 0.3, "maxTokens": 1024 } },
-    { "id": "llm_cloud", "type": "llm", "position": { "x": 1000, "y": 300 }, "data": { "label": "Cloud (Smart)", "provider": "google", "model": "gemini-2.0-flash", "systemPrompt": "You are a capable AI assistant. Provide thorough, well-structured answers with reasoning and examples where appropriate.", "temperature": 0.7, "maxTokens": 4096 } },
-    { "id": "transform_1", "type": "transform", "position": { "x": 1350, "y": 150 }, "data": { "mode": "template", "template": "{{llm_local.response}}{{llm_cloud.response}}" } },
-    { "id": "output_1", "type": "output", "position": { "x": 1650, "y": 200 }, "data": { "name": "answer", "format": "text" } }
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 250 }, "data": { "name": "query", "dataType": "text", "default": "Explain the difference between concurrency and parallelism with examples" } },
+    { "id": "llm_local", "type": "llm", "position": { "x": 400, "y": 50 }, "data": { "label": "Local Ollama", "provider": "ollama", "model": "llama3.2", "systemPrompt": "Answer the user query. Be concise and accurate.", "temperature": 0.3, "maxTokens": 1024 } },
+    { "id": "llm_cloud", "type": "llm", "position": { "x": 400, "y": 400 }, "data": { "label": "Google Gemini", "provider": "google", "model": "gemini-2.0-flash", "systemPrompt": "Answer the user query. Be thorough with reasoning and examples.", "temperature": 0.7, "maxTokens": 2048 } },
+    { "id": "llm_judge", "type": "llm", "position": { "x": 850, "y": 250 }, "data": { "label": "Judge", "provider": "ollama", "model": "llama3.2", "systemPrompt": "You are a quality evaluator. You will receive a user query and two AI responses (A and B). Rate each response on:\n- Accuracy (1-5)\n- Completeness (1-5)\n- Clarity (1-5)\n\nOutput a short markdown table with scores, then declare a winner or tie. Be objective.", "temperature": 0.0, "maxTokens": 512 } },
+    { "id": "transform_1", "type": "transform", "position": { "x": 850, "y": 0 }, "data": { "mode": "template", "template": "**Query**: {{input_1.query}}\n\n**Response A** (Local Ollama — $0.00):\n{{llm_local.response}}\n\n**Response B** (Google Gemini — cloud):\n{{llm_cloud.response}}" } },
+    { "id": "transform_final", "type": "transform", "position": { "x": 1250, "y": 200 }, "data": { "mode": "template", "template": "# Hybrid Intelligence Shootout\n\n{{transform_1.output}}\n\n---\n\n## Judge Verdict\n{{llm_judge.response}}\n\n---\n\n*Local model is free. Cloud model costs per token. Hybrid intelligence picks the right one per task — saving money without losing quality.*" } },
+    { "id": "output_1", "type": "output", "position": { "x": 1600, "y": 250 }, "data": { "name": "report", "format": "text" } }
   ],
   "edges": [
-    { "id": "e-input-classify", "source": "input_1", "target": "llm_classify", "sourceHandle": "output", "targetHandle": "prompt" },
-    { "id": "e-classify-router", "source": "llm_classify", "target": "router_1", "sourceHandle": "response", "targetHandle": "input" },
-    { "id": "e-router-local", "source": "router_1", "target": "llm_local", "sourceHandle": "branch-0", "targetHandle": "context" },
-    { "id": "e-router-cloud", "source": "router_1", "target": "llm_cloud", "sourceHandle": "branch-1", "targetHandle": "context" },
     { "id": "e-input-local", "source": "input_1", "target": "llm_local", "sourceHandle": "output", "targetHandle": "prompt" },
     { "id": "e-input-cloud", "source": "input_1", "target": "llm_cloud", "sourceHandle": "output", "targetHandle": "prompt" },
     { "id": "e-local-transform", "source": "llm_local", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-cloud-transform", "source": "llm_cloud", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },
-    { "id": "e-transform-output", "source": "transform_1", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }
+    { "id": "e-transform-judge", "source": "transform_1", "target": "llm_judge", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-local-final", "source": "llm_local", "target": "transform_final", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-cloud-final", "source": "llm_cloud", "target": "transform_final", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-judge-final", "source": "llm_judge", "target": "transform_final", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-final-output", "source": "transform_final", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }
   ],
-  "viewport": { "x": 0, "y": 0, "zoom": 0.85 }
+  "viewport": { "x": 0, "y": 0, "zoom": 0.8 }
 }

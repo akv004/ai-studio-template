@@ -80,6 +80,7 @@
 | **User Templates (Save & Load)** | DONE | Save workflow as reusable template, filesystem-based `~/.ai-studio/templates/`, merged into Templates dropdown with badge + delete |
 | **Streaming node output** | DONE | SSE token streaming: sidecar /chat/stream, Rust proxy_request_stream with batching, UI live preview with cursor (cd3b84d). All 6 providers: Ollama, OpenAI, Azure, Google Gemini, Anthropic, LocalOpenAI |
 | **Rich Output wiring** | DONE | RichOutput component bug fixes (broken CopyButton, CSV export, compact prop). Wired into 5 spots: NodeShell canvas preview, Inspector event details, Sessions chat, Runs output (35988bb) |
+| **Hybrid Intelligence template** | DONE | Ensemble synthesis: Qwen (engineer) + Gemini (architect) in parallel → synthesizer merges best of both. Template #12 (f6f5587) |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -105,7 +106,7 @@
 | Plugin subprocess lifecycle | `plugin-system.md` | DONE |
 | README update | — | DONE |
 | One-click installers | `phase-plan.md` | DONE |
-| Community templates | `phase-plan.md` | DONE (10 bundled + templates/README.md) |
+| Community templates | `phase-plan.md` | DONE (12 bundled + templates/README.md) |
 | Open-source launch prep | — | DONE (CHANGELOG, SECURITY, Show HN, CI, issue templates) |
 
 ---
@@ -198,6 +199,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
   - `compact` prop now suppresses mode tabs and toolbar (for inline canvas preview)
   - Wired into: NodeShell canvas preview, Inspector MessageDetail (assistant) + ToolDetail output, SessionsPage chat (assistant), RunsPage run output
   - 8 Playwright E2E tests still passing
+- **Hybrid Intelligence template** — ensemble synthesis demo (template #12):
+  - Two LLMs with different roles run in parallel: Qwen as practical engineer, Gemini as systems architect
+  - Transform combines both perspectives, then a synthesizer LLM merges the best of both
+  - Demonstrates "two minds > one" — the output is better than either model alone
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -220,7 +225,7 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 34: Competitive gap analysis + 6 Phase 5 specs
 - Session 35: SSE token streaming (Ollama), Playwright test fix
 - Session 36: Streaming for all remaining providers (OpenAI, Azure, Google, Anthropic, Local)
-- Session 37: Rich Output wiring — bug fixes + CSV export + wired into 5 output spots
+- Session 37: Rich Output wiring + Hybrid Intelligence template (ensemble synthesis)
 
 **Next session should**:
 1. **Rich Output polish** — chart/image rendering, or mark spec DONE if current coverage is sufficient

@@ -27,7 +27,7 @@
 | 18 | batch-runs.md | P1 | 5B | PLANNED | Dataset import, batch execution, progress dashboard |
 | 19 | rich-output.md | P1 | 5A | IN PROGRESS | Markdown, tables, JSON tree/table, code blocks — wired into 5 spots. Charts/images deferred. |
 | 20 | workflow-versioning.md | P2 | 5B | PLANNED | Version history, diff view, rollback, run comparison |
-| 21 | rag-knowledge-base.md | P0 | 5A | SPEC DONE | RAG nodes: Knowledge Base, chunking, embedding, vector search, citations. Peer reviewed. |
+| 21 | rag-knowledge-base.md | P0 | 5A | DONE | RAG Knowledge Base: 17th node type, full-stack (sidecar + Rust rag/ + executor + IPC + UI + templates + E2E). 160 tests. |
 
 **Status key**: DONE | IN PROGRESS | PLANNED | BLOCKED | REFERENCE (non-implementable)
 
@@ -86,6 +86,7 @@
 | **RAG Knowledge Base spec** | DONE | Full spec: Knowledge Base node, 2-tier design, binary index format, sidecar /embed, security, templates. Peer reviewed by Gemini + Codex, all 21 findings accepted and fixed. |
 | **README overhaul** | DONE | Complete rewrite: 16 node types, 13 templates, 129 tests, 6 providers, capability-based positioning (no competitor names), correct shortcuts, RAG "Coming Next". Peer reviewed by Gemini + Codex (c7c835e) |
 | **v0.1.2 tagged** | DONE | Streaming + Rich Output + RAG spec + README overhaul |
+| **RAG Knowledge Base** | DONE | Full-stack: sidecar /embed, Rust rag/ (chunker+index+search+format, 31 tests), KnowledgeBaseExecutor, 4 IPC commands, UI node+config, 3 templates (#14-16), 2 E2E tests. 160 total tests. (09ca3d0) |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -135,7 +136,7 @@
 12. **Time-Travel Debug** — Click any completed node → edit its output → re-run from that point forward. Don't restart the whole workflow. Inspector + node states already exist — this is an evolution. Unique differentiator, no competitor has this.
 13. **Auto-Pipeline Generator** — Describe a workflow in English → AI generates the graph JSON → canvas fills itself. Meta: use AI to build AI pipelines. The "wow" demo moment for Show HN.
 14. **Guardrails Node** — Built-in safety: PII detection, content filtering, hallucination check, schema enforcement. Drop anywhere in pipeline. Enterprise magnet, huge credibility for production use.
-15. **RAG Knowledge Base** — SPEC DONE (`rag-knowledge-base.md`). Single Knowledge Base node (80% users) + individual RAG nodes (power users). Zero-server local index (.ai-studio-index/), pre-normalized vectors, source citations, Inspector observability. Peer reviewed by Gemini + Codex (21 findings, all fixed). Ready to build.
+15. ~~RAG Knowledge Base~~ DONE (09ca3d0) — 17th node type, full-stack implementation
 16. **EIP: Error Handler / Dead Letter** — Route errors to a fallback path instead of stopping the workflow. Node-level `onError` output handle that connects to recovery logic. Table stakes for production automation.
 17. **EIP: Content Enricher** — Merge data from an external source (DB, API) into the current message. Ties into SQL Query node — "enrich this record with customer data from the DB."
 18. **EIP: Wire Tap** — Copy node output to a side channel (log, file, webhook) without affecting the main flow. Non-blocking audit/debugging.
@@ -192,18 +193,18 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-22 (session 37)
+**Date**: 2026-02-22 (session 38)
 **What happened**:
-- **Rich Output wiring** — fixed RichOutput bugs and wired it into all 5 remaining output spots:
-  - Fixed broken `CopyButton text=""` in table toolbar (was copying empty string)
-  - Added CSV export button next to TSV in JSON array table view
-  - `compact` prop now suppresses mode tabs and toolbar (for inline canvas preview)
-  - Wired into: NodeShell canvas preview, Inspector MessageDetail (assistant) + ToolDetail output, SessionsPage chat (assistant), RunsPage run output
-  - 8 Playwright E2E tests still passing
-- **Hybrid Intelligence template** — ensemble synthesis demo (template #12):
-  - Two LLMs with different roles run in parallel: Qwen as practical engineer, Gemini as systems architect
-  - Transform combines both perspectives, then a synthesizer LLM merges the best of both
-  - Demonstrates "two minds > one" — the output is better than either model alone
+- **RAG Knowledge Base — full-stack implementation** (09ca3d0):
+  - Sidecar: `POST /embed` endpoint with `EmbeddingClient` (Azure OpenAI + OpenAI-compatible), batching, token validation, retry
+  - Rust `rag/` module: 4 chunking strategies, binary vector index (memmap2), dot-product search with BinaryHeap top-K, atomic writes (fs2), citation formatting. 31 unit tests.
+  - `KnowledgeBaseExecutor`: auto-index on stale, streaming progress events, path security
+  - 4 IPC commands: `index_folder`, `search_index`, `get_index_stats`, `delete_index`
+  - UI: `KnowledgeBaseNode` component (BookOpen icon, 3 handles), full config panel
+  - 3 templates: Knowledge Q&A (#14), Smart Deployer + RAG (#15), Codebase Explorer (#16)
+  - 2 Playwright E2E tests (canvas render + palette presence), screenshots captured
+  - **160 total Rust tests** (129 existing + 31 new), **10 E2E tests** passing
+  - This is the **17th node type** and completes the RAG spec
 
 **Previous sessions**:
 - Sessions 1-17: See git log for full history
@@ -227,9 +228,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 35: SSE token streaming (Ollama), Playwright test fix
 - Session 36: Streaming for all remaining providers (OpenAI, Azure, Google, Anthropic, Local)
 - Session 37: Rich Output wiring + Hybrid Intelligence template (ensemble synthesis)
+- Session 38: RAG Knowledge Base full-stack implementation (17th node type, 31 tests, 3 templates)
 
 **Next session should**:
-1. **Rich Output polish** — chart/image rendering, or mark spec DONE if current coverage is sufficient
+1. **Peer review RAG implementation** — `/peer-review` for Gemini (architecture) + Codex (code quality)
 2. Consider v0.2.0 tag for Phase 4 completion
-3. Or start **connections-manager** (P0 prerequisite for SQL, HTTP, webhook nodes)
-4. Or start **batch-runs** (P1 — dataset import, batch execution, progress dashboard)
+3. Or start **A/B Eval Node** (Phase 5 #11 — highest demo impact, parallel LLM calls already exist)
+4. Or start **connections-manager** (P0 prerequisite for SQL, HTTP, webhook nodes)

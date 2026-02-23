@@ -60,7 +60,7 @@ Adding real cycles to the engine would require rewriting topological sort, handl
 | maxIterations | int | 5 | Hard cap on iterations (safety valve, 1-50) |
 | exitCondition | enum | `max_iterations` | When to stop: `max_iterations`, `evaluator`, `stable_output` |
 | stabilityThreshold | float | 0.95 | For `stable_output`: stop when similarity between consecutive outputs exceeds this |
-| feedbackMode | enum | `replace` | How to pass state: `replace` (output replaces input), `append` (output appended to input as conversation) |
+| feedbackMode | enum | `replace` | How to pass state: `replace` (output replaces input), `append` (text-only: output appended to input as conversation) |
 
 ### Handles
 
@@ -87,15 +87,23 @@ Run exactly `maxIterations` times. Output = last iteration's result.
 
 #### 2. `evaluator` (most powerful)
 The subgraph must contain a **Router node** that outputs to either:
-- `continue` handle → loop continues, Router's input becomes next iteration's input
-- `done` handle → loop exits, Router's input becomes final output
+- `done` handle → Exit node receives value → loop stops, that value becomes final output
+- `continue` handle → that value becomes next iteration's input
+
+**Router branch detection**: The Router executor must include `selectedBranch` in its `NodeOutput.value` (e.g., `{"selectedBranch": "done", "value": "..."}`) so the Loop executor can inspect the synthetic graph's output to determine which branch fired. Today Router only records `selected_branch` to DB events — this must be added to the dataflow output.
+
+**How Loop detects the branch**: After each synthetic execution, Loop reads the Router node's output from the synthetic graph results (not from `__loop_output__`). If the Router's `selectedBranch == "done"`, Loop reads the Exit node's output as the final result. If `selectedBranch == "continue"`, Loop reads the Router's output value as the next iteration's input.
 
 The Router acts as the evaluator — it can use an LLM to decide whether the result is good enough.
 
 **Use case**: "Keep refining until the evaluator LLM says the answer is complete and accurate."
 
 #### 3. `stable_output` (convergence)
-Compare consecutive outputs using text similarity (normalized edit distance). Stop when similarity exceeds `stabilityThreshold`.
+Compare consecutive outputs using text similarity. Stop when similarity exceeds `stabilityThreshold`.
+
+**Algorithm**: Bounded normalized Levenshtein distance. Both outputs are stringified (JSON `to_string()` for non-string values) and truncated to 10,000 chars before comparison. Similarity = `1.0 - (edit_distance / max(len_a, len_b))`. No external crate needed — simple O(n*m) implementation with the truncation cap keeping it fast.
+
+**Text-only**: This mode only works with text outputs. If outputs are structured JSON, they are serialized with `serde_json::to_string()` (compact, deterministic key order) before comparison.
 
 **Use case**: "Keep summarizing until the summary stops changing."
 
@@ -153,6 +161,7 @@ A new node type `exit` serves as the Loop's termination point (analogous to Aggr
 - Every Loop node must have exactly one Exit node downstream in its subgraph
 - An Exit node without a paired Loop is a validation error
 - Exactly like Iterator↔Aggregator pairing rules
+- **Nesting validation**: Use `find_subgraph()` BFS during validation to detect if a Loop's subgraph contains another Loop or Iterator. Reject with error: "Nested loops and loops inside iterators are not supported (Phase 2)."
 
 ---
 
@@ -181,8 +190,8 @@ iteration_0:
   result = execute_synthetic_graph(input)
 
 iteration_1:
-  input = result_0  (feedbackMode=replace)
-     OR  input + "\n---\n" + result_0  (feedbackMode=append)
+  input = result_0  (feedbackMode=replace, works with text or JSON)
+     OR  input + "\n---\n" + result_0  (feedbackMode=append, text-only — error if input is non-string JSON)
   result = execute_synthetic_graph(input)
 
 ...repeat until exit condition met...
@@ -193,9 +202,10 @@ final_output = last result
 ### For `evaluator` mode:
 
 The Router inside the subgraph controls flow:
-- If Router outputs on `done` handle → Exit node receives value → loop stops
-- If Router outputs on `continue` handle → that value becomes next iteration's input
-- Engine checks which handle fired after each synthetic execution
+- If Router outputs `selectedBranch: "done"` → Exit node receives value → loop stops
+- If Router outputs `selectedBranch: "continue"` → Router's output value becomes next iteration's input
+- Loop executor inspects Router's `selectedBranch` field in the synthetic graph's `node_outputs` after each execution
+- **Requires**: Router executor must include `selectedBranch` in its `NodeOutput.value` (implementation change to `router.rs`)
 
 ### Skip Pattern (same as Iterator)
 
@@ -211,7 +221,7 @@ Loop returns:
 
 | Event | Data | When |
 |-------|------|------|
-| `workflow.node.iteration` | `{node_id, iteration, total, input_preview}` | Each iteration starts |
+| `workflow.node.iteration` | `{node_id, index, total, input_preview}` | Each iteration starts (reuses Iterator's `index`/`total` field names for consistency) |
 | `workflow.node.streaming` | `{node_id, tokens}` | Progress updates during iteration |
 | `workflow.node.completed` | `{node_id, iterations_run, exit_reason}` | Loop finishes |
 
@@ -333,6 +343,7 @@ Input → Loop → LLM (plan search) → Tool (search) → Router (enough?)
 | File | Change |
 |------|--------|
 | `executors/mod.rs` | Register `loop_node::LoopExecutor`, `exit::ExitExecutor` |
+| `executors/router.rs` | Add `selectedBranch` to `NodeOutput.value` (for evaluator mode detection) |
 | `nodeTypes.ts` | Add LoopNode, ExitNode |
 | `nodeCategories.ts` | Add to LOGIC |
 | `nodeColors.ts` | Add loop + exit colors |

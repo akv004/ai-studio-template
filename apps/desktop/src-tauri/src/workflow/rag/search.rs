@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use std::path::Path;
 
 use super::chunker::Chunk;
-use super::index::read_chunk;
+use super::index::{read_chunk, acquire_shared_lock};
 
 const VECTORS_MAGIC: u32 = 0x52414756;
 const VECTORS_VERSION: u32 = 1;
@@ -55,7 +55,11 @@ impl PartialOrd for HeapEntry {
 impl Ord for HeapEntry {
     fn cmp(&self, other: &Self) -> Ordering {
         // Reverse ordering for min-heap (smallest score on top)
-        other.score.partial_cmp(&self.score).unwrap_or(Ordering::Equal)
+        // Tiebreak by chunk_id (lower ID first = larger in reversed heap)
+        match other.score.partial_cmp(&self.score) {
+            Some(Ordering::Equal) | None => other.chunk_id.cmp(&self.chunk_id),
+            Some(ord) => ord,
+        }
     }
 }
 
@@ -71,6 +75,9 @@ pub fn search(
     if !vectors_path.exists() {
         return Ok(Vec::new());
     }
+
+    // Acquire shared lock for consistent reads during search
+    let _lock = acquire_shared_lock(index_dir)?;
 
     let file = std::fs::File::open(&vectors_path)
         .map_err(|e| format!("Failed to open vectors.bin: {e}"))?;
@@ -121,23 +128,28 @@ pub fn search(
         ));
     }
 
+    // Verify mmap alignment for f32 reads (mmap is always page-aligned, but be safe)
+    let float_data = &mmap[16..];
+    assert!(
+        (float_data.as_ptr() as usize) % std::mem::align_of::<u8>() == 0,
+        "mmap data not byte-aligned"
+    );
+
     // BinaryHeap min-heap for top-K
     let mut heap: BinaryHeap<HeapEntry> = BinaryHeap::with_capacity(top_k + 1);
-    let float_data = &mmap[16..];
 
     for i in 0..count {
         let offset = i * dims * 4;
-        // Read f32 values from the mmap
-        let vec_slice: Vec<f32> = (0..dims)
-            .map(|j| {
-                let start = offset + j * 4;
-                f32::from_le_bytes(float_data[start..start + 4].try_into().unwrap())
-            })
-            .collect();
+        // Compute dot product directly over byte slice — no per-vector allocation
+        let mut score: f32 = 0.0;
+        for j in 0..dims {
+            let start = offset + j * 4;
+            let val = f32::from_le_bytes(float_data[start..start + 4].try_into().unwrap());
+            score += query_vector[j] * val;
+        }
 
-        let score = dot_similarity(query_vector, &vec_slice);
-
-        if score < threshold {
+        // Filter non-finite scores (NaN, Inf)
+        if !score.is_finite() || score < threshold {
             continue;
         }
 

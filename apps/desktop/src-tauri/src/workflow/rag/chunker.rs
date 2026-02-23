@@ -85,11 +85,13 @@ pub fn chunk_text(
         .into_iter()
         .enumerate()
         .map(|(id, (text, byte_start, byte_end))| {
-            // Apply hard cap
-            let text = if text.chars().count() > hard_cap {
-                truncate_chars(&text, hard_cap).to_string()
+            // Apply hard cap — adjust byte_end to match truncated text
+            let (text, byte_end) = if text.chars().count() > hard_cap {
+                let truncated = truncate_chars(&text, hard_cap).to_string();
+                let adjusted_end = byte_start + truncated.len();
+                (truncated, adjusted_end)
             } else {
-                text
+                (text, byte_end)
             };
             let line_start = byte_to_line(&offsets, byte_start);
             let line_end = byte_to_line(&offsets, byte_end.saturating_sub(1).max(byte_start));
@@ -131,8 +133,8 @@ fn safe_boundary(text: &str, pos: usize) -> usize {
 /// Find a word boundary near `pos` (prefer splitting on whitespace).
 fn word_boundary(text: &str, pos: usize) -> usize {
     let safe_pos = safe_boundary(text, pos);
-    // Look back from safe_pos for whitespace
-    let search_start = safe_pos.saturating_sub(50);
+    // Look back from safe_pos for whitespace — search_start must also be a char boundary
+    let search_start = safe_boundary(text, safe_pos.saturating_sub(50));
     if let Some(last_ws) = text[search_start..safe_pos].rfind(|c: char| c.is_whitespace()) {
         search_start + last_ws + 1
     } else {
@@ -146,37 +148,28 @@ fn split_fixed(text: &str, chunk_size: usize, overlap: usize) -> Vec<(String, us
     let len = text.len();
 
     while pos < len {
-        let end_target = pos + chunk_size * 4; // approximate byte offset for chunk_size chars
-        let end = if end_target >= len {
-            len
-        } else {
-            word_boundary(text, end_target)
+        // Use char_indices to find the byte offset for chunk_size chars from pos
+        let actual_end = match text[pos..].char_indices().nth(chunk_size) {
+            Some((idx, _)) => {
+                let abs = pos + idx;
+                word_boundary(text, abs)
+            }
+            None => len,
         };
 
-        // Count actual chars to respect chunk_size
-        let chunk_text: String = text[pos..end].to_string();
-        if chunk_text.chars().count() > chunk_size * 2 {
-            // Re-split at char boundary
-            let actual_end = match text[pos..].char_indices().nth(chunk_size) {
-                Some((idx, _)) => {
-                    let abs = pos + idx;
-                    word_boundary(text, abs)
-                }
-                None => len,
-            };
-            let chunk = text[pos..actual_end].to_string();
-            if !chunk.trim().is_empty() {
-                chunks.push((chunk, pos, actual_end));
-            }
-            let step = (actual_end - pos).saturating_sub(overlap * 4);
-            pos += step.max(1);
-        } else {
-            if !chunk_text.trim().is_empty() {
-                chunks.push((chunk_text, pos, end));
-            }
-            let step = (end - pos).saturating_sub(overlap * 4);
-            pos += step.max(1);
+        let chunk = text[pos..actual_end].to_string();
+        if !chunk.trim().is_empty() {
+            chunks.push((chunk, pos, actual_end));
         }
+
+        // Advance by (chunk_chars - overlap_chars) using char_indices for UTF-8 safety
+        let advance_chars = chunk_size.saturating_sub(overlap);
+        let advance_bytes = match text[pos..].char_indices().nth(advance_chars) {
+            Some((idx, _)) => idx,
+            None => actual_end - pos,
+        };
+        let new_pos = pos + advance_bytes.max(1);
+        pos = safe_boundary(text, new_pos);
     }
     chunks
 }
@@ -283,15 +276,14 @@ fn merge_segments_by_size(
     chunk_size: usize,
     overlap: usize,
 ) -> Vec<(String, usize, usize)> {
-    let target_bytes = chunk_size * 4; // approximate
     let mut chunks = Vec::new();
     let mut start = 0;
 
     let mut bi = 0;
     while bi < boundaries.len() {
-        // Accumulate segments until we exceed target
+        // Accumulate segments until char count exceeds chunk_size
         let mut end = boundaries[bi];
-        while bi + 1 < boundaries.len() && (end - start) < target_bytes {
+        while bi + 1 < boundaries.len() && text[start..end].chars().count() < chunk_size {
             bi += 1;
             end = boundaries[bi];
         }
@@ -301,10 +293,15 @@ fn merge_segments_by_size(
             chunks.push((chunk, start, end));
         }
 
-        // Advance with overlap
-        let overlap_bytes = overlap * 4;
-        start = if end > overlap_bytes { end - overlap_bytes } else { end };
-        start = safe_boundary(text, start);
+        // Advance with char-based overlap
+        if overlap > 0 && end > start {
+            // Count overlap chars backwards from end
+            let chunk_chars: Vec<(usize, char)> = text[start..end].char_indices().collect();
+            let overlap_start_idx = chunk_chars.len().saturating_sub(overlap);
+            start = start + chunk_chars[overlap_start_idx].0;
+        } else {
+            start = end;
+        }
 
         bi += 1;
     }
@@ -418,6 +415,30 @@ mod tests {
     fn test_source_preserved() {
         let chunks = chunk_text("hello", "my/file.md", ChunkStrategy::FixedSize, 500, 0);
         assert_eq!(chunks[0].source, "my/file.md");
+    }
+
+    #[test]
+    fn test_fixed_size_emoji_with_overlap() {
+        // Regression test: FixedSize with multibyte chars + overlap must not panic
+        let text = "Hello 🚀🌍💡 world! Testing 🎉 emoji overlap. More text here with 🐱 cats.";
+        let chunks = chunk_text(text, "emoji.md", ChunkStrategy::FixedSize, 10, 3);
+        assert!(!chunks.is_empty());
+        for chunk in &chunks {
+            assert!(std::str::from_utf8(chunk.text.as_bytes()).is_ok());
+            // byte_end should never exceed byte_start + text.len()
+            assert!(chunk.byte_end - chunk.byte_start <= chunk.text.len() + 4);
+        }
+    }
+
+    #[test]
+    fn test_hard_cap_adjusts_byte_end() {
+        // Verify hard_cap adjusts byte_end to match truncated text
+        let text = "a".repeat(5000);
+        let chunks = chunk_text(&text, "big.txt", ChunkStrategy::FixedSize, 100, 0);
+        for chunk in &chunks {
+            assert_eq!(chunk.byte_end - chunk.byte_start, chunk.text.len(),
+                "byte range should match text length after hard cap");
+        }
     }
 
     #[test]

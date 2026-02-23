@@ -231,6 +231,23 @@ impl NodeExecutor for KnowledgeBaseExecutor {
 
             let dimensions = embed_resp.get("dimensions").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
 
+            // Validate all vectors have consistent dimensions and finite values
+            if let Some(expected_dims) = raw_vectors.first().map(|v| v.len()) {
+                for (i, vec) in raw_vectors.iter().enumerate() {
+                    if vec.len() != expected_dims {
+                        return Err(format!(
+                            "Knowledge Base: vector {} has {} dims, expected {}",
+                            i, vec.len(), expected_dims
+                        ));
+                    }
+                    if vec.iter().any(|v| !v.is_finite()) {
+                        return Err(format!(
+                            "Knowledge Base: vector {} contains non-finite values", i
+                        ));
+                    }
+                }
+            }
+
             // Normalize all vectors
             let mut vectors = raw_vectors;
             for v in &mut vectors {

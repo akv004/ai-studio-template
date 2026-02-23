@@ -62,17 +62,29 @@ class EmbeddingClient:
         )
 
     async def _embed_with_retry(self, texts: list[str], model: str, max_retries: int = 3):
-        """Retry with exponential backoff."""
+        """Retry with exponential backoff on transient errors only."""
         last_error = None
         for attempt in range(max_retries):
             try:
                 return await self._embed_batch(texts, model)
-            except Exception as e:
+            except httpx.HTTPStatusError as e:
+                # Only retry on transient server errors (5xx, 429)
+                if e.response.status_code in (429, 500, 502, 503, 504):
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        wait = 2 ** attempt
+                        print(f'[embed] Attempt {attempt + 1} failed ({e.response.status_code}). Retrying in {wait}s...')
+                        await asyncio.sleep(wait)
+                        continue
+                raise  # Non-transient HTTP error (400, 401, 403, etc.)
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
                 last_error = e
                 if attempt < max_retries - 1:
                     wait = 2 ** attempt
                     print(f'[embed] Attempt {attempt + 1} failed: {e}. Retrying in {wait}s...')
                     await asyncio.sleep(wait)
+                    continue
+                raise
         raise last_error
 
     async def _embed_batch(self, texts: list[str], model: str) -> tuple[list[list[float]], dict]:

@@ -123,7 +123,25 @@ pub fn write_index(
         }
     }
 
-    // Atomic swap: copy temp files to index dir
+    // Atomic swap: rename old dir, rename temp dir into place, remove old
+    // This is a single directory rename — all files swap together
+    let old_backup = index_dir.join(format!(".old-{}", uuid::Uuid::new_v4()));
+    let has_existing = index_dir.join("meta.json").exists();
+
+    if has_existing {
+        // Move existing files to backup dir
+        std::fs::create_dir_all(&old_backup)
+            .map_err(|e| format!("Failed to create backup dir: {e}"))?;
+        for file_name in &["meta.json", "chunks.jsonl", "offsets.bin", "vectors.bin"] {
+            let src = index_dir.join(file_name);
+            if src.exists() {
+                std::fs::rename(&src, old_backup.join(file_name))
+                    .map_err(|e| format!("Failed to backup {file_name}: {e}"))?;
+            }
+        }
+    }
+
+    // Move new files into index dir
     for file_name in &["meta.json", "chunks.jsonl", "offsets.bin", "vectors.bin"] {
         let src = temp_dir.join(file_name);
         let dst = index_dir.join(file_name);
@@ -131,8 +149,11 @@ pub fn write_index(
             .map_err(|e| format!("Failed to move {file_name}: {e}"))?;
     }
 
-    // Cleanup temp dir
+    // Cleanup temp dir and backup
     let _ = std::fs::remove_dir_all(&temp_dir);
+    if has_existing {
+        let _ = std::fs::remove_dir_all(&old_backup);
+    }
 
     // Create .gitignore
     let gitignore = index_dir.join(".gitignore");
@@ -158,8 +179,23 @@ pub fn write_index(
     Ok(())
 }
 
+/// Acquire a shared lock for reading. Returns the lock file handle.
+pub(crate) fn acquire_shared_lock(index_dir: &Path) -> Result<Option<std::fs::File>, String> {
+    use fs2::FileExt;
+    let lock_path = index_dir.join(".lock");
+    if !lock_path.exists() {
+        return Ok(None);
+    }
+    let lock_file = std::fs::File::open(&lock_path)
+        .map_err(|e| format!("Failed to open lock file: {e}"))?;
+    lock_file.lock_shared()
+        .map_err(|e| format!("Failed to acquire shared lock: {e}"))?;
+    Ok(Some(lock_file))
+}
+
 /// Read index metadata.
 pub fn read_meta(index_dir: &Path) -> Result<IndexMeta, String> {
+    let _lock = acquire_shared_lock(index_dir)?;
     let path = index_dir.join("meta.json");
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read meta.json: {e}"))?;
@@ -169,6 +205,7 @@ pub fn read_meta(index_dir: &Path) -> Result<IndexMeta, String> {
 
 /// Read a single chunk by ID using offsets.bin for O(1) lookup.
 pub fn read_chunk(index_dir: &Path, chunk_id: usize) -> Result<Chunk, String> {
+    let _lock = acquire_shared_lock(index_dir)?;
     let offsets_path = index_dir.join("offsets.bin");
     let offsets_data = std::fs::read(&offsets_path)
         .map_err(|e| format!("Failed to read offsets.bin: {e}"))?;

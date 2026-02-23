@@ -289,46 +289,20 @@ docker compose --profile gpu up
 ## Architecture
 
 ```mermaid
-graph TB
-    subgraph UI["🖥️ UI Layer — React 19 + TypeScript"]
-        A1["📋 Agents"]
-        A2["💬 Sessions"]
-        A3["▶️ Runs"]
-        A4["🔍 Inspector"]
-        A5["🔧 Workflows"]
-        A6["⚙️ Settings"]
-    end
+graph LR
+    UI["🖥️ <b>UI Layer</b><br/>React 19 + TypeScript<br/><br/>Agents · Sessions · Runs<br/>Inspector · Workflows · Settings"]
+    Desktop["🦀 <b>Desktop Layer</b><br/>Rust / Tauri 2<br/><br/>SQLite DB · Smart Router<br/>Approval Engine · Event Bridge<br/>Workflow Engine · SSE Proxy"]
+    Sidecar["🐍 <b>Sidecar</b><br/>Python FastAPI<br/><br/>6 LLM Providers · MCP Client<br/>Event Emitter · Embeddings"]
+    External["☁️ <b>External</b><br/><br/>Ollama · OpenAI · Azure<br/>Google · Anthropic<br/>MCP Servers"]
 
-    subgraph Desktop["🦀 Desktop Layer — Rust / Tauri 2"]
-        D1["🗄️ SQLite DB<br/>WAL mode, schema v7"]
-        D2["🧠 Smart Router<br/>3 modes, budget-aware"]
-        D3["🛡️ Approval Engine<br/>per-tool rules"]
-        D4["📡 Event Bridge<br/>WS relay to UI"]
-        D5["⚡ Workflow Engine<br/>DAG walker, 17 executors"]
-        D6["🌊 SSE Stream Proxy<br/>token batching"]
-    end
-
-    subgraph Sidecar["🐍 Sidecar — Python FastAPI"]
-        S1["🤖 6 LLM Providers<br/>Ollama, OpenAI, Azure,<br/>Google, Anthropic, Local"]
-        S2["🔌 MCP Client<br/>stdio + built-in tools"]
-        S3["📊 Event Emitter<br/>typed events"]
-        S4["📝 Embedding Client<br/>RAG vectors"]
-    end
-
-    subgraph External["☁️ External Services"]
-        E1["🏠 Ollama<br/>localhost"]
-        E2["☁️ Cloud APIs<br/>OpenAI, Azure,<br/>Google, Anthropic"]
-        E3["🔧 MCP Servers<br/>GitHub, Postgres,<br/>Filesystem"]
-    end
-
-    UI -->|"Tauri IPC<br/>(commands + events)"| Desktop
-    Desktop -->|"HTTP + WebSocket<br/>(x-ai-studio-token auth)"| Sidecar
+    UI -->|"Tauri IPC"| Desktop
+    Desktop -->|"HTTP + WS"| Sidecar
     Sidecar --> External
 
-    style UI fill:#1a1a2e,stroke:#e94560,color:#fff
-    style Desktop fill:#1a1a2e,stroke:#0f3460,color:#fff
-    style Sidecar fill:#1a1a2e,stroke:#16213e,color:#fff
-    style External fill:#0d1117,stroke:#30363d,color:#8b949e
+    style UI fill:#1e1e2e,stroke:#cba6f7,stroke-width:2px,color:#cdd6f4
+    style Desktop fill:#1e1e2e,stroke:#89b4fa,stroke-width:2px,color:#cdd6f4
+    style Sidecar fill:#1e1e2e,stroke:#a6e3a1,stroke-width:2px,color:#cdd6f4
+    style External fill:#1e1e2e,stroke:#6c7086,stroke-width:2px,color:#a6adc8
 ```
 
 **3 layers, strict boundaries:**

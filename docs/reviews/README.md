@@ -108,3 +108,5 @@ All resolved reviews have been deleted. Summary of completed reviews:
 | 2026-02-19 | EIP implementation code review | GPT-5 Codex | 12 findings — 5 fixed (UTF-8 truncation, File Glob containment, multi-aggregator, maxHistory clamp, cycle detection), 7 deferred to Phase 5 |
 | 2026-02-22 | RAG Knowledge Base spec — architecture | Gemini 3 Pro | 8 findings — all accepted. Storage deletions, concurrent access, file permissions, token limits. Spec updated. |
 | 2026-02-22 | RAG Knowledge Base spec — implementation | GPT-5.2 Codex | 13 findings — all accepted. vectors.bin format (magic/version/LE/pre-normalized), offsets.bin for O(1) lookup, atomic writes, UTF-8 chunking, CJK support, test strategy. Spec updated. |
+| 2026-02-22 | README — open-source first impression | Gemini 3 Pro | 6 findings — all accepted. Outdated numbers, missing features, competitor naming, feature hierarchy. Full README rewrite. |
+| 2026-02-22 | README — technical accuracy | GPT-5.2 Codex | 11 findings — all accepted. Wrong node count, template count, test count, phase status, keyboard shortcuts, DAG claim, provider count. Full README rewrite. |

@@ -2,6 +2,33 @@
 
 All notable changes to AI Studio are documented here.
 
+## [0.1.2] - 2026-02-22
+
+### Phase 4C: Streaming, Live Mode, UX
+
+**SSE Token Streaming**
+- Real-time token streaming for all 6 LLM providers
+- Ollama (NDJSON), OpenAI/Azure/Local (SSE), Google (streamGenerateContent), Anthropic (event-typed SSE)
+- Rust stream proxy with batching, UI live preview with animated cursor
+
+**Rich Output**
+- RichOutput component: auto-detect markdown, JSON table, JSON tree, code blocks
+- CSV export, compact mode, wired into 5 output spots (canvas, Inspector, Sessions, Runs)
+
+**Templates**
+- Hybrid Intelligence (#12): Ensemble synthesis — Qwen (engineer) + Gemini (architect) in parallel, synthesizer merges best of both
+- Smart Deployer (#13): Natural language microservice deployment via GitHub Actions
+
+**RAG Knowledge Base Spec**
+- Full spec for local-first RAG: Knowledge Base node, binary vector index, sidecar /embed endpoint
+- Peer reviewed by Gemini 3 Pro (8 findings) + GPT-5.2 Codex (13 findings), all 21 accepted
+- Ready to implement
+
+**README Overhaul**
+- Complete rewrite reflecting Phase 4C state (16 node types, 13 templates, 129 tests, 6 providers)
+- Capability-based competitive positioning (no competitor names)
+- Updated architecture diagram, keyboard shortcuts, project structure, roadmap
+
 ## [0.1.0] - 2026-02-19
 
 ### Phase 4A: Universal Automation Canvas

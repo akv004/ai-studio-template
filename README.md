@@ -70,11 +70,11 @@
 
 **"Unreal Blueprints for AI agents."** Build complex AI workflows by connecting nodes — no code required:
 
-- **16 Node Types** — Input, Output, LLM, Tool, Router, Approval, Transform, Subworkflow, HTTP Request, File Read/Write, File Glob, Iterator, Aggregator, Shell Exec, Validator.
+- **17 Node Types** — Input, Output, LLM, Tool, Router, Approval, Transform, Subworkflow, HTTP Request, File Read/Write, File Glob, Iterator, Aggregator, Shell Exec, Validator, Knowledge Base.
 - **Live Workflow Mode** — Watch real-time multi-agent interactions unfold with continuous, cooperative cancellation loops and live data feeds.
-- **DAG Execution Engine** — Topological sort with cycle detection, 129 unit tests.
+- **DAG Execution Engine** — Topological sort with cycle detection, 162 unit tests.
 - **Live Execution View** — Watch data flow through nodes with status badges and cost per node.
-- **13 Bundled Templates** — Including Smart Deployer, Hybrid Intelligence (Ensemble Synthesis), RAG Search, Team Assistant, and Computer Vision pipelines.
+- **14 Bundled Templates** — Including Smart Deployer, Hybrid Intelligence (Ensemble Synthesis), Knowledge Q&A (RAG), Team Assistant, and Computer Vision pipelines.
 - **Export/Import & User Templates** — Share workflows as JSON files or save them as reusable templates.
 - **Blender-inspired UI** — Dark theme, typed edges, inline editing, collapsible nodes, context menu + keyboard shortcuts.
 
@@ -288,30 +288,53 @@ docker compose --profile gpu up
 
 ## Architecture
 
-```
-+--------------------------------------------------+
-|              UI Layer (React 19 + Tauri)          |
-|  Agents | Sessions | Runs | Inspector | Workflows|
-+--------------------+-----------------------------+
-                     | Tauri IPC
-+--------------------+-----------------------------+
-|            Desktop Layer (Rust/Tauri 2)           |
-|  SQLite DB | Smart Router | Approval | Events    |
-|  Workflow Engine (DAG walker, 16 node executors)  |
-|  SSE Stream Proxy | Budget Enforcement            |
-+--------------------+-----------------------------+
-                     | HTTP + WebSocket
-+--------------------+-----------------------------+
-|            Sidecar (Python FastAPI)               |
-|  6 LLM Providers | MCP Client | Event Emitter    |
-|  Streaming (/chat/stream) | Tool Execution        |
-+--------------------------------------------------+
+```mermaid
+graph TB
+    subgraph UI["🖥️ UI Layer — React 19 + TypeScript"]
+        A1["📋 Agents"]
+        A2["💬 Sessions"]
+        A3["▶️ Runs"]
+        A4["🔍 Inspector"]
+        A5["🔧 Workflows"]
+        A6["⚙️ Settings"]
+    end
+
+    subgraph Desktop["🦀 Desktop Layer — Rust / Tauri 2"]
+        D1["🗄️ SQLite DB<br/>WAL mode, schema v7"]
+        D2["🧠 Smart Router<br/>3 modes, budget-aware"]
+        D3["🛡️ Approval Engine<br/>per-tool rules"]
+        D4["📡 Event Bridge<br/>WS relay to UI"]
+        D5["⚡ Workflow Engine<br/>DAG walker, 17 executors"]
+        D6["🌊 SSE Stream Proxy<br/>token batching"]
+    end
+
+    subgraph Sidecar["🐍 Sidecar — Python FastAPI"]
+        S1["🤖 6 LLM Providers<br/>Ollama, OpenAI, Azure,<br/>Google, Anthropic, Local"]
+        S2["🔌 MCP Client<br/>stdio + built-in tools"]
+        S3["📊 Event Emitter<br/>typed events"]
+        S4["📝 Embedding Client<br/>RAG vectors"]
+    end
+
+    subgraph External["☁️ External Services"]
+        E1["🏠 Ollama<br/>localhost"]
+        E2["☁️ Cloud APIs<br/>OpenAI, Azure,<br/>Google, Anthropic"]
+        E3["🔧 MCP Servers<br/>GitHub, Postgres,<br/>Filesystem"]
+    end
+
+    UI -->|"Tauri IPC<br/>(commands + events)"| Desktop
+    Desktop -->|"HTTP + WebSocket<br/>(x-ai-studio-token auth)"| Sidecar
+    Sidecar --> External
+
+    style UI fill:#1a1a2e,stroke:#e94560,color:#fff
+    style Desktop fill:#1a1a2e,stroke:#0f3460,color:#fff
+    style Sidecar fill:#1a1a2e,stroke:#16213e,color:#fff
+    style External fill:#0d1117,stroke:#30363d,color:#8b949e
 ```
 
-**3 layers, clear responsibilities:**
+**3 layers, strict boundaries:**
 
 - **UI (React 19)** — what you see. Never talks to the sidecar directly.
-- **Desktop (Rust/Tauri 2)** — security boundary. SQLite persistence, smart model router, tool approval, event bridging, workflow DAG engine, SSE stream proxy.
+- **Desktop (Rust/Tauri 2)** — security boundary. SQLite, smart router, approval engine, DAG workflow engine, SSE stream proxy.
 - **Sidecar (Python FastAPI)** — does the work. Calls LLMs, executes tools, streams tokens, emits events.
 
 **Key design decisions:**
@@ -395,13 +418,13 @@ ai-studio-template/
 - Agent Inspector with timeline, grouping, filters, keyboard nav, markdown export
 - Session branching (fork-and-compare)
 - Headless runs with async background execution
-- Node Editor with **16** custom node types, React Flow canvas, DAG execution engine
+- Node Editor with **17** custom node types, React Flow canvas, DAG execution engine
 - Smart model router (3 modes: single, auto, manual)
 - Budget tracking with monthly limits and runtime enforcement
 - Plugin system with manifest scanning and Settings UI
 - Blender-inspired node styling, context menus, inline editing, and visual typed edges
-- **13** bundled workflow templates + Save/Load JSON user template functionality
-- **129+** Rust unit tests across routing, workflow validation, template resolution, and sidecar API integration
+- **14** bundled workflow templates + Save/Load JSON user template functionality
+- **162** Rust unit tests across routing, workflow validation, template resolution, RAG, and sidecar API integration
 - SSE Token Streaming functionality directly rendering responsive blocks mid-flight.
 - Playwright E2E UI automation structure with Tauri IPC mocks via 30+ custom test commands
 

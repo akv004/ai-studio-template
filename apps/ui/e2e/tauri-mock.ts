@@ -132,7 +132,6 @@ const MOCK_HANDLERS: Record<string, (args?: any) => any> = {
     // Templates
     list_templates: () => [
         { id: 'knowledge-qa', name: 'Knowledge Q&A', description: 'RAG demo', nodeCount: 4, source: 'bundled' },
-        { id: 'codebase-explorer', name: 'Codebase Explorer', description: 'Index source code', nodeCount: 4, source: 'bundled' },
     ],
 
     // Knowledge Base (RAG)

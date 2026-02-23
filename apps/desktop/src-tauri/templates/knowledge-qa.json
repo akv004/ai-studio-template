@@ -1,9 +1,9 @@
 {
   "nodes": [
     { "id": "input_1", "type": "input", "position": { "x": 50, "y": 200 }, "data": { "name": "question", "dataType": "text", "defaultValue": "How does authentication work?" } },
-    { "id": "kb_1", "type": "knowledge_base", "position": { "x": 350, "y": 100 }, "data": { "docsFolder": "", "embeddingProvider": "azure_openai", "embeddingModel": "text-embedding-3-small", "chunkStrategy": "recursive", "chunkSize": 500, "chunkOverlap": 50, "topK": 5, "scoreThreshold": 0.0, "label": "Docs" } },
-    { "id": "llm_1", "type": "llm", "position": { "x": 700, "y": 200 }, "data": { "provider": "", "model": "", "systemPrompt": "Answer the user's question using ONLY the provided context. Include source citations in your answer. If the context doesn't contain relevant information, say so.", "temperature": 0.3, "label": "Answer from Docs" } },
-    { "id": "output_1", "type": "output", "position": { "x": 1050, "y": 200 }, "data": { "name": "answer", "format": "text" } }
+    { "id": "kb_1", "type": "knowledge_base", "position": { "x": 350, "y": 100 }, "data": { "docsFolder": "", "embeddingProvider": "azure_openai", "embeddingModel": "text-embedding-3-small", "chunkStrategy": "recursive", "chunkSize": 500, "chunkOverlap": 50, "topK": 8, "scoreThreshold": 0.0, "label": "Knowledge Base" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 700, "y": 200 }, "data": { "provider": "", "model": "", "systemPrompt": "Answer the user's question using ONLY the provided context. Reference specific files and line numbers from the citations. If the context doesn't contain relevant information, say so.", "temperature": 0.3, "label": "Answer" } },
+    { "id": "output_1", "type": "output", "position": { "x": 1050, "y": 200 }, "data": { "name": "answer", "format": "markdown" } }
   ],
   "edges": [
     { "id": "e-input-kb", "source": "input_1", "target": "kb_1", "sourceHandle": "value", "targetHandle": "query" },

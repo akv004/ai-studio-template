@@ -41,8 +41,7 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
         include_str!("../../templates/translation-pipeline.json")),
     ("meeting-notes", "Meeting Notes", "Summarize transcript and extract action items in parallel",
         include_str!("../../templates/meeting-notes.json")),
-    ("rag-search", "RAG Search", "Search for information with a tool, then answer using retrieved context",
-        include_str!("../../templates/rag-search.json")),
+    // rag-search removed — superseded by Knowledge Q&A (uses Knowledge Base node instead of shell tool)
     // Hardware + AI templates
     ("webcam-monitor", "Webcam Monitor", "Capture webcam frame with YOLO detection, route on person detected, LLM describes scene",
         include_str!("../../templates/webcam-monitor.json")),
@@ -53,12 +52,11 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
     ("smart-deployer", "Smart Deployer", "Natural language microservice deployment — LLM reads your config, builds a plan, you approve, it runs gh CLI",
         include_str!("../../templates/smart-deployer.json")),
     // RAG Knowledge Base
-    ("knowledge-qa", "Knowledge Q&A", "Index a docs folder, ask questions, get answers with source citations — the 30-second RAG demo",
+    ("knowledge-qa", "Knowledge Q&A", "Index any folder (docs, code, configs), ask questions, get answers with source citations",
         include_str!("../../templates/knowledge-qa.json")),
     ("smart-deployer-rag", "Smart Deployer + RAG", "RAG-powered deployment: Knowledge Base indexes deploy docs, LLM plans from context, approval gate, then execute",
         include_str!("../../templates/smart-deployer-rag.json")),
-    ("codebase-explorer", "Codebase Explorer", "Index source code, ask how things work — citations point to exact files and line numbers",
-        include_str!("../../templates/codebase-explorer.json")),
+    // codebase-explorer removed — same graph as Knowledge Q&A with different config
 ];
 
 fn templates_directory() -> PathBuf {

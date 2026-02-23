@@ -106,6 +106,10 @@ AI Studio auto-picks the best model for each step:
 
 ### 6 LLM Providers
 
+<p align="center">
+  <img src="docs/screenshots/settings-providers.png" alt="AI Providers Settings" width="800">
+</p>
+
 | Provider | Streaming | Vision | Notes |
 |----------|-----------|--------|-------|
 | Ollama | NDJSON | Via multimodal models | Local, free |
@@ -120,6 +124,10 @@ AI Studio auto-picks the best model for each step:
 ## MCP-Native Tools
 
 Built on [Model Context Protocol](https://modelcontextprotocol.io/) — the open standard for AI tool integration:
+
+<p align="center">
+  <img src="docs/screenshots/settings-mcp.png" alt="MCP Server Settings" width="800">
+</p>
 
 - Connect any MCP server (GitHub, Postgres, Filesystem, Brave Search, and growing)
 - Built-in tools: shell execution, filesystem operations
@@ -141,6 +149,10 @@ Extend AI Studio with third-party capabilities:
 ---
 
 ## Streaming, Rich Output & Vision
+
+<p align="center">
+  <img src="docs/screenshots/vision-workflow.png" alt="Vision Pipeline Workflow" width="800">
+</p>
 
 - **SSE token streaming** — watch tokens flow through LLM nodes in real time. All 6 providers supported.
 - **Rich output rendering** — markdown, JSON tables, code blocks, and collapsible trees everywhere: canvas preview, Inspector, Sessions, Runs.
@@ -394,6 +406,10 @@ ai-studio-template/
 - Playwright E2E UI automation structure with Tauri IPC mocks via 30+ custom test commands
 
 ### Coming Next
+
+<p align="center">
+  <img src="docs/screenshots/rag-workflow.png" alt="RAG Knowledge Base Workflow" width="800">
+</p>
 
 - **RAG Knowledge Base** — point a workflow at a folder of documents, get answers with source citations (file + line number + relevance score). Zero-server, file-based vector index, works offline. [Full spec](docs/specs/rag-knowledge-base.md) complete and peer-reviewed.
 - **A/B Eval Node** — send the same prompt to multiple models in parallel, compare outputs side-by-side with latency, cost, and quality metrics.

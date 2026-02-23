@@ -1,6 +1,6 @@
 # RAG Knowledge Base — Visual Retrieval-Augmented Generation
 
-**Status**: DRAFT — pending peer review
+**Status**: DRAFT — peer reviewed (Gemini 3 Pro + GPT-5.2 Codex), fixes applied
 **Phase**: 5A (next after streaming + rich output)
 **Priority**: P0 — table stakes for production AI workflows, but our implementation must be differentiated
 **Author**: AI Studio PM
@@ -105,7 +105,7 @@ QUERYING (every workflow run):
 | topK | int | 5 | Number of results to return per query |
 | scoreThreshold | float | 0.0 | Minimum similarity score (0.0 = return all top-K) |
 | autoReindex | bool | true | Re-index when file timestamps change |
-| fileTypes | string | `*` | Glob pattern for files to include (e.g., `*.md,*.txt,*.pdf`) |
+| fileTypes | string | `*.md,*.txt,*.rs,*.py,*.ts,*.js,*.json,*.yml,*.yaml,*.csv,*.toml,*.go,*.java` | Glob pattern for files to include. Safe default excludes binary/secret files. |
 | maxFileSize | int | 10 | Max file size in MB (skip larger files) |
 | label | string | — | Custom node label (e.g., "Deploy Docs") |
 
@@ -173,50 +173,76 @@ execute_knowledge_base(node_config, query):
      index_dir = node_config.indexLocation
                  ?? format!("{}/.ai-studio-index", node_config.docsFolder)
 
-  2. CHECK index freshness
+  2. ACQUIRE cross-process lock
+     lock = flock(index_dir/.lock, EXCLUSIVE)  // blocks if another workflow is indexing
+
+  3. CHECK index freshness
      if index_dir/meta.json exists:
        meta = read meta.json
        if meta.embeddingModel != node_config.embeddingModel:
          → FULL re-index (model changed, vectors incompatible)
-       stale_files = scan docsFolder for files newer than meta.lastIndexed
-       if stale_files.is_empty() && !force_reindex:
-         → SKIP to step 5 (index is fresh)
-       else:
-         → INCREMENTAL re-index (step 3, only stale files)
-     else:
-       → FULL index (step 3, all files)
 
-  3. INDEX (full or incremental)
+       // Detect ALL changes: new, modified, AND deleted files
+       disk_files = glob docsFolder with fileTypes filter
+       indexed_files = meta.indexedFiles keys
+       stale_files = disk_files where mtime > meta.indexedFiles[file].modified
+       new_files = disk_files NOT IN indexed_files
+       deleted_files = indexed_files NOT IN disk_files
+
+       if stale_files.is_empty() && new_files.is_empty() && deleted_files.is_empty():
+         → SKIP to step 6 (index is fresh)
+       else:
+         // MVP: FULL REBUILD on any change (simple, correct, no tombstone complexity)
+         // Phase 2: per-file shards with tombstones for true incremental updates
+         → FULL re-index (step 4)
+     else:
+       → FULL index (step 4, all files)
+
+  4. INDEX (full rebuild)
      files = glob docsFolder with fileTypes filter
+     // Exclude .ai-studio-index/ directory and deny-listed paths (reuse is_path_denied)
      for each file:
        a. Read file content (skip if > maxFileSize)
-       b. Chunk text using chunkStrategy
-          Each chunk = {text, source_file, line_start, line_end, chunk_id}
-       c. Emit workflow.node.streaming event: "Indexing {filename}..."
+       b. Normalize line endings (CRLF → LF)
+       c. Chunk text using chunkStrategy (with hard cap per chunk)
+          Each chunk = {text, source_file, line_start, line_end, byte_start, byte_end, chunk_id}
+       d. Emit workflow.node.streaming event: "Indexing {filename}..."
 
      all_chunks = collect all chunks from all files
 
-     d. Call sidecar POST /embed with all chunk texts (batched)
+     e. Call sidecar POST /embed with all chunk texts (batched)
         → Returns array of vectors (one per chunk)
 
-     e. Write to index_dir:
-        - meta.json: {model, dimensions, chunk_count, file_count, last_indexed, config}
-        - chunks.jsonl: one JSON line per chunk (text + metadata)
-        - vectors.bin: binary f32 arrays (dimensions * chunk_count * 4 bytes)
+     f. Normalize all vectors (L2 normalize each vector for pre-normalized storage)
 
-  4. EMIT indexing complete event
+     g. ATOMIC WRITE to index_dir:
+        // Write to temp directory first, then rename — crash-safe
+        temp_dir = index_dir/.tmp-{uuid}/
+        Write temp_dir/meta.json
+        Write temp_dir/chunks.jsonl
+        Write temp_dir/offsets.bin (u64 byte offset per chunk for O(1) lookup)
+        Write temp_dir/vectors.bin (with magic + version header)
+        // Atomic swap: rename old dir, rename temp → real, delete old
+        rename(index_dir/meta.json, index_dir/meta.json.old)  // backup
+        rename(temp_dir/*, index_dir/)                         // atomic per file
+        delete temp files
+
+  5. EMIT indexing complete event
      workflow.node.streaming: "Indexed {chunk_count} chunks from {file_count} files"
 
-  5. SEARCH
+  6. SEARCH
      a. Call sidecar POST /embed with [query] → query_vector
-     b. Load vectors.bin (mmap for large indexes)
-     c. Cosine similarity: query_vector vs all stored vectors
-     d. Sort by score descending
-     e. Filter by scoreThreshold
-     f. Take top-K
-     g. Load corresponding chunks from chunks.jsonl
-     h. Format context string with citations
-     i. Return {context, results, indexStats}
+     b. Normalize query_vector (L2)
+     c. Load vectors.bin (mmap via memmap2 for large indexes)
+     d. Validate vectors.bin header (magic, version, dims * count * 4 + 16 == file_len)
+     e. Dot product: query_vector vs all stored vectors (pre-normalized = cosine)
+     f. Use BinaryHeap (min-heap) to maintain top-K without full sort
+     g. Filter by scoreThreshold
+     h. Load corresponding chunks from chunks.jsonl via offsets.bin (O(1) seek)
+     i. Format context string with citations
+     j. Return {context, results, indexStats}
+
+  7. RELEASE lock
 ```
 
 ---
@@ -340,7 +366,9 @@ Queries an existing index with a vector and returns top-K matches.
 └── .ai-studio-index/              ← created by Knowledge Base node
     ├── meta.json                   ← index metadata
     ├── chunks.jsonl                ← text chunks with source metadata
-    └── vectors.bin                 ← binary f32 embedding vectors
+    ├── offsets.bin                 ← byte offsets into chunks.jsonl (u64 LE per chunk, O(1) lookup)
+    ├── vectors.bin                 ← binary f32 embedding vectors (pre-normalized)
+    └── .lock                       ← cross-process lock file (flock/fs2)
 ```
 
 ### meta.json
@@ -372,19 +400,31 @@ Queries an existing index with a vector and returns top-K matches.
 One JSON object per line:
 
 ```json
-{"id": 0, "text": "The auth service uses JWT tokens...", "source": "services/auth-service.md", "lineStart": 23, "lineEnd": 45, "charStart": 1200, "charEnd": 1700}
-{"id": 1, "text": "Refresh tokens are stored in Redis...", "source": "services/auth-service.md", "lineStart": 46, "lineEnd": 62, "charStart": 1650, "charEnd": 2150}
+{"id": 0, "text": "The auth service uses JWT tokens...", "source": "services/auth-service.md", "lineStart": 23, "lineEnd": 45, "byteStart": 1200, "byteEnd": 1700}
+{"id": 1, "text": "Refresh tokens are stored in Redis...", "source": "services/auth-service.md", "lineStart": 46, "lineEnd": 62, "byteStart": 1650, "byteEnd": 2150}
 ```
 
 ### vectors.bin
 
-Binary format: `[dimensions: u32] [count: u32] [f32 * dimensions * count]`
+Binary format (little-endian throughout):
 
-- First 4 bytes: embedding dimensions (e.g., 1536)
-- Next 4 bytes: number of vectors
-- Remaining: flat f32 array, row-major
+```
+[magic: u32 = 0x52414756 ("RAGV")]  ← 4 bytes, identifies file type
+[version: u32 = 1]                   ← 4 bytes, format version
+[dimensions: u32]                    ← 4 bytes, embedding dimensions (e.g., 1536)
+[count: u32]                         ← 4 bytes, number of vectors
+[f32 * dimensions * count]           ← float region, row-major
+```
+
+- **Endianness**: All values little-endian (LE). Both ARM64 (macOS) and x86_64 (Linux) are natively LE.
+- **Alignment**: Float region starts at byte offset 16 (4-byte aligned). Use `memmap2` crate for mmap.
+- **Validation on load**: Verify magic + version, then check `16 + dims * count * 4 == file_len`. Reject if mismatch (corruption detection).
+- **Vectors are pre-normalized** at index time. This means search is a simple dot product (no per-vector norm computation needed), improving both speed and numerical stability.
+- **mmap safety**: Use `memmap2::MmapOptions`, gate `f32` slice casting on alignment checks. Never cast unaligned bytes.
 
 This format supports memory-mapped reads — the OS handles paging, we don't load the entire file into memory for large indexes.
+
+**Alternative considered**: `.npy` or `safetensors`. Custom format chosen for simplicity and because we control both reader and writer. The magic + version header allows future migration.
 
 ### .gitignore
 
@@ -404,7 +444,7 @@ The Knowledge Base node automatically creates `.ai-studio-index/.gitignore`:
 ```python
 class EmbedRequest(BaseModel):
     texts: list[str]             # 1 to N texts to embed
-    provider: str                # "azure_openai", "local_openai", etc.
+    provider: str                # "azure_openai", "local", etc. (matches Settings provider IDs)
     model: str                   # "text-embedding-3-small", etc.
 
 class EmbedResponse(BaseModel):
@@ -415,10 +455,17 @@ class EmbedResponse(BaseModel):
 
 @app.post("/embed")
 async def embed(request: EmbedRequest) -> EmbedResponse:
-    provider = get_provider(request.provider)
-    vectors = await provider.embed(request.texts, request.model)
+    client = create_embedding_client(request.provider)  # separate from AgentProvider
+    vectors = await client.embed(request.texts, request.model)
     return EmbedResponse(vectors=vectors, ...)
 ```
+
+**Note**: Embedding uses a **separate client** from the chat `AgentProvider` (which only has `chat()`/`stream()`). The embedding client reads the same Settings config (api_key, base_url, extra_config) but calls the embeddings API. This follows the same per-request config pattern as `/chat/direct`.
+
+**Provider ID standardization**: Use the same IDs everywhere:
+- `azure_openai` (not `azure`, not `azureopenai`)
+- `local` (not `local_openai`, not `local_openai_compatible`)
+- `openai`, `google`, `anthropic`, `ollama`
 
 ### Provider embed() implementations
 
@@ -443,12 +490,22 @@ async def embed(self, texts: list[str], model: str) -> list[list[float]]:
     return [item["embedding"] for item in response.json()["data"]]
 ```
 
-### Batching
+### Batching + Token Safety
 
 For large document sets, the sidecar batches embedding calls:
 - Azure OpenAI: max 2048 texts per call, max 8191 tokens per text
 - Local: depends on server, default batch of 32
 - Sidecar handles retry with exponential backoff on rate limits
+
+**Per-input token validation**: Before sending to the embedding API:
+1. Estimate token count per text (heuristic: `len(text) / 4` for English, `len(text) / 2` for CJK)
+2. If any text exceeds the model's token limit (8191 for text-embedding-3), **truncate** it and log a warning (do NOT fail the entire batch)
+3. Return truncation warnings in the response metadata so the caller knows which chunks were affected
+
+**Partial batch failure handling**: If a batch call fails (rate limit, server error):
+1. Retry with exponential backoff (3 attempts)
+2. If a specific input causes the error (malformed text), skip it and return a null vector + error message for that index
+3. Never fail the entire indexing operation because of one bad chunk
 
 ---
 
@@ -462,9 +519,18 @@ Implements the Knowledge Base node executor:
 pub struct KnowledgeBaseExecutor;
 
 impl KnowledgeBaseExecutor {
-    pub async fn execute(ctx: &ExecutionContext) -> Result<Value> {
-        let config = parse_config(ctx.node_data);
-        let query = ctx.get_input("query")?;
+    /// Follows the same pattern as LlmExecutor::execute and FileGlobExecutor::execute:
+    /// - Input resolution: incoming > config (resolve_template for interpolation)
+    /// - Sidecar calls via ctx.sidecar_url + reqwest
+    /// - Event emission via emit_workflow_event (knowledge.index.*, knowledge.search.*)
+    pub async fn execute(
+        ctx: &ExecutionContext,
+        node_id: &str,
+        node_data: &Value,
+        incoming: &HashMap<String, Value>,
+    ) -> Result<NodeOutput> {
+        let config = parse_kb_config(node_data, incoming);  // incoming > config
+        let query = resolve_input("query", incoming, node_data)?;
 
         // 1. Ensure index is fresh
         let index_dir = resolve_index_dir(&config);
@@ -484,11 +550,18 @@ impl KnowledgeBaseExecutor {
         let context = format_context_with_citations(&results);
         let stats = read_index_stats(&index_dir)?;
 
-        Ok(json!({
-            "context": context,
-            "results": results,
-            "indexStats": stats,
-        }))
+        Ok(NodeOutput {
+            output: json!({
+                "context": context,
+                "results": results,
+                "indexStats": stats,
+            }),
+            handles: HashMap::from([
+                ("context".into(), json!(context)),
+                ("results".into(), json!(results)),
+                ("indexStats".into(), json!(stats)),
+            ]),
+        })
     }
 }
 ```
@@ -501,8 +574,9 @@ Shared RAG engine used by both Knowledge Base node and individual Tier 2 nodes.
 src/workflow/rag/
 ├── mod.rs           — public API
 ├── chunker.rs       — text chunking strategies (recursive, sentence, paragraph, fixed)
-├── index.rs         — index read/write (meta.json, chunks.jsonl, vectors.bin)
-├── search.rs        — cosine similarity, top-K, score filtering
+├── index.rs         — index read/write (meta.json, chunks.jsonl, offsets.bin, vectors.bin)
+│                      Atomic writes (temp dir + rename), cross-process lock (fs2 crate)
+├── search.rs        — dot product on pre-normalized vectors, BinaryHeap top-K, mmap via memmap2
 └── format.rs        — citation formatting for context output
 ```
 
@@ -522,8 +596,8 @@ pub struct Chunk {
     pub source: String,
     pub line_start: usize,
     pub line_end: usize,
-    pub char_start: usize,
-    pub char_end: usize,
+    pub byte_start: usize,  // byte offset (not char offset — avoids ambiguity)
+    pub byte_end: usize,
 }
 
 pub fn chunk_text(
@@ -534,6 +608,15 @@ pub fn chunk_text(
     overlap: usize,
 ) -> Vec<Chunk>
 ```
+
+**Chunking safety requirements**:
+- **UTF-8 safe splitting**: Always split at char boundaries (use `char_indices()`). Never slice mid-codepoint.
+- **CRLF handling**: Normalize `\r\n` → `\n` before chunking. Adjust byte offsets to map back to original.
+- **CJK punctuation**: Sentence strategy must recognize `。！？` (CJK period, exclamation, question) in addition to ASCII `.!?`.
+- **Abbreviation awareness**: Sentence splitter must not split on common abbreviations (e.g., "Dr.", "U.S.", "etc."). Use a simple heuristic: don't split on `.` preceded by a single uppercase letter or known abbreviation.
+- **Hard cap per chunk**: Clamp every chunk to `max(chunk_size * 2, 2000)` characters to prevent overlong inputs to the embed endpoint.
+- **Overlap constraint**: Enforce `overlap < chunk_size`. Clamp if user provides invalid value.
+- **Line number computation**: Precompute line-start byte offsets once per file. Derive `lineStart/lineEnd` from chunk byte range via binary search on the offset array.
 
 ### Vector Search (Pure Rust)
 
@@ -547,16 +630,25 @@ pub struct SearchResult {
     pub line_end: usize,
 }
 
-pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f32 {
-    let dot: f32 = a.iter().zip(b).map(|(x, y)| x * y).sum();
-    let norm_a: f32 = a.iter().map(|x| x * x).sum::<f32>().sqrt();
-    let norm_b: f32 = b.iter().map(|x| x * x).sum::<f32>().sqrt();
-    if norm_a == 0.0 || norm_b == 0.0 { return 0.0; }
-    dot / (norm_a * norm_b)
+/// Since vectors are pre-normalized at index time, cosine similarity
+/// reduces to a simple dot product. This is both faster and more
+/// numerically stable than computing norms at query time.
+pub fn dot_similarity(a: &[f32], b: &[f32]) -> f32 {
+    a.iter().zip(b).map(|(x, y)| x * y).sum()
 }
 
+/// Normalize a vector in-place. Called once at index time per vector,
+/// and once at query time for the query vector.
+pub fn normalize(v: &mut [f32]) {
+    let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+    if norm > 0.0 { v.iter_mut().for_each(|x| *x /= norm); }
+}
+
+/// Search uses a BinaryHeap (min-heap by score) to maintain top-K
+/// without sorting all results. For 50K vectors this avoids a full sort.
+/// Consider spawn_blocking/Rayon for CPU-bound loop on large indexes.
 pub fn search(
-    query_vector: &[f32],
+    query_vector: &[f32],  // must be pre-normalized
     index_dir: &Path,
     top_k: usize,
     threshold: f32,
@@ -761,38 +853,50 @@ Re-indexing cost is negligible. Incremental indexing only re-embeds changed file
 
 ### Search Latency
 
-- Brute-force cosine similarity over 5,000 chunks (1536-dim): ~2ms on modern CPU
-- Index load from SSD: ~10ms for 30MB vectors file (mmap)
+- Dot product over 5,000 pre-normalized vectors (1536-dim) with BinaryHeap top-K: ~1-2ms on modern CPU
+- Index load from SSD: ~10ms for 30MB vectors file (mmap, OS handles paging)
+- Chunk fetch via offsets.bin: <1ms per chunk (seek, not scan)
 - Embedding one query: ~100-500ms (API call)
 - Total search latency: **~200-600ms** (dominated by embedding API call)
+- For large indexes (>10K chunks): consider `spawn_blocking`/Rayon to avoid stalling async executor
 
 ---
 
 ## Security
 
-- **Path containment**: Same security model as File Read / File Glob nodes. Denied paths list applies to docsFolder.
+- **Path containment**: Same security model as File Read / File Glob nodes. Denied paths list applies to docsFolder. Reuse `is_path_denied()` from File Glob executor.
+- **Self-exclusion**: The indexer always excludes `.ai-studio-index/` from scanning to prevent indexing its own output.
 - **Index write safety**: Index is only written to the configured indexLocation. Never writes outside it.
+- **File permissions**: Create `.ai-studio-index/` directory with mode `0700` and all files within with mode `0600`. This prevents other OS users from reading potentially sensitive document chunks.
 - **No data exfiltration**: Embedding API calls send text chunks to the configured provider. User controls which provider (local = nothing leaves the machine).
 - **Sidecar auth**: `/embed` endpoint requires the same `x-ai-studio-token` header as all other sidecar endpoints.
 - **.gitignore**: Auto-created in index directory to prevent accidental commit of binary index files.
+- **Concurrent access**: Cross-process file lock (`.lock` file with `flock`/`fs2` crate) prevents two workflows from writing the same index simultaneously. Readers acquire shared locks; writers acquire exclusive locks.
 
 ---
 
 ## Implementation Plan
 
 ### Phase 1 (MVP — this spec)
-- [ ] Sidecar: `/embed` endpoint (Azure OpenAI + Local/OpenAI-Compatible)
-- [ ] Rust: `rag/` module (chunker, index, search, format)
-- [ ] Rust: Knowledge Base node executor
+- [ ] Sidecar: `/embed` endpoint (Azure OpenAI + Local) with batching, token validation, retry
+- [ ] Rust: `rag/` module (chunker, index, search, format) with `memmap2` + `fs2` deps
+- [ ] Rust: vectors.bin with magic/version/LE header + pre-normalized vectors
+- [ ] Rust: offsets.bin for O(1) chunk lookup
+- [ ] Rust: Atomic index writes (temp dir + rename) + cross-process lock
+- [ ] Rust: UTF-8 safe chunking with CRLF handling, CJK punctuation, hard cap
+- [ ] Rust: Knowledge Base node executor (matching NodeExecutor API pattern)
 - [ ] Rust: Tauri IPC commands (index_folder, search_index, get_index_stats, delete_index)
-- [ ] UI: Knowledge Base node (canvas + config panel)
+- [ ] Rust: Deletion detection (diff disk files vs meta.indexedFiles → full rebuild)
+- [ ] UI: Knowledge Base node (canvas + config panel, safe default fileTypes)
 - [ ] UI: RichOutput citation rendering
+- [ ] Security: index dir 0700, files 0600, exclude .ai-studio-index from scanning
 - [ ] Template: Knowledge Q&A
 - [ ] Template: Smart Deployer with RAG
 - [ ] Template: Codebase Explorer
-- [ ] Tests: chunker unit tests, search unit tests, sidecar embed tests
+- [ ] Tests: chunker edge cases, index round-trip, mmap validation, /embed contract
 
 ### Phase 2 (Polish)
+- [ ] True incremental indexing (per-file shards + tombstones, skip full rebuild)
 - [ ] Tier 2 individual nodes (Chunker, Embedding, Index Store, Index Search)
 - [ ] PDF + DOCX support (sidecar extraction)
 - [ ] Settings: Index Management page
@@ -800,6 +904,7 @@ Re-indexing cost is negligible. Incremental indexing only re-embeds changed file
 - [ ] Live mode: auto re-index on file change (file watcher)
 - [ ] HNSW approximate search for large indexes (>10K chunks)
 - [ ] Additional embedding providers (Ollama, Google, Cohere)
+- [ ] Rayon/spawn_blocking for CPU-bound search on large indexes
 
 ---
 
@@ -818,6 +923,47 @@ Re-indexing cost is negligible. Incremental indexing only re-embeds changed file
 | Live re-index | ✗ | ✗ | ✗ | ✗ | **✓ (Phase 2)** |
 
 **Our story**: "Every other tool hides RAG behind a config panel. AI Studio shows you the full pipeline — watch your docs get chunked, embedded, and searched. Debug retrieval quality in the Inspector. All local, no servers, zero setup."
+
+---
+
+## Test Strategy
+
+### Rust Unit Tests (chunker)
+- Empty file → returns zero chunks
+- Single character → returns one chunk
+- Unicode: CJK text, emojis, multi-byte characters → splits at char boundaries
+- CRLF file → line numbers correct after normalization
+- File with no paragraph breaks → falls through to sentence → fixed_size
+- Huge file (10MB) → chunks don't exceed hard cap
+- Overlap > chunkSize → clamped to chunkSize - 1
+- Code file → chunks respect function-boundary heuristic (if implemented)
+
+### Rust Unit Tests (index)
+- Write/read round-trip: chunks.jsonl + offsets.bin + vectors.bin
+- vectors.bin magic + version validation (reject bad magic)
+- vectors.bin length validation (reject truncated file = crash safety)
+- mmap alignment check passes on valid file
+- offsets.bin enables O(1) chunk lookup (verify byte offset correctness)
+
+### Rust Unit Tests (search)
+- Pre-normalized vectors: dot product matches expected cosine similarity
+- Top-K heap returns correct top results (not just sorted)
+- Score threshold filtering works
+- Empty index → returns empty results (not error)
+- Query vector with zero norm → returns score 0.0 for all
+
+### Sidecar Tests (/embed endpoint)
+- Single text embedding → returns vector of correct dimensions
+- Batch of 100 texts → returns 100 vectors
+- Overlong text (>8191 tokens) → truncated, warning returned
+- Invalid provider → 400 error with clear message
+- Auth token required (no token → 401)
+
+### Integration Tests
+- Full pipeline: write docs → index → search → verify citations have correct file + line
+- Incremental: index, delete a file, re-index → deleted file's chunks are gone
+- Model change: re-index with different model → full rebuild triggered
+- Concurrent lock: two index operations on same dir → second blocks, not corrupts
 
 ---
 

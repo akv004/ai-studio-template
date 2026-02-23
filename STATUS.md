@@ -27,6 +27,7 @@
 | 18 | batch-runs.md | P1 | 5B | PLANNED | Dataset import, batch execution, progress dashboard |
 | 19 | rich-output.md | P1 | 5A | IN PROGRESS | Markdown, tables, JSON tree/table, code blocks — wired into 5 spots. Charts/images deferred. |
 | 20 | workflow-versioning.md | P2 | 5B | PLANNED | Version history, diff view, rollback, run comparison |
+| 21 | rag-knowledge-base.md | P0 | 5A | SPEC DONE | RAG nodes: Knowledge Base, chunking, embedding, vector search, citations. Peer reviewed. |
 
 **Status key**: DONE | IN PROGRESS | PLANNED | BLOCKED | REFERENCE (non-implementable)
 
@@ -81,6 +82,8 @@
 | **Streaming node output** | DONE | SSE token streaming: sidecar /chat/stream, Rust proxy_request_stream with batching, UI live preview with cursor (cd3b84d). All 6 providers: Ollama, OpenAI, Azure, Google Gemini, Anthropic, LocalOpenAI |
 | **Rich Output wiring** | DONE | RichOutput component bug fixes (broken CopyButton, CSV export, compact prop). Wired into 5 spots: NodeShell canvas preview, Inspector event details, Sessions chat, Runs output (35988bb) |
 | **Hybrid Intelligence template** | DONE | Ensemble synthesis: Qwen (engineer) + Gemini (architect) in parallel → synthesizer merges best of both. Template #12 (f6f5587) |
+| **Smart Deployer template** | DONE | Natural language microservice deployment: File Read → LLM Plan Builder → Approval → Iterator → Shell Exec. Template #13 |
+| **RAG Knowledge Base spec** | DONE | Full spec: Knowledge Base node, 2-tier design, binary index format, sidecar /embed, security, templates. Peer reviewed by Gemini + Codex, all 21 findings accepted and fixed. |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -130,11 +133,7 @@
 12. **Time-Travel Debug** — Click any completed node → edit its output → re-run from that point forward. Don't restart the whole workflow. Inspector + node states already exist — this is an evolution. Unique differentiator, no competitor has this.
 13. **Auto-Pipeline Generator** — Describe a workflow in English → AI generates the graph JSON → canvas fills itself. Meta: use AI to build AI pipelines. The "wow" demo moment for Show HN.
 14. **Guardrails Node** — Built-in safety: PII detection, content filtering, hallucination check, schema enforcement. Drop anywhere in pipeline. Enterprise magnet, huge credibility for production use.
-15. **RAG Pipeline Nodes** — 3 new node types for first-class RAG support:
-    - **Text Chunker**: Split documents into overlapping chunks (configurable size/overlap/strategy)
-    - **Embedding**: Call embedding APIs (OpenAI, Cohere, local models) to convert text → vectors
-    - **Vector Search**: Query vector DBs (Pinecone, Chroma, Qdrant, pgvector) for top-k retrieval
-    - Enables visual RAG builder: File Glob → Chunker → Embedding → Vector Search → LLM → Output
+15. **RAG Knowledge Base** — SPEC DONE (`rag-knowledge-base.md`). Single Knowledge Base node (80% users) + individual RAG nodes (power users). Zero-server local index (.ai-studio-index/), pre-normalized vectors, source citations, Inspector observability. Peer reviewed by Gemini + Codex (21 findings, all fixed). Ready to build.
 16. **EIP: Error Handler / Dead Letter** — Route errors to a fallback path instead of stopping the workflow. Node-level `onError` output handle that connects to recovery logic. Table stakes for production automation.
 17. **EIP: Content Enricher** — Merge data from an external source (DB, API) into the current message. Ties into SQL Query node — "enrich this record with customer data from the DB."
 18. **EIP: Wire Tap** — Copy node output to a side channel (log, file, webhook) without affecting the main flow. Non-blocking audit/debugging.

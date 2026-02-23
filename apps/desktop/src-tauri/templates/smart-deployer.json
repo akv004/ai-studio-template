@@ -1,0 +1,24 @@
+{
+  "nodes": [
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 280 }, "data": { "name": "request", "dataType": "text", "default": "deploy all services, but auth to v2.1.0 on staging" } },
+    { "id": "file_config", "type": "file_read", "position": { "x": 50, "y": 80 }, "data": { "label": "Deploy Config", "path": "~/.ai-studio/deploy-config.md" } },
+    { "id": "llm_parser", "type": "llm", "position": { "x": 420, "y": 180 }, "data": { "label": "Plan Builder", "provider": "google", "model": "gemini-2.0-flash", "systemPrompt": "You are a deployment planner. You receive:\n1. A deployment config file (in context) with all services, repos, workflows, and rules\n2. A natural language deployment request (as the prompt)\n\nYour job: parse the request and output a valid JSON array of deployment actions.\n\nEach action must be:\n```json\n{\"service\": \"alias\", \"repo\": \"full-repo-name\", \"workflow\": \"filename.yml\", \"tag\": \"tag\", \"env\": \"environment\", \"command\": \"full gh CLI command\"}\n```\n\nRules:\n- Use the config file for repo names, workflow files, and defaults\n- If user says \"all\" or \"everything\", include all services from the config\n- If user says \"except X\", exclude those\n- Fill in defaults for any unspecified tag or env\n- Build the full `gh workflow run` command for each service\n- Respect ordering rules from the config (e.g., gateway first)\n- Output ONLY the JSON array, no markdown fences, no explanation", "temperature": 0.0, "maxTokens": 2048 } },
+    { "id": "approval_1", "type": "approval", "position": { "x": 820, "y": 180 }, "data": { "label": "Review Plan", "message": "Review the deployment plan below. Approve to execute, reject to cancel." } },
+    { "id": "iterator_1", "type": "iterator", "position": { "x": 1100, "y": 180 }, "data": { "label": "Per Service" } },
+    { "id": "shell_deploy", "type": "shell_exec", "position": { "x": 1100, "y": 400 }, "data": { "label": "Deploy", "command": "{{item.command}}", "timeout": 30 } },
+    { "id": "aggregator_1", "type": "aggregator", "position": { "x": 1400, "y": 180 }, "data": { "label": "Collect Results", "strategy": "array" } },
+    { "id": "transform_report", "type": "transform", "position": { "x": 1400, "y": 400 }, "data": { "mode": "template", "template": "# Deployment Report\n\n**Request**: {{input_1.request}}\n\n## Results\n{{aggregator_1.output}}\n\n---\n*Deployed via AI Studio Smart Deployer*" } },
+    { "id": "output_1", "type": "output", "position": { "x": 1700, "y": 300 }, "data": { "name": "report", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-config-parser", "source": "file_config", "target": "llm_parser", "sourceHandle": "content", "targetHandle": "context" },
+    { "id": "e-input-parser", "source": "input_1", "target": "llm_parser", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-parser-approval", "source": "llm_parser", "target": "approval_1", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-approval-iterator", "source": "approval_1", "target": "iterator_1", "sourceHandle": "approved", "targetHandle": "input" },
+    { "id": "e-iterator-shell", "source": "iterator_1", "target": "shell_deploy", "sourceHandle": "item", "targetHandle": "input" },
+    { "id": "e-shell-aggregator", "source": "shell_deploy", "target": "aggregator_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-aggregator-report", "source": "aggregator_1", "target": "transform_report", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-report-output", "source": "transform_report", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.75 }
+}

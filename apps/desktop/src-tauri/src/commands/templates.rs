@@ -49,6 +49,9 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
     // Hybrid intelligence
     ("hybrid-intelligence", "Hybrid Intelligence", "Two models think differently — local Qwen (engineer) and Gemini (architect) in parallel, then a synthesizer merges the best of both",
         include_str!("../../templates/hybrid-intelligence.json")),
+    // DevOps
+    ("smart-deployer", "Smart Deployer", "Natural language microservice deployment — LLM reads your config, builds a plan, you approve, it runs gh CLI",
+        include_str!("../../templates/smart-deployer.json")),
 ];
 
 fn templates_directory() -> PathBuf {

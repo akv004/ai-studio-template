@@ -1,0 +1,36 @@
+# RAG Knowledge Base — Implementation Review
+**Date**: 2026-02-22
+**Reviewer**: GPT-5.2 (Codex CLI)
+**Status**: RESOLVED — all findings accepted and applied to spec
+
+### Findings Table
+| Check | Priority | Verdict | Findings |
+|-------|----------|---------|----------|
+| Rust executor shape + conventions | HIGH | WARN | Spec pseudo-code doesn’t match the current `NodeExecutor` API (`execute(ctx, node_id, node_data, incoming) -> NodeOutput`). Plan the KB node to follow `llm.rs` patterns: input resolution (incoming > config), `resolve_template`, sidecar calls via `ctx.sidecar`, and event emission via `emit_workflow_event`. |
+| `vectors.bin` binary format | HIGH | WARN | `[u32 dims][u32 count][f32…]` can work, but needs explicit endianness (pick LE), a version/magic, and strict file-length validation to be resilient to partial writes/corruption. Also define whether vectors are normalized at write-time (recommended) so search is just dot products. |
+| mmap safety + alignment | HIGH | WARN | mmap is feasible on macOS ARM64 + Linux x86_64, but you must avoid UB when interpreting bytes as `f32`. Use `memmap2` and validate `8 + dims*count*4 == file_len`; ensure the float region starts at a 4-byte aligned offset (8 bytes is OK), but still gate casting on alignment checks. |
+| Chunking correctness (recursive) | HIGH | WARN | The proposed sentence/paragraph heuristics (`\n\n`, `.?! + whitespace`) will misbehave on abbreviations, CJK punctuation (`。！？`), and CRLF files. Ensure UTF-8 safe splitting (char boundaries), clamp `overlap < chunkSize`, and add a “hard cap” per chunk to protect the embed endpoint from overlong inputs. |
+| Line/char ranges for citations | MED | WARN | Storing `charStart/charEnd` is ambiguous (chars vs bytes) and makes mapping back to UI harder; line numbers need CRLF-aware counting. Precompute line-start offsets once per file and derive `{lineStart,lineEnd}` cheaply for each chunk. |
+| `chunks.jsonl` lookup strategy | HIGH | FAIL | “Load corresponding chunks from chunks.jsonl” is underspecified: mapping `chunk_id -> JSONL line` without an offset index implies either O(n) scan per query or loading the entire file. Add an `offsets.bin` (u64 per chunk) or switch to a length-prefixed binary format/SQLite to enable O(1) fetch for top-K. |
+| Incremental indexing semantics | HIGH | FAIL | Updating only stale files is hard with a single flat `vectors.bin`/`chunks.jsonl` (deletes/renames require compaction and ID remapping). Either (a) MVP: rebuild the whole index on any change, or (b) design shards/tombstones per source file and a merge step at query time. |
+| Sidecar `/embed` feasibility | HIGH | WARN | Sidecar providers currently implement chat only (`AgentProvider` has no `embed()`), so `/embed` requires a new provider API (or separate embedding clients) plus consistent per-request config (`api_key/base_url/extra_config`) like `/chat/direct`. Add batching + retry/backoff, and handle per-input token limits (truncate/split with clear errors). |
+| Provider naming/config drift | MED | WARN | Spec uses names like `local_openai`/“Local/OpenAI-Compatible”; current sidecar uses `"local"` and `"azure_openai"` in `create_provider_for_request`. Standardize provider IDs and config keys early to avoid UI/settings mismatches. |
+| Concurrency + crash safety | HIGH | FAIL | Two workflows writing the same index concurrently can corrupt files. Add a cross-process lock (lockfile + `fs2`/OS locks) and write indexes atomically (write temp files/dir + `rename`) so crashes don’t leave half-written `vectors.bin`/`meta.json`. |
+| Security + default fileTypes | MED | WARN | Default `fileTypes="*"` is likely to pull in secrets (`.env`, keys) and may accidentally index the index directory itself. Default to safer include globs (e.g., `*.md,*.txt,*.rs,*.py,*.ts,*.js,*.json,*.yml`) and explicitly exclude `.ai-studio-index/` plus deny-listed paths (reuse `file_glob` containment + `is_path_denied`). |
+| Performance expectations | MED | WARN | Brute-force cosine at 50K×1536 can be acceptable, but the spec’s latency numbers are optimistic without SIMD/parallelism and with cold mmap pages. Normalize vectors at index time, use a top-K heap (avoid full sort), and consider `spawn_blocking`/Rayon for CPU loops to avoid stalling async execution. |
+| Test strategy | HIGH | WARN | Good callout, but make tests explicit: chunker edge cases (empty/Unicode/CJK/CRLF/huge line), index round-trip (write/read/mmap), corruption detection (truncated header/data), and sidecar `/embed` contract tests (batching, retries, dimension checks). |
+
+### Actionable Checklist
+- [x] Define `vectors.bin` header: magic + version + little-endian encoding + strict length checks; decide/store “normalized vectors” invariant. → **Added: 0x52414756 magic, version u32, LE, pre-normalized invariant, length validation formula.** (2026-02-22, spec updated)
+- [x] Make index writes atomic (temp dir/files + rename) and add a cross-process index lock to prevent concurrent writers. → **Added: temp dir + rename pattern, .lock file + fs2 crate.** (2026-02-22, spec updated)
+- [x] Pick a concrete `chunks` storage/read strategy (JSONL + `offsets.bin`, or binary length-prefix, or SQLite) so top-K chunk fetch is O(1) without loading all metadata. → **Chose: JSONL + offsets.bin (u64 per chunk). Human-readable + O(1) seek.** (2026-02-22, spec updated)
+- [x] Decide MVP incremental indexing behavior (full rebuild vs sharded/tombstones) and document how deletes/renames are handled. → **MVP: full rebuild on any change (detects new/stale/deleted). Per-file shards in Phase 2.** (2026-02-22, spec updated)
+- [x] Implement UTF-8 safe chunking with CRLF handling, CJK punctuation support, and a hard max chunk size to avoid embed token-limit failures. → **Added: char_indices splitting, CRLF normalization, CJK 。！？, abbreviation heuristic, hard cap = max(chunk_size*2, 2000).** (2026-02-22, spec updated)
+- [x] Add sidecar `/embed` endpoint following `/chat/direct` patterns (auth middleware, per-request provider config) and extend the provider layer to support embeddings. → **Added: separate embedding client (not AgentProvider), per-request config, token validation, partial failure handling.** (2026-02-22, spec updated)
+- [x] Standardize provider IDs (`azure_openai`, `local`, etc.) across spec/UI/settings/sidecar to prevent configuration drift. → **Added: canonical ID table (azure_openai, local, openai, google, anthropic, ollama).** (2026-02-22, spec updated)
+- [x] Add targeted tests for chunking, index read/write/mmap validation, and `/embed` batching + error handling. → **Added: full Test Strategy section with 5 categories, ~20 specific test cases.** (2026-02-22, spec updated)
+
+### Notes (optional)
+- Consider adding an `offsets`/index file even if you keep JSONL; it’s the simplest way to keep human-readable metadata without sacrificing query-time performance.
+- If you want portability + tooling, `.npy` (little-endian f32) or `safetensors` can replace a custom `vectors.bin`, but a custom header is fine if you version it and validate strictly.
+- If you normalize vectors at index time, cosine similarity becomes `dot(query_unit, vec_unit)`, which simplifies and speeds search and avoids per-vector norm computation.

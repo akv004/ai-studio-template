@@ -106,3 +106,5 @@ All resolved reviews have been deleted. Summary of completed reviews:
 | 2026-02-18 | Node field model coherence | Codex (GPT-5.3) | 8 findings — F2 already fixed (ff2b271), F7 deferred (router branch IDs). Fields being wired incrementally per executor. |
 | 2026-02-19 | EIP spec vs implementation | Gemini 3 Pro | 7 findings — 3 fixed (spec updates, nested iterator warning), 1 deferred (session cleanup), 3 PASS |
 | 2026-02-19 | EIP implementation code review | GPT-5 Codex | 12 findings — 5 fixed (UTF-8 truncation, File Glob containment, multi-aggregator, maxHistory clamp, cycle detection), 7 deferred to Phase 5 |
+| 2026-02-22 | RAG Knowledge Base spec — architecture | Gemini 3 Pro | 8 findings — all accepted. Storage deletions, concurrent access, file permissions, token limits. Spec updated. |
+| 2026-02-22 | RAG Knowledge Base spec — implementation | GPT-5.2 Codex | 13 findings — all accepted. vectors.bin format (magic/version/LE/pre-normalized), offsets.bin for O(1) lookup, atomic writes, UTF-8 chunking, CJK support, test strategy. Spec updated. |

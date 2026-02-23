@@ -94,12 +94,14 @@ class EmbeddingClient:
 class AzureOpenAIEmbeddingClient(EmbeddingClient):
     """Azure OpenAI embeddings via deployment API."""
 
-    def __init__(self, endpoint: str, api_key: str, api_version: str = '2024-02-01'):
+    def __init__(self, endpoint: str, api_key: str, api_version: str = '2024-02-01', deployment: str = ''):
         super().__init__(base_url=endpoint, api_key=api_key, max_batch=2048)
         self.api_version = api_version
+        self.deployment = deployment  # Override deployment name (may differ from model name)
 
     async def _embed_batch(self, texts: list[str], model: str) -> tuple[list[list[float]], dict]:
-        url = f'{self.base_url}/openai/deployments/{model}/embeddings?api-version={self.api_version}'
+        deploy_name = self.deployment or model  # Use deployment override, fallback to model
+        url = f'{self.base_url}/openai/deployments/{deploy_name}/embeddings?api-version={self.api_version}'
         async with httpx.AsyncClient(timeout=60.0) as client:
             resp = await client.post(
                 url,
@@ -152,6 +154,7 @@ def create_embedding_client(
             endpoint=base_url or cfg.get('endpoint', ''),
             api_key=api_key,
             api_version=cfg.get('api_version', '2024-02-01'),
+            deployment=cfg.get('deployment', ''),
         )
     elif provider in ('local', 'openai'):
         default_url = 'http://localhost:11434/v1' if provider == 'local' else 'https://api.openai.com/v1'

@@ -198,6 +198,14 @@ impl NodeExecutor for KnowledgeBaseExecutor {
                 }
             }
 
+            // Use node-level embeddingDeployment if set, otherwise fall back to embeddingModel
+            // This prevents the chat deployment name (e.g. gpt-4o-mini) from being used for embeddings
+            let embed_deploy = node_data.get("embeddingDeployment")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .unwrap_or(embedding_model);
+            extra_config.insert("deployment".to_string(), Value::String(embed_deploy.to_string()));
+
             let embed_body = serde_json::json!({
                 "texts": texts,
                 "provider": embedding_provider,
@@ -302,6 +310,13 @@ impl NodeExecutor for KnowledgeBaseExecutor {
                 }
             }
         }
+
+        // Override deployment for embedding (don't use chat deployment name)
+        let embed_deploy = node_data.get("embeddingDeployment")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .unwrap_or(embedding_model);
+        extra_config.insert("deployment".to_string(), Value::String(embed_deploy.to_string()));
 
         let query_embed_body = serde_json::json!({
             "texts": [query],

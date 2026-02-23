@@ -84,6 +84,8 @@
 | **Hybrid Intelligence template** | DONE | Ensemble synthesis: Qwen (engineer) + Gemini (architect) in parallel → synthesizer merges best of both. Template #12 (f6f5587) |
 | **Smart Deployer template** | DONE | Natural language microservice deployment: File Read → LLM Plan Builder → Approval → Iterator → Shell Exec. Template #13 |
 | **RAG Knowledge Base spec** | DONE | Full spec: Knowledge Base node, 2-tier design, binary index format, sidecar /embed, security, templates. Peer reviewed by Gemini + Codex, all 21 findings accepted and fixed. |
+| **README overhaul** | DONE | Complete rewrite: 16 node types, 13 templates, 129 tests, 6 providers, capability-based positioning (no competitor names), correct shortcuts, RAG "Coming Next". Peer reviewed by Gemini + Codex (c7c835e) |
+| **v0.1.2 tagged** | DONE | Streaming + Rich Output + RAG spec + README overhaul |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---

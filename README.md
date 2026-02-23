@@ -1,12 +1,15 @@
 <p align="center">
-  <img src="docs/screenshots/screenshot-1-main-dashboard.png" alt="AI Studio" width="800">
+  <img src="docs/screenshots/workflow-canvas.png" alt="AI Studio — Visual Workflow Editor" width="800">
+</p>
+<p align="center">
+  <em><small>[Placeholder: Add a demo.gif here showing a live workflow execution with streaming output and Inspector updates]</small></em>
 </p>
 
 <h1 align="center">AI Studio</h1>
 
 <p align="center">
   <strong>The open-source IDE for AI agents.</strong><br>
-  Visual pipelines. Full observability. Local-first. Zero cloud lock-in.
+  Build, run, debug, and compare AI agents — with full visibility into every decision and dollar spent.
 </p>
 
 <p align="center">
@@ -42,45 +45,38 @@
 
 ---
 
-## What Makes This Different
+## Why AI Studio?
 
-| Capability | Chat-Only AI Apps | Web-Based Workflow Builders | **AI Studio** |
-|---|---|---|---|
-| Visual pipeline builder with execution engine | No | Yes (cloud-hosted) | **Yes (runs locally)** |
-| Full Inspector — event traces, replay, branching | No | No | **Yes** |
-| Real-time streaming through pipeline nodes | No | Partial | **Yes (SSE, all providers)** |
-| Hybrid intelligence — auto-pick model per step | No | No | **Yes** |
-| Cost tracking per message and per node | No | No | **Yes** |
-| Local-first — all data on your machine | No | No | **Yes (SQLite)** |
-| MCP-native tool system | Limited | No | **Yes** |
-| Desktop app — works offline | No | No | **Yes** |
-| Open source and free | No | Some | **Yes (MIT)** |
+| Feature | SaaS Chat UIs | Cloud Workflow Builders | **AI Studio** |
+|---------|---------------|-------------------------|---------------|
+| **Full Inspector (traces, replay, branch)** | No | No | **Yes** |
+| **Visual pipeline builder** | No | Yes | **Yes (+ local engine)** |
+| **Hybrid intelligence (auto-pick model)** | No | No | **Yes** |
+| **Local-first (data stays on machine)** | No | Partial | **Yes (SQLite)** |
+| **MCP-native tool system** | Limited | No | **Full Support** |
+| **Cost tracking per message** | No | No | **Yes** |
+| **Approval rules for safety** | N/A | Minimal | **Full rules engine** |
+| **Open source & Desktop native** | No | No | **Yes (MIT)** |
 
 ---
 
 ## Visual Workflow Engine
 
-**16 node types.** Build anything from a 4-node Q&A bot to a multi-model deployment pipeline — no code required.
+<p align="center">
+  <img src="docs/screenshots/node-palette.png" alt="16 Node Types" width="800">
+</p>
 
-| Category | Nodes |
-|----------|-------|
-| **Core** | Input, Output, LLM (6 providers + streaming), Tool (MCP) |
-| **Control Flow** | Router (conditional branching), Approval (human-in-the-loop), Subworkflow |
-| **Data I/O** | File Read, File Write, File Glob, HTTP Request, Shell Exec |
-| **Processing** | Transform (JSONPath + expressions), Validator (JSON Schema), Iterator, Aggregator |
+### Node Editor — Visual AI Pipelines
 
-**Key capabilities:**
-- **SSE streaming** — watch tokens flow through LLM nodes in real time (all 6 providers)
-- **Live mode** — continuous execution loop with cooperative cancellation (IoT, monitoring)
-- **Vision support** — pipe images through LLM nodes (webcam, screenshots, documents)
-- **Iterator + Aggregator** — process arrays item-by-item with fan-out/fan-in
-- **DAG execution engine** — topological sort, cycle detection, 129 unit tests
-- **13 bundled templates** — Code Review, Research, Multi-Model Compare, Webcam Monitor, Hybrid Intelligence, Smart Deployer, and more
-- **User templates** — save any workflow as a reusable template
+**"Unreal Blueprints for AI agents."** Build complex AI workflows by connecting nodes — no code required:
 
-### Rich Output
-
-LLM responses render as **formatted markdown, JSON tables, code blocks, and collapsible trees** — not raw text. Output rendering works everywhere: canvas preview, Inspector, Sessions, Runs.
+- **16 Node Types** — Input, Output, LLM, Tool, Router, Approval, Transform, Subworkflow, HTTP Request, File Read/Write, File Glob, Iterator, Aggregator, Shell Exec, Validator.
+- **Live Workflow Mode** — Watch real-time multi-agent interactions unfold with continuous, cooperative cancellation loops and live data feeds.
+- **DAG Execution Engine** — Topological sort with cycle detection, 129 unit tests.
+- **Live Execution View** — Watch data flow through nodes with status badges and cost per node.
+- **13 Bundled Templates** — Including Smart Deployer, Hybrid Intelligence (Ensemble Synthesis), RAG Search, Team Assistant, and Computer Vision pipelines.
+- **Export/Import & User Templates** — Share workflows as JSON files or save them as reusable templates.
+- **Blender-inspired UI** — Dark theme, typed edges, inline editing, collapsible nodes, context menu + keyboard shortcuts.
 
 ---
 
@@ -144,6 +140,15 @@ Extend AI Studio with third-party capabilities:
 
 ---
 
+## Streaming, Rich Output & Vision
+
+- **SSE token streaming** — watch tokens flow through LLM nodes in real time. All 6 providers supported.
+- **Rich output rendering** — markdown, JSON tables, code blocks, and collapsible trees everywhere: canvas preview, Inspector, Sessions, Runs.
+- **Data I/O pipeline** — load documents with **File Glob**, loop with **Iterator**, combine with **Aggregator**, transform with **JSONPath + expressions**.
+- **Vision pipeline** — pipe images through LLM nodes from webcam, file read, or MCP tools. Multi-image support for providers like Qwen3-VL.
+
+---
+
 ## 6 Modules
 
 | Module | What It Does |
@@ -152,7 +157,7 @@ Extend AI Studio with third-party capabilities:
 | **Sessions** | Interactive chat with real-time tool approval and streaming |
 | **Runs** | Headless batch execution — CI/CD for agents |
 | **Inspector** | Deep-dive into any session: timeline, traces, cost, replay |
-| **Workflows** | Visual pipeline builder — 16 node types, DAG engine, streaming, live mode |
+| **Workflows** | Visual pipeline builder — connect 16+ nodes to orchestrate behavior |
 | **Settings** | Providers, MCP servers, plugins, budget, hotkeys, appearance |
 
 ---
@@ -363,33 +368,36 @@ ai-studio-template/
 
 | Phase | Focus | Status |
 |-------|-------|--------|
-| **Phase 0** | Specs + architecture | Done |
 | **Phase 1** | Core loop — agents, sessions, persistence, events, inspector, MCP | Done |
-| **Phase 2** | Polish — session branching, cost tracking, onboarding | Done |
-| **Phase 3** | Node editor, hybrid intelligence, plugin system, templates | Done |
-| **Phase 4** | Universal automation — 16 node types, streaming, live mode, data I/O, vision | **In progress** |
-| **Phase 5** | RAG Knowledge Base, A/B Eval, Time-Travel Debug, Auto-Pipeline Generator | Planned |
+| **Phase 2** | Polish — session branching, cost tracking, inspector improvements, onboarding | Done |
+| **Phase 3** | Node editor, hybrid intelligence, plugin system | Done |
+| **Phase 4** | Universal automation — 16 custom node types, data I/O nodes, streaming, multi-images, canvas UX | **In progress (Phase 4C)** |
+| **Phase 5** | Killer Features — A/B Eval, Time-Travel Debug, RAG Knowledge Base | Planned |
 
 ### What's Built
 
-- **16 node types** with DAG execution engine (topological sort, cycle detection)
-- **SSE streaming** across all 6 LLM providers (Ollama, OpenAI, Azure, Google, Anthropic, Local)
-- **Live workflow mode** — continuous execution with cooperative cancellation
-- **Vision pipeline** — multi-image LLM inputs (webcam, file read, MCP tools)
-- **Data I/O nodes** — File Glob, Iterator/Aggregator fan-out/fan-in, HTTP Request, Shell Exec
-- **Transform node** — RFC 9535 JSONPath + 15 pipe operators + expression engine
-- **Rich output rendering** — markdown, JSON tables, code blocks, collapsible trees
-- **13 bundled templates** + user-saved templates (save/load/delete)
-- **Agent Inspector** — event timeline, tool traces, cost tracking, session branching, export
-- **Hybrid intelligence** — smart router (3 modes), budget tracking with enforcement
-- **MCP-native tools** — registry, approval rules, stdio client, auto-connect
-- **Plugin system** — manifest scanning, subprocess lifecycle, Settings UI
-- **129 Rust unit tests** + Playwright E2E tests
-- **SQLite local-first** persistence (WAL mode, schema v7, 7 migrations)
+- SQLite local-first persistence (WAL mode, schema v7, 7 migrations)
+- 5+ LLM providers (Ollama, Anthropic, OpenAI, Google AI, Azure, LocalOpenAI compatible modes)
+- MCP-native tool system with registry, approval rules, and stdio client
+- Multi-turn tool calling with event-sourced audit trail
+- Agent Inspector with timeline, grouping, filters, keyboard nav, markdown export
+- Session branching (fork-and-compare)
+- Headless runs with async background execution
+- Node Editor with **16** custom node types, React Flow canvas, DAG execution engine
+- Smart model router (3 modes: single, auto, manual)
+- Budget tracking with monthly limits and runtime enforcement
+- Plugin system with manifest scanning and Settings UI
+- Blender-inspired node styling, context menus, inline editing, and visual typed edges
+- **13** bundled workflow templates + Save/Load JSON user template functionality
+- **129+** Rust unit tests across routing, workflow validation, template resolution, and sidecar API integration
+- SSE Token Streaming functionality directly rendering responsive blocks mid-flight.
+- Playwright E2E UI automation structure with Tauri IPC mocks via 30+ custom test commands
 
-### Coming Next: RAG Knowledge Base
+### Coming Next
 
-Local-first retrieval-augmented generation — point a workflow at a folder of documents, get answers with source citations. Zero-server, zero-config, file-based vector index. [Full spec](docs/specs/rag-knowledge-base.md) complete and peer-reviewed.
+- **RAG Knowledge Base** — point a workflow at a folder of documents, get answers with source citations (file + line number + relevance score). Zero-server, file-based vector index, works offline. [Full spec](docs/specs/rag-knowledge-base.md) complete and peer-reviewed.
+- **A/B Eval Node** — send the same prompt to multiple models in parallel, compare outputs side-by-side with latency, cost, and quality metrics.
+- **Time-Travel Debug** — click any completed node, edit its output, re-run the pipeline from that point. No wasted tokens.
 
 See [STATUS.md](STATUS.md) for the detailed sprint board.
 

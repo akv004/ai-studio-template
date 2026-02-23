@@ -189,9 +189,29 @@ impl SidecarManager {
         {
             let port = { self.inner.lock().await.port };
             eprintln!("[sidecar] Killing orphaned processes on port {}", port);
-            let _ = std::process::Command::new("fuser")
-                .args(["-k", &format!("{}/tcp", port)])
-                .output();
+
+            // macOS: `fuser -k PORT/tcp` doesn't work — use lsof + kill instead.
+            // Linux: fuser works fine.
+            #[cfg(target_os = "macos")]
+            {
+                if let Ok(output) = std::process::Command::new("lsof")
+                    .args(["-ti", &format!(":{}", port)])
+                    .output()
+                {
+                    let pids = String::from_utf8_lossy(&output.stdout);
+                    for pid in pids.split_whitespace() {
+                        eprintln!("[sidecar] Killing orphaned PID {} on port {}", pid, port);
+                        let _ = std::process::Command::new("kill").arg(pid).output();
+                    }
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                let _ = std::process::Command::new("fuser")
+                    .args(["-k", &format!("{}/tcp", port)])
+                    .output();
+            }
+
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
 

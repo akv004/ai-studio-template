@@ -3,6 +3,7 @@ pub mod validation;
 pub mod engine;
 pub mod executors;
 pub mod live;
+pub mod rag;
 
 use crate::db::{Database, now_iso};
 use crate::error::AppError;

@@ -518,6 +518,86 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                 </>
             )}
 
+            {type === 'knowledge_base' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Docs Folder</span>
+                        <input className="config-input" value={(data.docsFolder as string) || ''}
+                            onChange={(e) => update('docsFolder', e.target.value)}
+                            placeholder="~/my-docs/" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Index Location</span>
+                        <input className="config-input" value={(data.indexLocation as string) || ''}
+                            onChange={(e) => update('indexLocation', e.target.value)}
+                            placeholder="Auto: {docsFolder}/.ai-studio-index/" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Embedding Provider</span>
+                        <select className="config-input" value={(data.embeddingProvider as string) || 'azure_openai'}
+                            onChange={(e) => update('embeddingProvider', e.target.value)}>
+                            <option value="azure_openai">Azure OpenAI</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="local">Local (OpenAI-Compatible)</option>
+                            <option value="ollama">Ollama</option>
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Embedding Model</span>
+                        <input className="config-input" value={(data.embeddingModel as string) || 'text-embedding-3-small'}
+                            onChange={(e) => update('embeddingModel', e.target.value)}
+                            placeholder="text-embedding-3-small" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Chunk Strategy</span>
+                        <select className="config-input" value={(data.chunkStrategy as string) || 'recursive'}
+                            onChange={(e) => update('chunkStrategy', e.target.value)}>
+                            <option value="recursive">Recursive (recommended)</option>
+                            <option value="paragraph">Paragraph</option>
+                            <option value="sentence">Sentence</option>
+                            <option value="fixed_size">Fixed Size</option>
+                        </select>
+                    </label>
+                    <div className="flex gap-2">
+                        <label className="block flex-1">
+                            <span className="text-xs text-[var(--text-muted)]">Chunk Size</span>
+                            <input type="number" className="config-input" value={(data.chunkSize as number) ?? 500}
+                                onChange={(e) => update('chunkSize', parseInt(e.target.value) || 500)} />
+                        </label>
+                        <label className="block flex-1">
+                            <span className="text-xs text-[var(--text-muted)]">Overlap</span>
+                            <input type="number" className="config-input" value={(data.chunkOverlap as number) ?? 50}
+                                onChange={(e) => update('chunkOverlap', parseInt(e.target.value) || 50)} />
+                        </label>
+                    </div>
+                    <div className="flex gap-2">
+                        <label className="block flex-1">
+                            <span className="text-xs text-[var(--text-muted)]">Top K</span>
+                            <input type="number" className="config-input" min={1} max={50}
+                                value={(data.topK as number) ?? 5}
+                                onChange={(e) => update('topK', parseInt(e.target.value) || 5)} />
+                        </label>
+                        <label className="block flex-1">
+                            <span className="text-xs text-[var(--text-muted)]">Min Score</span>
+                            <input type="number" className="config-input" step="0.05" min={0} max={1}
+                                value={(data.scoreThreshold as number) ?? 0.0}
+                                onChange={(e) => update('scoreThreshold', parseFloat(e.target.value) || 0)} />
+                        </label>
+                    </div>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">File Types</span>
+                        <input className="config-input text-xs" value={(data.fileTypes as string) || '*.md,*.txt,*.rs,*.py,*.ts,*.js,*.json,*.yml,*.yaml,*.csv,*.toml,*.go,*.java'}
+                            onChange={(e) => update('fileTypes', e.target.value)}
+                            placeholder="*.md,*.txt,*.py,..." />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Max File Size (MB)</span>
+                        <input type="number" className="config-input" value={(data.maxFileSize as number) ?? 10}
+                            onChange={(e) => update('maxFileSize', parseInt(e.target.value) || 10)} />
+                    </label>
+                </>
+            )}
+
             {type === 'aggregator' && (
                 <>
                     <label className="block">

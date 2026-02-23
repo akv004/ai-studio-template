@@ -126,6 +126,11 @@ pub fn run() {
             disable_plugin,
             remove_plugin,
             connect_enabled_plugins,
+            // Knowledge Base (RAG)
+            index_folder,
+            search_index,
+            get_index_stats,
+            delete_index,
             // Sidecar
             sidecar_start,
             sidecar_stop,

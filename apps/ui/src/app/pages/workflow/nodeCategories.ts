@@ -2,6 +2,7 @@ import {
     FileInput, FileOutput, Cpu, GitFork,
     Wrench, ShieldCheck, Repeat, MessageSquare,
     Globe, Terminal, CheckSquare, FolderOpen, Layers,
+    BookOpen,
 } from 'lucide-react';
 
 export interface NodeCategory {
@@ -21,6 +22,7 @@ export const NODE_CATEGORIES: NodeCategory[] = [
         label: 'AI',
         types: [
             { type: 'llm', label: 'LLM', icon: Cpu, description: 'Language model call' },
+            { type: 'knowledge_base', label: 'Knowledge Base', icon: BookOpen, description: 'RAG: index docs, search, cite sources' },
             { type: 'router', label: 'Router', icon: GitFork, description: 'Conditional branching' },
         ],
     },

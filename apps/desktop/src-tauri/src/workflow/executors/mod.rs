@@ -14,6 +14,7 @@ pub mod shell_exec;
 pub mod validator;
 pub mod iterator;
 pub mod aggregator;
+pub mod knowledge_base;
 
 use crate::db::Database;
 use crate::sidecar::SidecarManager;
@@ -93,6 +94,8 @@ impl ExecutorRegistry {
         // Phase 4B
         executors.insert("iterator".to_string(), Box::new(iterator::IteratorExecutor));
         executors.insert("aggregator".to_string(), Box::new(aggregator::AggregatorExecutor));
+        // Phase 5A — RAG
+        executors.insert("knowledge_base".to_string(), Box::new(knowledge_base::KnowledgeBaseExecutor));
         Self { executors }
     }
 

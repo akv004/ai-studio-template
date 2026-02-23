@@ -15,6 +15,7 @@ import { ShellExecNode } from './nodes/ShellExecNode';
 import { ValidatorNode } from './nodes/ValidatorNode';
 import { IteratorNode } from './nodes/IteratorNode';
 import { AggregatorNode } from './nodes/AggregatorNode';
+import { KnowledgeBaseNode } from './nodes/KnowledgeBaseNode';
 
 export const customNodeTypes: NodeTypes = {
     input: InputNode,
@@ -33,4 +34,5 @@ export const customNodeTypes: NodeTypes = {
     validator: ValidatorNode,
     iterator: IteratorNode,
     aggregator: AggregatorNode,
+    knowledge_base: KnowledgeBaseNode,
 };

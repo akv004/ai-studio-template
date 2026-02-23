@@ -54,4 +54,27 @@ test.describe('Workflow Canvas', () => {
         await page.waitForTimeout(1000);
         await page.screenshot({ path: 'e2e/screenshots/nodes-rendered.png', fullPage: true });
     });
+
+    test('knowledge base node renders on canvas', async ({ page }) => {
+        await navigateToWorkflows(page);
+        const workflowCard = page.getByText('Test Workflow').first();
+        await expect(workflowCard).toBeVisible({ timeout: 5000 });
+        await workflowCard.click();
+        await expect(page.locator('.react-flow')).toBeVisible({ timeout: 10000 });
+        await page.waitForTimeout(1000);
+        // Knowledge Base node should be visible with its label on the canvas
+        await expect(page.locator('.react-flow').getByText('KNOWLEDGE BASE · MY DOCS')).toBeVisible({ timeout: 5000 });
+        await page.screenshot({ path: 'e2e/screenshots/knowledge-base-node.png', fullPage: true });
+    });
+
+    test('knowledge base node in palette', async ({ page }) => {
+        await navigateToWorkflows(page);
+        const workflowCard = page.getByText('Test Workflow').first();
+        await expect(workflowCard).toBeVisible({ timeout: 5000 });
+        await workflowCard.click();
+        await expect(page.locator('.react-flow')).toBeVisible({ timeout: 10000 });
+        // Knowledge Base should appear in the palette (exact match to avoid canvas node)
+        await expect(page.getByText('Knowledge Base', { exact: true })).toBeVisible({ timeout: 5000 });
+        await page.screenshot({ path: 'e2e/screenshots/kb-in-palette.png', fullPage: true });
+    });
 });

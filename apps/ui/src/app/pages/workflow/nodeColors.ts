@@ -16,6 +16,7 @@ export const nodeColors: Record<string, string> = {
     validator: '#2a5a6a',
     iterator: '#6a3a6a',
     aggregator: '#4a2a6a',
+    knowledge_base: '#2a4a7a',
 };
 
 export const PROVIDER_MODELS: Record<string, string[]> = {

@@ -52,6 +52,13 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
     // DevOps
     ("smart-deployer", "Smart Deployer", "Natural language microservice deployment — LLM reads your config, builds a plan, you approve, it runs gh CLI",
         include_str!("../../templates/smart-deployer.json")),
+    // RAG Knowledge Base
+    ("knowledge-qa", "Knowledge Q&A", "Index a docs folder, ask questions, get answers with source citations — the 30-second RAG demo",
+        include_str!("../../templates/knowledge-qa.json")),
+    ("smart-deployer-rag", "Smart Deployer + RAG", "RAG-powered deployment: Knowledge Base indexes deploy docs, LLM plans from context, approval gate, then execute",
+        include_str!("../../templates/smart-deployer-rag.json")),
+    ("codebase-explorer", "Codebase Explorer", "Index source code, ask how things work — citations point to exact files and line numbers",
+        include_str!("../../templates/codebase-explorer.json")),
 ];
 
 fn templates_directory() -> PathBuf {

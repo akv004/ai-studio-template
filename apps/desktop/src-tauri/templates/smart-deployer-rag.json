@@ -1,0 +1,23 @@
+{
+  "nodes": [
+    { "id": "kb_1", "type": "knowledge_base", "position": { "x": 50, "y": 80 }, "data": { "docsFolder": "", "embeddingProvider": "azure_openai", "embeddingModel": "text-embedding-3-small", "chunkStrategy": "recursive", "chunkSize": 500, "topK": 5, "label": "Deploy Docs" } },
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 350 }, "data": { "name": "instruction", "dataType": "text", "defaultValue": "Deploy auth-service to staging" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 400, "y": 200 }, "data": { "provider": "", "model": "", "systemPrompt": "You are a DevOps engineer. Using the deployment documentation provided as context, generate a step-by-step deployment plan for the user's request. Output each command on its own line.", "temperature": 0.2, "label": "Plan Builder" } },
+    { "id": "approval_1", "type": "approval", "position": { "x": 700, "y": 200 }, "data": { "message": "Review the deployment plan before execution" } },
+    { "id": "iterator_1", "type": "iterator", "position": { "x": 950, "y": 200 }, "data": { "mode": "sequential" } },
+    { "id": "shell_1", "type": "shell_exec", "position": { "x": 1200, "y": 200 }, "data": { "command": "{{item}}", "shell": "bash", "timeout": 60, "label": "Run Step" } },
+    { "id": "aggregator_1", "type": "aggregator", "position": { "x": 1450, "y": 200 }, "data": { "strategy": "concat", "separator": "\n---\n" } },
+    { "id": "output_1", "type": "output", "position": { "x": 1700, "y": 200 }, "data": { "name": "results", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-input-kb", "source": "input_1", "target": "kb_1", "sourceHandle": "value", "targetHandle": "query" },
+    { "id": "e-kb-llm", "source": "kb_1", "target": "llm_1", "sourceHandle": "context", "targetHandle": "context" },
+    { "id": "e-input-llm", "source": "input_1", "target": "llm_1", "sourceHandle": "value", "targetHandle": "prompt" },
+    { "id": "e-llm-approval", "source": "llm_1", "target": "approval_1", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-approval-iter", "source": "approval_1", "target": "iterator_1", "sourceHandle": "approved", "targetHandle": "input" },
+    { "id": "e-iter-shell", "source": "iterator_1", "target": "shell_1", "sourceHandle": "item", "targetHandle": "input" },
+    { "id": "e-shell-agg", "source": "shell_1", "target": "aggregator_1", "sourceHandle": "stdout", "targetHandle": "input" },
+    { "id": "e-agg-output", "source": "aggregator_1", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.8 }
+}

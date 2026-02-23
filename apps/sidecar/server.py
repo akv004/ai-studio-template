@@ -24,6 +24,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from agent.chat import ChatService
+from agent.embedding import create_embedding_client
 from agent.providers import (
     OllamaProvider,
     AnthropicProvider,
@@ -294,6 +295,60 @@ async def test_provider(request: ProviderTestRequest):
         return {"success": healthy, "message": "Connected" if healthy else "Health check failed"}
     except Exception as e:
         return {"success": False, "message": str(e)}
+
+
+# ============================================================================
+# Embedding Endpoint (RAG Knowledge Base)
+# ============================================================================
+
+class EmbedRequest(BaseModel):
+    """Embedding request for RAG indexing and search"""
+    texts: list[str]
+    provider: str
+    model: str
+    # Per-request provider config (from Rust, loaded from SQLite settings)
+    api_key: Optional[str] = None
+    base_url: Optional[str] = None
+    extra_config: Optional[dict] = None
+
+
+class EmbedResponse(BaseModel):
+    """Embedding response"""
+    vectors: list[list[float]]
+    model: str
+    dimensions: int
+    usage: dict
+
+
+@app.post("/embed", response_model=EmbedResponse)
+async def embed(request: EmbedRequest):
+    """Generate embeddings for a list of texts. Used by Knowledge Base node."""
+    try:
+        if not request.texts:
+            raise HTTPException(status_code=400, detail="texts list cannot be empty")
+        if len(request.texts) > 10000:
+            raise HTTPException(status_code=400, detail="Maximum 10000 texts per request")
+
+        client = create_embedding_client(
+            provider=request.provider,
+            api_key=request.api_key or "",
+            base_url=request.base_url or "",
+            extra_config=request.extra_config,
+        )
+        result = await client.embed(request.texts, request.model)
+
+        return EmbedResponse(
+            vectors=result.vectors,
+            model=result.model,
+            dimensions=result.dimensions,
+            usage=result.usage,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Embedding error: {str(e)}")
 
 
 # ============================================================================

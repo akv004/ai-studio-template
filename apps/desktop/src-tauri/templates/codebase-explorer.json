@@ -1,0 +1,15 @@
+{
+  "nodes": [
+    { "id": "kb_1", "type": "knowledge_base", "position": { "x": 50, "y": 100 }, "data": { "docsFolder": "", "embeddingProvider": "azure_openai", "embeddingModel": "text-embedding-3-small", "chunkStrategy": "recursive", "chunkSize": 500, "topK": 8, "fileTypes": "*.rs,*.py,*.ts,*.js,*.go,*.java,*.md,*.toml,*.yaml", "label": "Codebase" } },
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 350 }, "data": { "name": "question", "dataType": "text", "defaultValue": "How does the authentication middleware work?" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 450, "y": 200 }, "data": { "provider": "", "model": "", "systemPrompt": "You are a senior engineer explaining a codebase. Using the source code provided as context, answer the user's question. Reference specific files and line numbers from the citations. Be precise and technical.", "temperature": 0.3, "label": "Code Expert" } },
+    { "id": "output_1", "type": "output", "position": { "x": 800, "y": 200 }, "data": { "name": "explanation", "format": "markdown" } }
+  ],
+  "edges": [
+    { "id": "e-input-kb", "source": "input_1", "target": "kb_1", "sourceHandle": "value", "targetHandle": "query" },
+    { "id": "e-kb-llm", "source": "kb_1", "target": "llm_1", "sourceHandle": "context", "targetHandle": "context" },
+    { "id": "e-input-llm", "source": "input_1", "target": "llm_1", "sourceHandle": "value", "targetHandle": "prompt" },
+    { "id": "e-llm-output", "source": "llm_1", "target": "output_1", "sourceHandle": "response", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

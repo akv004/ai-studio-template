@@ -39,10 +39,13 @@ const TEST_WORKFLOW = {
             { id: 'input_1', type: 'input', position: { x: 100, y: 200 }, data: { name: 'input', defaultValue: 'hello' } },
             { id: 'llm_1', type: 'llm', position: { x: 400, y: 200 }, data: { provider: 'local', model: 'qwen3-vl', prompt: '{{input}}' } },
             { id: 'output_1', type: 'output', position: { x: 700, y: 200 }, data: { name: 'result' } },
+            { id: 'kb_1', type: 'knowledge_base', position: { x: 400, y: 400 }, data: { docsFolder: '~/docs', embeddingProvider: 'azure_openai', embeddingModel: 'text-embedding-3-small', chunkStrategy: 'recursive', label: 'My Docs' } },
         ],
         edges: [
             { id: 'e1', source: 'input_1', target: 'llm_1', sourceHandle: 'value', targetHandle: 'prompt' },
             { id: 'e2', source: 'llm_1', target: 'output_1', sourceHandle: 'response', targetHandle: 'value' },
+            { id: 'e3', source: 'input_1', target: 'kb_1', sourceHandle: 'value', targetHandle: 'query' },
+            { id: 'e4', source: 'kb_1', target: 'llm_1', sourceHandle: 'context', targetHandle: 'context' },
         ],
         viewport: { x: 0, y: 0, zoom: 1 },
     }),
@@ -80,7 +83,7 @@ const MOCK_HANDLERS: Record<string, (args?: any) => any> = {
     get_session_stats: () => ({ totalEvents: 0, totalMessages: 0, totalInputTokens: 0, totalOutputTokens: 0, totalCostUsd: 0, modelsUsed: [], totalRoutingDecisions: 0, totalEstimatedSavings: 0, modelUsage: [] }),
 
     // Workflows
-    list_workflows: () => [{ id: TEST_WORKFLOW.id, name: TEST_WORKFLOW.name, description: TEST_WORKFLOW.description, agentId: TEST_WORKFLOW.agentId, nodeCount: 3, isArchived: false, createdAt: TEST_WORKFLOW.createdAt, updatedAt: TEST_WORKFLOW.updatedAt }],
+    list_workflows: () => [{ id: TEST_WORKFLOW.id, name: TEST_WORKFLOW.name, description: TEST_WORKFLOW.description, agentId: TEST_WORKFLOW.agentId, nodeCount: 4, isArchived: false, createdAt: TEST_WORKFLOW.createdAt, updatedAt: TEST_WORKFLOW.updatedAt }],
     get_workflow: () => TEST_WORKFLOW,
     create_workflow: ({ workflow }: any) => ({
         ...TEST_WORKFLOW, ...workflow, id: `wf-${Date.now()}`,
@@ -127,7 +130,19 @@ const MOCK_HANDLERS: Record<string, (args?: any) => any> = {
     connect_enabled_plugins: () => ({ connected: 0, failed: 0 }),
 
     // Templates
-    list_templates: () => [],
+    list_templates: () => [
+        { id: 'knowledge-qa', name: 'Knowledge Q&A', description: 'RAG demo', nodeCount: 4, source: 'bundled' },
+        { id: 'codebase-explorer', name: 'Codebase Explorer', description: 'Index source code', nodeCount: 4, source: 'bundled' },
+    ],
+
+    // Knowledge Base (RAG)
+    index_folder: () => ({ fileCount: 3, chunkCount: 15, dimensions: 1536, embeddingModel: 'text-embedding-3-small', lastIndexed: new Date().toISOString(), indexSizeBytes: 12345 }),
+    search_index: () => [
+        { text: 'Auth uses JWT tokens with 15min expiry', score: 0.92, source: 'auth-service.md', lineStart: 23, lineEnd: 45, chunkId: 0 },
+        { text: 'Refresh tokens stored in Redis', score: 0.87, source: 'auth-service.md', lineStart: 46, lineEnd: 62, chunkId: 1 },
+    ],
+    get_index_stats: () => ({ fileCount: 3, chunkCount: 15, dimensions: 1536, embeddingModel: 'text-embedding-3-small', lastIndexed: '2026-02-22T12:00:00Z', indexSizeBytes: 12345 }),
+    delete_index: () => undefined,
 
     // Database
     wipe_database: () => undefined,

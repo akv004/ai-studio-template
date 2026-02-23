@@ -38,24 +38,30 @@ export function KnowledgeBaseNode({ id, data, selected }: { id: string; data: Re
                         placeholder="~/my-docs/"
                         onChange={e => updateField('docsFolder', e.target.value)}
                         onMouseDown={e => e.stopPropagation()} />
-                    <select className="node-inline-input" value={embeddingProvider}
-                        onChange={e => {
-                            const p = e.target.value;
-                            const models = EMBEDDING_MODELS[p] || [];
-                            updateFields({ embeddingProvider: p, embeddingModel: models[0] || '' });
-                        }}
-                        onMouseDown={e => e.stopPropagation()}>
-                        <option value="azure_openai">Azure OpenAI</option>
-                        <option value="openai">OpenAI</option>
-                        <option value="local">Local</option>
-                        <option value="ollama">Ollama</option>
-                    </select>
-                    <select className="node-inline-input" value={embeddingModel}
-                        onChange={e => updateField('embeddingModel', e.target.value)}
-                        onMouseDown={e => e.stopPropagation()}>
-                        <option value="" disabled>Model...</option>
-                        {validModels.map(m => <option key={m} value={m}>{m}</option>)}
-                    </select>
+                    <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-[#666] w-16">Embed Provider</span>
+                        <select className="node-inline-input flex-1" value={embeddingProvider}
+                            onChange={e => {
+                                const p = e.target.value;
+                                const models = EMBEDDING_MODELS[p] || [];
+                                updateFields({ embeddingProvider: p, embeddingModel: models[0] || '' });
+                            }}
+                            onMouseDown={e => e.stopPropagation()}>
+                            <option value="azure_openai">Azure OpenAI</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="local">Local</option>
+                            <option value="ollama">Ollama</option>
+                        </select>
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <span className="text-[9px] text-[#666] w-16">Embed Model</span>
+                        <select className="node-inline-input flex-1" value={embeddingModel}
+                            onChange={e => updateField('embeddingModel', e.target.value)}
+                            onMouseDown={e => e.stopPropagation()}>
+                            <option value="" disabled>Model...</option>
+                            {validModels.map(m => <option key={m} value={m}>{m}</option>)}
+                        </select>
+                    </div>
                     <div className="flex items-center gap-1">
                         <span className="text-[9px] text-[#666] w-12">Strategy</span>
                         <select className="node-inline-input flex-1" value={chunkStrategy}

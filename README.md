@@ -383,8 +383,8 @@ ai-studio-template/
 | **Phase 1** | Core loop — agents, sessions, persistence, events, inspector, MCP | Done |
 | **Phase 2** | Polish — session branching, cost tracking, inspector improvements, onboarding | Done |
 | **Phase 3** | Node editor, hybrid intelligence, plugin system | Done |
-| **Phase 4** | Universal automation — 16 custom node types, data I/O nodes, streaming, multi-images, canvas UX | **In progress (Phase 4C)** |
-| **Phase 5** | Killer Features — A/B Eval, Time-Travel Debug, RAG Knowledge Base | Planned |
+| **Phase 4** | Universal automation — 16 custom node types, data I/O nodes, streaming, multi-images, canvas UX | Done |
+| **Phase 5** | Killer Features — A/B Eval, Time-Travel Debug, RAG Knowledge Base | **In progress (Phase 5C)** |
 
 ### What's Built
 
@@ -405,13 +405,14 @@ ai-studio-template/
 - SSE Token Streaming functionality directly rendering responsive blocks mid-flight.
 - Playwright E2E UI automation structure with Tauri IPC mocks via 30+ custom test commands
 
-### Coming Next
-
 <p align="center">
   <img src="docs/screenshots/rag-workflow.png" alt="RAG Knowledge Base Workflow" width="800">
 </p>
 
-- **RAG Knowledge Base** — point a workflow at a folder of documents, get answers with source citations (file + line number + relevance score). Zero-server, file-based vector index, works offline. [Full spec](docs/specs/rag-knowledge-base.md) complete and peer-reviewed.
+- **RAG Knowledge Base** — point a workflow at a folder of documents, get answers with source citations (file + line number + relevance score). Zero-server, file-based vector index, works offline.
+
+### Coming Next
+
 - **A/B Eval Node** — send the same prompt to multiple models in parallel, compare outputs side-by-side with latency, cost, and quality metrics.
 - **Time-Travel Debug** — click any completed node, edit its output, re-run the pipeline from that point. No wasted tokens.
 

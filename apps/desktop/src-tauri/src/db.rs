@@ -88,6 +88,9 @@ impl Database {
         if version < 7 {
             self.migrate_v7(&conn)?;
         }
+        if version < 8 {
+            self.migrate_v8(&conn)?;
+        }
 
         Ok(())
     }
@@ -378,6 +381,44 @@ impl Database {
         ).map_err(|e| format!("Migration v7 failed: {e}"))?;
 
         println!("[db] Migrated to schema v7 (plugins table)");
+        Ok(())
+    }
+
+    /// V8: Triggers table for webhook/cron/file-watch triggers + trigger_log
+    fn migrate_v8(&self, conn: &Connection) -> Result<(), String> {
+        conn.execute_batch(
+            "
+            CREATE TABLE IF NOT EXISTS triggers (
+                id           TEXT PRIMARY KEY,
+                workflow_id  TEXT NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+                trigger_type TEXT NOT NULL,
+                config       TEXT NOT NULL DEFAULT '{}',
+                enabled      INTEGER NOT NULL DEFAULT 1,
+                last_fired   TEXT,
+                fire_count   INTEGER NOT NULL DEFAULT 0,
+                created_at   TEXT NOT NULL,
+                updated_at   TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_triggers_workflow ON triggers(workflow_id);
+            CREATE INDEX IF NOT EXISTS idx_triggers_type ON triggers(trigger_type);
+            CREATE INDEX IF NOT EXISTS idx_triggers_enabled ON triggers(enabled);
+
+            CREATE TABLE IF NOT EXISTS trigger_log (
+                id         TEXT PRIMARY KEY,
+                trigger_id TEXT NOT NULL REFERENCES triggers(id) ON DELETE CASCADE,
+                run_id     TEXT,
+                fired_at   TEXT NOT NULL,
+                status     TEXT NOT NULL DEFAULT 'fired',
+                metadata   TEXT NOT NULL DEFAULT '{}'
+            );
+            CREATE INDEX IF NOT EXISTS idx_trigger_log_trigger ON trigger_log(trigger_id);
+            CREATE INDEX IF NOT EXISTS idx_trigger_log_fired ON trigger_log(fired_at DESC);
+
+            INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '8');
+            "
+        ).map_err(|e| format!("Migration v8 failed: {e}"))?;
+
+        println!("[db] Migrated to schema v8 (triggers + trigger_log)");
         Ok(())
     }
 

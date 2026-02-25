@@ -41,6 +41,9 @@ serde_json_path = "0.7"
 glob = "0.3"
 memmap2 = "0.9"
 fs2 = "0.4"
+axum = "0.8"
+hmac = "0.12"
+sha2 = "0.10"
 
 [dev-dependencies]
 tempfile = "3"

@@ -10,6 +10,7 @@ pub mod events;
 mod routing;
 mod sidecar;
 mod system;
+mod webhook;
 mod workflow;
 
 use commands::*;
@@ -34,6 +35,7 @@ pub fn run() {
         .manage(SidecarManager::default())
         .manage(ApprovalManager::default())
         .manage(workflow::live::LiveWorkflowManager::default())
+        .manage(webhook::TriggerManager::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -131,6 +133,16 @@ pub fn run() {
             search_index,
             get_index_stats,
             delete_index,
+            // Triggers (Webhooks)
+            create_trigger,
+            update_trigger,
+            delete_trigger,
+            list_triggers,
+            get_trigger_log,
+            arm_trigger,
+            disarm_trigger,
+            test_trigger,
+            get_webhook_server_status,
             // Sidecar
             sidecar_start,
             sidecar_stop,
@@ -144,6 +156,9 @@ pub fn run() {
                 // Stop all live workflows
                 let live_mgr = app_handle.state::<workflow::live::LiveWorkflowManager>();
                 live_mgr.stop_all();
+                // Stop webhook server
+                let trigger_mgr = app_handle.state::<webhook::TriggerManager>();
+                trigger_mgr.stop_all();
                 // Stop sidecar
                 let sidecar = app_handle.state::<SidecarManager>().inner().clone();
                 tauri::async_runtime::spawn(async move {

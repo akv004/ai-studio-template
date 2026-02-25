@@ -34,7 +34,7 @@ pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String>
     for node in nodes {
         let id = node.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let ntype = node.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        if ntype == "input" || ntype == "file_read" || ntype == "file_glob" || ntype == "iterator" || ntype == "loop" || ntype == "tool" || ntype == "http_request" || ntype == "shell_exec" { has_input = true; }
+        if ntype == "input" || ntype == "file_read" || ntype == "file_glob" || ntype == "iterator" || ntype == "loop" || ntype == "tool" || ntype == "http_request" || ntype == "shell_exec" || ntype == "webhook_trigger" { has_input = true; }
         if ntype == "output" || ntype == "file_write" || ntype == "aggregator" || ntype == "exit" { has_output = true; }
         node_ids.push(id.clone());
         node_types.insert(id, ntype);
@@ -137,6 +137,12 @@ pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String>
     }
     if loop_count > 0 && iterator_count > 0 {
         errors.push("Loop and Iterator nodes in the same workflow — nesting is not yet supported".to_string());
+    }
+
+    // Max 1 webhook trigger per workflow
+    let webhook_trigger_count = node_types.values().filter(|t| t.as_str() == "webhook_trigger").count();
+    if webhook_trigger_count > 1 {
+        errors.push("Only one Webhook Trigger node is allowed per workflow".to_string());
     }
 
     // Check for orphan nodes
@@ -344,6 +350,28 @@ mod tests {
         assert!(result.valid, "direct loop→exit is a warning, not error");
         assert!(result.warnings.iter().any(|w| w.contains("empty loop body")),
             "warnings: {:?}", result.warnings);
+    }
+
+    #[test]
+    fn test_webhook_trigger_valid_as_input() {
+        let graph = make_graph(
+            &[("wh1", "webhook_trigger"), ("llm1", "llm"), ("out1", "output")],
+            &[("wh1", "llm1"), ("llm1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid, "errors: {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_multiple_webhook_triggers_error() {
+        let graph = make_graph(
+            &[("wh1", "webhook_trigger"), ("wh2", "webhook_trigger"), ("llm1", "llm"), ("out1", "output")],
+            &[("wh1", "llm1"), ("wh2", "llm1"), ("llm1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(!result.valid, "should be invalid with multiple webhook triggers");
+        assert!(result.errors.iter().any(|e| e.contains("Webhook Trigger")),
+            "errors: {:?}", result.errors);
     }
 
     #[test]

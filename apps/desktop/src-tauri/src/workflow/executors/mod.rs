@@ -17,6 +17,7 @@ pub mod aggregator;
 pub mod knowledge_base;
 pub mod loop_node;
 pub mod exit;
+pub mod webhook_trigger;
 
 use crate::db::Database;
 use crate::sidecar::SidecarManager;
@@ -101,6 +102,8 @@ impl ExecutorRegistry {
         // Phase 5A — Loop & Feedback
         executors.insert("loop".to_string(), Box::new(loop_node::LoopExecutor));
         executors.insert("exit".to_string(), Box::new(exit::ExitExecutor));
+        // Webhook trigger
+        executors.insert("webhook_trigger".to_string(), Box::new(webhook_trigger::WebhookTriggerExecutor));
         Self { executors }
     }
 

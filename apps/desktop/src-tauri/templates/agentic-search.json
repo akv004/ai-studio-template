@@ -14,7 +14,7 @@
     { "id": "e-loop-plan", "source": "loop_1", "target": "llm_plan", "sourceHandle": "output", "targetHandle": "prompt" },
     { "id": "e-plan-url", "source": "llm_plan", "target": "transform_url", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-url-http", "source": "transform_url", "target": "http_search", "sourceHandle": "output", "targetHandle": "url" },
-    { "id": "e-http-answer", "source": "http_search", "target": "llm_answer", "sourceHandle": "output", "targetHandle": "context" },
+    { "id": "e-http-answer", "source": "http_search", "target": "llm_answer", "sourceHandle": "body", "targetHandle": "context" },
     { "id": "e-loop-answer", "source": "loop_1", "target": "llm_answer", "sourceHandle": "output", "targetHandle": "prompt" },
     { "id": "e-answer-exit", "source": "llm_answer", "target": "exit_1", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-exit-out", "source": "exit_1", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }

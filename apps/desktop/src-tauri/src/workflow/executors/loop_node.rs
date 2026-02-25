@@ -325,7 +325,7 @@ impl NodeExecutor for LoopExecutor {
                 ctx.ephemeral,
             ).await.map_err(|e| format!("Loop iteration {} failed: {}", idx, e))?;
 
-            // Extract the synthetic workflow's output
+            // Extract the synthetic workflow's output (from Output nodes)
             let iteration_output = if result.outputs.len() == 1 {
                 result.outputs.into_values().next().unwrap_or(Value::Null)
             } else if !result.outputs.is_empty() {
@@ -339,42 +339,7 @@ impl NodeExecutor for LoopExecutor {
             // Check exit condition
             match exit_condition {
                 "evaluator" => {
-                    // Check the Router node's output for selectedBranch
                     if let Some(ref rid) = router_id {
-                        // Re-parse the synthetic graph to get node outputs
-                        // The Router output includes selectedBranch in the synthetic execution
-                        // We need to look at the synthetic result's node outputs
-                        // Since we only get workflow outputs (from Output nodes), we need
-                        // to check the iteration_output which flows through Exit → Output
-                        // The Router's selectedBranch is embedded in its output value.
-                        //
-                        // In evaluator mode, the graph structure is:
-                        //   ... → Router → done branch → Exit → __loop_output__
-                        //   ... → Router → continue branch → ...
-                        // If the Router picked "done", the Exit node gets the value and
-                        // __loop_output__ produces output. If Router picked "continue",
-                        // the Exit branch is skipped, so __loop_output__ gets nothing.
-                        //
-                        // We detect "done" by checking if we got a non-null output.
-                        // But we also need the Router's explicit selectedBranch signal.
-                        // Since the synthetic graph runs fully and produces outputs,
-                        // we check if the output contains selectedBranch info.
-
-                        // Strategy: run a fresh synthetic execution that also captures
-                        // node_outputs. But our current API only returns workflow_outputs.
-                        // Instead, rely on the output convention:
-                        // If iteration produced output (Exit was reached), Router said "done".
-                        // If output is Null (Exit was skipped), Router said "continue".
-
-                        // Actually, the Router skips downstream nodes of non-selected branches.
-                        // If Exit is on the "done" branch and Router picks "continue",
-                        // Exit gets skipped → __loop_output__ gets skipped → no workflow output.
-                        // If Router picks "done", Exit runs → __loop_output__ gets value.
-
-                        // But wait — we're checking result.outputs which comes from Output nodes.
-                        // If Exit was skipped, __loop_output__ (which is an Output node) is also
-                        // skipped, so result.outputs is empty → iteration_output is Null.
-
                         let got_output = !iteration_output.is_null();
 
                         if got_output {
@@ -384,11 +349,37 @@ impl NodeExecutor for LoopExecutor {
                                 node_id, idx + 1, rid);
                             break;
                         }
-                        // Router selected "continue" — feedback is applied below.
-                        // Since Exit was skipped, iteration_output is Null and the
-                        // feedback block will preserve current_input (replace keeps it,
-                        // append skips Null values). This matches spec: the subgraph's
-                        // continue path processes data internally within the iteration.
+
+                        // Router selected "continue" — Exit was skipped, so iteration_output is Null.
+                        // For feedback, extract the last meaningful output from the subgraph's
+                        // intermediate node_outputs (e.g., the LLM answer before the Router).
+                        // This lets the next iteration see what was produced even though Exit was skipped.
+                        if idx + 1 < max_iterations {
+                            // Find the best intermediate output: try subgraph nodes in reverse,
+                            // skip the Router itself (its output is a wrapper, not content).
+                            let mut feedback_val: Option<Value> = None;
+                            for sub_id in subgraph_ids.iter().rev() {
+                                if sub_id == rid { continue; } // skip Router
+                                if let Some(val) = result.node_outputs.get(sub_id) {
+                                    if !val.is_null() {
+                                        eprintln!("[workflow] Loop '{}': evaluator continue — using '{}' output as feedback",
+                                            node_id, sub_id);
+                                        feedback_val = Some(val.clone());
+                                        break;
+                                    }
+                                }
+                            }
+                            if let Some(fv) = feedback_val {
+                                let fv_text = crate::workflow::engine::extract_primary_text(&fv);
+                                current_input = match feedback_mode {
+                                    "append" => {
+                                        let prev_text = stringify_value(&current_input);
+                                        Value::String(format!("{}\n---\nPrevious attempt:\n{}", prev_text, fv_text))
+                                    }
+                                    _ => Value::String(fv_text),
+                                };
+                            }
+                        }
                     }
                 }
                 "stable_output" => {

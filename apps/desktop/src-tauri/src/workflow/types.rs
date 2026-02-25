@@ -14,6 +14,10 @@ pub struct WorkflowRunResult {
     pub session_id: String,
     pub status: String,
     pub outputs: HashMap<String, serde_json::Value>,
+    /// All node outputs keyed by node_id. Used internally by Loop executor
+    /// to access intermediate results (e.g., LLM answer when Router skips Exit).
+    #[serde(skip_serializing)]
+    pub node_outputs: HashMap<String, serde_json::Value>,
     pub total_tokens: i64,
     pub total_cost_usd: f64,
     pub duration_ms: i64,

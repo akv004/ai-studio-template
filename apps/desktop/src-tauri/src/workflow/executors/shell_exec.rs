@@ -1,5 +1,5 @@
 use super::{ExecutionContext, NodeExecutor, NodeOutput};
-use crate::workflow::engine::resolve_template;
+use crate::workflow::engine::{resolve_template, extract_primary_text};
 
 pub struct ShellExecExecutor;
 
@@ -18,7 +18,16 @@ impl NodeExecutor for ShellExecExecutor {
         let config_cmd = node_data.get("command").and_then(|v| v.as_str()).unwrap_or("");
         let command = if let Some(inc) = incoming {
             if let Some(obj) = inc.as_object() {
-                obj.get("command").and_then(|v| v.as_str()).unwrap_or(config_cmd).to_string()
+                if let Some(cmd_val) = obj.get("command") {
+                    // Command handle exists — extract string or primary text from object
+                    if let Some(s) = cmd_val.as_str() {
+                        s.to_string()
+                    } else {
+                        extract_primary_text(cmd_val)
+                    }
+                } else {
+                    config_cmd.to_string()
+                }
             } else if let Some(s) = inc.as_str() {
                 s.to_string()
             } else {

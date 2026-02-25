@@ -60,7 +60,7 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
     // Loop & Feedback
     ("self-refine", "Self-Refine", "Draft → critique → revise loop — LLM improves its own output iteratively (3 rounds)",
         include_str!("../../templates/self-refine.json")),
-    ("agentic-search", "Agentic Search", "LLM decides what to search, evaluates results, searches again if needed (max 5 rounds)",
+    ("agentic-search", "Agentic Search", "Search → synthesize loop — LLM plans queries, DuckDuckGo fetches results, LLM synthesizes answer (3 rounds)",
         include_str!("../../templates/agentic-search.json")),
 ];
 

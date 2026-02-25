@@ -16,6 +16,8 @@ import { ValidatorNode } from './nodes/ValidatorNode';
 import { IteratorNode } from './nodes/IteratorNode';
 import { AggregatorNode } from './nodes/AggregatorNode';
 import { KnowledgeBaseNode } from './nodes/KnowledgeBaseNode';
+import { LoopNode } from './nodes/LoopNode';
+import { ExitNode } from './nodes/ExitNode';
 
 export const customNodeTypes: NodeTypes = {
     input: InputNode,
@@ -35,4 +37,6 @@ export const customNodeTypes: NodeTypes = {
     iterator: IteratorNode,
     aggregator: AggregatorNode,
     knowledge_base: KnowledgeBaseNode,
+    loop: LoopNode,
+    exit: ExitNode,
 };

@@ -2,7 +2,7 @@ import {
     FileInput, FileOutput, Cpu, GitFork,
     Wrench, ShieldCheck, Repeat, MessageSquare,
     Globe, Terminal, CheckSquare, FolderOpen, Layers,
-    BookOpen,
+    BookOpen, RefreshCw, LogOut,
 } from 'lucide-react';
 
 export interface NodeCategory {
@@ -50,6 +50,8 @@ export const NODE_CATEGORIES: NodeCategory[] = [
             { type: 'validator', label: 'Validator', icon: CheckSquare, description: 'JSON Schema validation' },
             { type: 'iterator', label: 'Iterator', icon: Repeat, description: 'Loop over array items' },
             { type: 'aggregator', label: 'Aggregator', icon: Layers, description: 'Collect iteration results' },
+            { type: 'loop', label: 'Loop', icon: RefreshCw, description: 'Iterative refinement loop' },
+            { type: 'exit', label: 'Exit', icon: LogOut, description: 'Loop exit point' },
         ],
     },
     {

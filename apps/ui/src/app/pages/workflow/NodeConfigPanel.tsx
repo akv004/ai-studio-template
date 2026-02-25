@@ -598,6 +598,42 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                 </>
             )}
 
+            {type === 'loop' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Max Iterations</span>
+                        <input type="number" className="config-input" min={1} max={50}
+                            value={(data.maxIterations as number) ?? 5}
+                            onChange={(e) => update('maxIterations', parseInt(e.target.value) || 5)} />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Exit Condition</span>
+                        <select className="config-input" value={(data.exitCondition as string) || 'max_iterations'}
+                            onChange={(e) => update('exitCondition', e.target.value)}>
+                            <option value="max_iterations">Max Iterations (run N times)</option>
+                            <option value="evaluator">Evaluator (Router decides)</option>
+                            <option value="stable_output">Stable Output (convergence)</option>
+                        </select>
+                    </label>
+                    {(data.exitCondition as string) === 'stable_output' && (
+                        <label className="block">
+                            <span className="text-xs text-[var(--text-muted)]">Stability Threshold</span>
+                            <input type="number" className="config-input" step="0.05" min={0} max={1}
+                                value={(data.stabilityThreshold as number) ?? 0.95}
+                                onChange={(e) => update('stabilityThreshold', parseFloat(e.target.value) || 0.95)} />
+                        </label>
+                    )}
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Feedback Mode</span>
+                        <select className="config-input" value={(data.feedbackMode as string) || 'replace'}
+                            onChange={(e) => update('feedbackMode', e.target.value)}>
+                            <option value="replace">Replace (output → next input)</option>
+                            <option value="append">Append (concat with separator)</option>
+                        </select>
+                    </label>
+                </>
+            )}
+
             {type === 'aggregator' && (
                 <>
                     <label className="block">

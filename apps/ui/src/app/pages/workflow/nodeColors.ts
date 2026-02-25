@@ -17,6 +17,8 @@ export const nodeColors: Record<string, string> = {
     iterator: '#6a3a6a',
     aggregator: '#4a2a6a',
     knowledge_base: '#2a4a7a',
+    loop: '#4a2a6a',
+    exit: '#4a2a6a',
 };
 
 export const PROVIDER_MODELS: Record<string, string[]> = {

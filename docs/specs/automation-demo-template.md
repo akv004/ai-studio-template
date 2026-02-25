@@ -40,8 +40,8 @@ Webhook Trigger → Transform (parse payload)
 |---|------|------|---------|
 | 1 | Webhook Trigger | webhook_trigger | Receives POST from CI/CD with code diff |
 | 2 | Parse Payload | transform | Extract `repo`, `branch`, `diff`, `author` from webhook body |
-| 3 | Standards Lookup | knowledge_base | RAG search: find relevant coding standards for this type of change |
-| 4 | Code Analyzer | llm | "Analyze this code change against our standards. Rate severity: critical/normal. List violations." |
+| 3 | Standards Lookup | knowledge_base | RAG search (azure_openai / text-embedding-3-large, recursive, 500, topK=5) |
+| 4 | Code Analyzer | llm | azure_openai / gpt-4o-mini / temp=0.2 — "Analyze this code change against our standards. Rate severity: critical/normal. List violations." |
 | 5 | Severity Router | router | Route by LLM's severity rating |
 | 6 | Approval Gate | approval | Human review required for critical changes |
 | 7 | Urgent Email | email_send | Email team lead: "CRITICAL: Code review needs attention" |
@@ -90,7 +90,7 @@ Cron Trigger (daily 9am) → HTTP Request (fetch data)
 |---|------|------|---------|
 | 1 | Daily Schedule | cron_trigger | Fires at 9:00 AM daily |
 | 2 | Fetch Data | http_request | GET from internal API / data source |
-| 3 | Summarize | llm | "Summarize this data into a concise daily report" |
+| 3 | Summarize | llm | azure_openai / gpt-4o-mini / temp=0.2 — "Summarize this data into a concise daily report" |
 | 4 | Email Report | email_send | Send to distribution list |
 | 5 | Archive | output | Store report output |
 
@@ -126,8 +126,8 @@ This template uses **wait mode** — the webhook caller gets the LLM response di
 | # | Node | Type | Purpose |
 |---|------|------|---------|
 | 1 | API Endpoint | webhook_trigger | Receives question, wait mode returns answer |
-| 2 | Knowledge Search | knowledge_base | RAG lookup in indexed documents |
-| 3 | Answer Generator | llm | Generate answer using RAG context |
+| 2 | Knowledge Search | knowledge_base | RAG lookup (azure_openai / text-embedding-3-large, recursive, 500, topK=5) |
+| 3 | Answer Generator | llm | azure_openai / gpt-4o-mini / temp=0.2 — Generate answer using RAG context |
 | 4 | Response | output | Returns to webhook caller |
 
 ### Template Config
@@ -143,9 +143,22 @@ This template uses **wait mode** — the webhook caller gets the LLM response di
 
 ---
 
-## LLM Provider Note
+## LLM Provider Settings (Proven Working)
 
-All templates should work with **Azure OpenAI** as the LLM provider (the most common enterprise provider). Template LLM nodes should NOT hardcode a specific provider — they use whatever the user has configured as their default provider.
+All templates MUST use these exact settings (verified working in enterprise environment):
+
+| Setting | Value |
+|---------|-------|
+| LLM Provider | `azure_openai` |
+| LLM Model | `gpt-4o-mini` |
+| Temperature | `0.2` |
+| Embedding Provider | `azure_openai` |
+| Embedding Model | `text-embedding-3-large` |
+| KB Chunk Strategy | `recursive` |
+| KB Chunk Size | `500` |
+| KB Top K | `5` |
+
+Do NOT use Ollama, local providers, or any other model in enterprise-facing templates.
 
 ---
 

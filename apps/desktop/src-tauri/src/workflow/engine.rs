@@ -952,4 +952,128 @@ mod tests {
         // incoming is bare string → picked up by incoming_bare
         assert_eq!(prompt, "test prompt");
     }
+
+    // --- Router backward compatibility integration tests ---
+    // These simulate the EXACT data flow from existing templates to verify
+    // the Router output change ({"selectedBranch", "value"}) doesn't break them.
+
+    #[test]
+    fn test_router_branch_to_output_content_moderator_flow() {
+        // Simulates content-moderator.json:
+        // LLM → Router → branch-0 (safe) → Output (value handle)
+        // Router output should be unwrapped — Output node gets the moderation text, not the wrapper.
+        let mut node_outputs = HashMap::new();
+
+        // LLM produces moderation result
+        node_outputs.insert("llm_1".to_string(), serde_json::json!({
+            "response": "{\"verdict\": \"safe\", \"reason\": \"no issues\", \"confidence\": 0.98}",
+        }));
+
+        // Router receives LLM response and wraps with selectedBranch (this is what router.rs does)
+        let router_output = serde_json::json!({
+            "selectedBranch": "safe",
+            "value": "{\"verdict\": \"safe\", \"reason\": \"no issues\", \"confidence\": 0.98}",
+        });
+        node_outputs.insert("router_1".to_string(), router_output);
+
+        // content-moderator edges: router_1:branch-0 → output_1:value
+        let edges = vec![
+            ("router_1".to_string(), "branch-0".to_string(), "output_1".to_string(), "value".to_string()),
+        ];
+
+        let incoming = simulate_incoming_resolution(&node_outputs, &edges, "output_1");
+        // Output node receives via "value" handle (not "input"), so it builds an object
+        let incoming_val = incoming.unwrap();
+        let value_field = incoming_val.get("value").unwrap();
+
+        // The value should be the unwrapped moderation text, NOT the Router wrapper
+        assert!(value_field.is_string(), "should be string, got: {}", value_field);
+        assert!(value_field.as_str().unwrap().contains("verdict"),
+            "should contain moderation result, got: {}", value_field);
+        assert!(!value_field.to_string().contains("selectedBranch"),
+            "should NOT contain Router wrapper, got: {}", value_field);
+    }
+
+    #[test]
+    fn test_router_branch_to_llm_email_classifier_flow() {
+        // Simulates email-classifier.json:
+        // Router → branch-0 (urgent) → LLM (prompt handle)
+        // LLM should receive the email text, not the Router wrapper.
+        let mut node_outputs = HashMap::new();
+
+        // Router wraps the email body with selectedBranch
+        let router_output = serde_json::json!({
+            "selectedBranch": "urgent",
+            "value": "URGENT: Server is down, need immediate fix!",
+        });
+        node_outputs.insert("router_1".to_string(), router_output);
+
+        // email-classifier edge: router_1:branch-0 → llm_2:prompt
+        let edges = vec![
+            ("router_1".to_string(), "branch-0".to_string(), "llm_2".to_string(), "prompt".to_string()),
+        ];
+
+        let incoming = simulate_incoming_resolution(&node_outputs, &edges, "llm_2");
+        let incoming_val = incoming.unwrap();
+        let prompt_field = incoming_val.get("prompt").unwrap();
+
+        // LLM prompt handle should get the unwrapped email, not the wrapper
+        assert_eq!(prompt_field.as_str().unwrap(), "URGENT: Server is down, need immediate fix!");
+    }
+
+    #[test]
+    fn test_router_branch_to_default_input_handle() {
+        // Edge case: branch-* edge goes to default "input" handle (single edge flatten)
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("router_1".to_string(), serde_json::json!({
+            "selectedBranch": "done",
+            "value": "final result",
+        }));
+
+        let edges = vec![
+            ("router_1".to_string(), "branch-0".to_string(), "next_1".to_string(), "input".to_string()),
+        ];
+
+        let incoming = simulate_incoming_resolution(&node_outputs, &edges, "next_1");
+        // Single edge to "input" handle: flattened to bare value (unwrapped)
+        assert_eq!(incoming, Some(serde_json::json!("final result")));
+    }
+
+    #[test]
+    fn test_router_branch_with_object_value() {
+        // Router routes a JSON object (not a string) — downstream should get the object, not wrapper
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("router_1".to_string(), serde_json::json!({
+            "selectedBranch": "analyze",
+            "value": {"metrics": {"cpu": 95, "memory": 80}, "alert": true},
+        }));
+
+        let edges = vec![
+            ("router_1".to_string(), "branch-0".to_string(), "transform_1".to_string(), "input".to_string()),
+        ];
+
+        let incoming = simulate_incoming_resolution(&node_outputs, &edges, "transform_1");
+        let val = incoming.unwrap();
+
+        // Should get the inner object, not the wrapper
+        assert!(val.is_object());
+        assert!(val.get("metrics").is_some(), "should have metrics, got: {}", val);
+        assert!(val.get("selectedBranch").is_none(), "should NOT have selectedBranch, got: {}", val);
+    }
+
+    #[test]
+    fn test_router_template_resolution_backward_compat() {
+        // Verify {{router_1.output}} in templates resolves to inner value, not wrapper
+        let mut node_outputs = HashMap::new();
+        node_outputs.insert("router_1".to_string(), serde_json::json!({
+            "selectedBranch": "approved",
+            "value": "The document has been approved.",
+        }));
+
+        let inputs = HashMap::new();
+        let resolved = resolve_template("Result: {{router_1.output}}", &node_outputs, &inputs);
+        // extract_primary_text should extract "value" field from the wrapper
+        assert_eq!(resolved, "Result: The document has been approved.");
+        assert!(!resolved.contains("selectedBranch"));
+    }
 }

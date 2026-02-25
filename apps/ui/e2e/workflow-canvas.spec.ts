@@ -77,4 +77,28 @@ test.describe('Workflow Canvas', () => {
         await expect(page.getByText('Knowledge Base', { exact: true })).toBeVisible({ timeout: 5000 });
         await page.screenshot({ path: 'e2e/screenshots/kb-in-palette.png', fullPage: true });
     });
+
+    test('loop node renders on canvas', async ({ page }) => {
+        await navigateToWorkflows(page);
+        const workflowCard = page.getByText('Test Workflow').first();
+        await expect(workflowCard).toBeVisible({ timeout: 5000 });
+        await workflowCard.click();
+        await expect(page.locator('.react-flow')).toBeVisible({ timeout: 10000 });
+        await page.waitForTimeout(1000);
+        // Loop node should be visible with its custom label on the canvas
+        await expect(page.locator('.react-flow').getByText('LOOP · REFINE')).toBeVisible({ timeout: 5000 });
+        await page.screenshot({ path: 'e2e/screenshots/loop-node.png', fullPage: true });
+    });
+
+    test('loop and exit nodes in palette', async ({ page }) => {
+        await navigateToWorkflows(page);
+        const workflowCard = page.getByText('Test Workflow').first();
+        await expect(workflowCard).toBeVisible({ timeout: 5000 });
+        await workflowCard.click();
+        await expect(page.locator('.react-flow')).toBeVisible({ timeout: 10000 });
+        // Loop and Exit should appear in the node palette
+        await expect(page.getByText('Loop', { exact: true })).toBeVisible({ timeout: 5000 });
+        await expect(page.getByText('Exit', { exact: true })).toBeVisible({ timeout: 5000 });
+        await page.screenshot({ path: 'e2e/screenshots/loop-exit-palette.png', fullPage: true });
+    });
 });

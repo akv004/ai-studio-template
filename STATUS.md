@@ -28,6 +28,7 @@
 | 19 | rich-output.md | P1 | 5A | IN PROGRESS | Markdown, tables, JSON tree/table, code blocks — wired into 5 spots. Charts/images deferred. |
 | 20 | workflow-versioning.md | P2 | 5B | PLANNED | Version history, diff view, rollback, run comparison |
 | 21 | rag-knowledge-base.md | P0 | 5A | DONE | RAG Knowledge Base: 17th node type, full-stack (sidecar + Rust rag/ + executor + IPC + UI + templates + E2E). 160 tests. |
+| 22 | loop-feedback.md | P0 | 5A | DONE | Loop & Exit nodes: iterative refinement, 3 exit conditions, 2 feedback modes, 2 templates. 188 tests. |
 
 **Status key**: DONE | IN PROGRESS | PLANNED | BLOCKED | REFERENCE (non-implementable)
 
@@ -87,6 +88,7 @@
 | **README overhaul** | DONE | Complete rewrite: 16 node types, 13 templates, 129 tests, 6 providers, capability-based positioning (no competitor names), correct shortcuts, RAG "Coming Next". Peer reviewed by Gemini + Codex (c7c835e) |
 | **v0.1.2 tagged** | DONE | Streaming + Rich Output + RAG spec + README overhaul |
 | **RAG Knowledge Base** | DONE | Full-stack: sidecar /embed, Rust rag/ (chunker+index+search+format, 31 tests), KnowledgeBaseExecutor, 4 IPC commands, UI node+config, 3 templates (#14-16), 2 E2E tests. 160 total tests. (09ca3d0) |
+| **Loop & Feedback nodes** | DONE | Loop + Exit node types: 3 exit conditions (max_iterations, evaluator, stable_output), 2 feedback modes (replace, append), Router selectedBranch for evaluator mode, 2 templates (self-refine, agentic-search). 188 Rust tests, 8 E2E tests. |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -193,8 +195,22 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-22 (session 38)
+**Date**: 2026-02-24 (session 39)
 **What happened**:
+- **Loop & Feedback nodes — full implementation** (4 commits):
+  - `exit.rs`: pass-through stub (same pattern as Aggregator)
+  - `loop_node.rs` (~400 lines): subgraph extraction, synthetic graph builder, levenshtein similarity, 3 exit conditions (max_iterations, evaluator, stable_output), 2 feedback modes (replace, append), 20 unit tests
+  - Router output now includes `selectedBranch` for evaluator mode detection
+  - Engine `extract_primary_text` adds "value" key for Router output unwrapping
+  - Validation: Loop↔Exit pairing warnings, nesting warnings (loop+loop, loop+iterator), 5 new tests
+  - UI: LoopNode (RefreshCw icon, 3 outputs) + ExitNode (LogOut icon, pass-through)
+  - NodeConfigPanel: Loop config section with conditional stabilityThreshold
+  - 2 templates: Self-Refine (#15), Agentic Search (#16) — 16 bundled total
+  - 2 Playwright E2E tests (canvas render + palette presence)
+  - **188 total Rust tests** (162 existing + 26 new), **8 E2E tests** passing
+  - This is the **18th and 19th node types** (loop + exit)
+
+**Previous session (38)**:
 - **RAG Knowledge Base — full-stack implementation** (09ca3d0):
   - Sidecar: `POST /embed` endpoint with `EmbeddingClient` (Azure OpenAI + OpenAI-compatible), batching, token validation, retry
   - Rust `rag/` module: 4 chunking strategies, binary vector index (memmap2), dot-product search with BinaryHeap top-K, atomic writes (fs2), citation formatting. 31 unit tests.
@@ -229,9 +245,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 36: Streaming for all remaining providers (OpenAI, Azure, Google, Anthropic, Local)
 - Session 37: Rich Output wiring + Hybrid Intelligence template (ensemble synthesis)
 - Session 38: RAG Knowledge Base full-stack implementation (17th node type, 31 tests, 3 templates)
+- Session 39: Loop & Feedback nodes (18th+19th node types, 26 new tests, 2 templates)
 
 **Next session should**:
-1. **Peer review RAG implementation** — `/peer-review` for Gemini (architecture) + Codex (code quality)
+1. **Peer review Loop & Feedback** — `/peer-review` for Gemini (architecture) + Codex (code quality)
 2. Consider v0.2.0 tag for Phase 4 completion
 3. Or start **A/B Eval Node** (Phase 5 #11 — highest demo impact, parallel LLM calls already exist)
 4. Or start **connections-manager** (P0 prerequisite for SQL, HTTP, webhook nodes)

@@ -40,12 +40,15 @@ const TEST_WORKFLOW = {
             { id: 'llm_1', type: 'llm', position: { x: 400, y: 200 }, data: { provider: 'local', model: 'qwen3-vl', prompt: '{{input}}' } },
             { id: 'output_1', type: 'output', position: { x: 700, y: 200 }, data: { name: 'result' } },
             { id: 'kb_1', type: 'knowledge_base', position: { x: 400, y: 400 }, data: { docsFolder: '~/docs', embeddingProvider: 'azure_openai', embeddingModel: 'text-embedding-3-small', chunkStrategy: 'recursive', label: 'My Docs' } },
+            { id: 'loop_1', type: 'loop', position: { x: 400, y: 600 }, data: { maxIterations: 3, exitCondition: 'max_iterations', feedbackMode: 'replace', label: 'Refine' } },
+            { id: 'exit_1', type: 'exit', position: { x: 700, y: 600 }, data: {} },
         ],
         edges: [
             { id: 'e1', source: 'input_1', target: 'llm_1', sourceHandle: 'value', targetHandle: 'prompt' },
             { id: 'e2', source: 'llm_1', target: 'output_1', sourceHandle: 'response', targetHandle: 'value' },
             { id: 'e3', source: 'input_1', target: 'kb_1', sourceHandle: 'value', targetHandle: 'query' },
             { id: 'e4', source: 'kb_1', target: 'llm_1', sourceHandle: 'context', targetHandle: 'context' },
+            { id: 'e5', source: 'loop_1', target: 'exit_1', sourceHandle: 'output', targetHandle: 'input' },
         ],
         viewport: { x: 0, y: 0, zoom: 1 },
     }),
@@ -83,7 +86,7 @@ const MOCK_HANDLERS: Record<string, (args?: any) => any> = {
     get_session_stats: () => ({ totalEvents: 0, totalMessages: 0, totalInputTokens: 0, totalOutputTokens: 0, totalCostUsd: 0, modelsUsed: [], totalRoutingDecisions: 0, totalEstimatedSavings: 0, modelUsage: [] }),
 
     // Workflows
-    list_workflows: () => [{ id: TEST_WORKFLOW.id, name: TEST_WORKFLOW.name, description: TEST_WORKFLOW.description, agentId: TEST_WORKFLOW.agentId, nodeCount: 4, isArchived: false, createdAt: TEST_WORKFLOW.createdAt, updatedAt: TEST_WORKFLOW.updatedAt }],
+    list_workflows: () => [{ id: TEST_WORKFLOW.id, name: TEST_WORKFLOW.name, description: TEST_WORKFLOW.description, agentId: TEST_WORKFLOW.agentId, nodeCount: 6, isArchived: false, createdAt: TEST_WORKFLOW.createdAt, updatedAt: TEST_WORKFLOW.updatedAt }],
     get_workflow: () => TEST_WORKFLOW,
     create_workflow: ({ workflow }: any) => ({
         ...TEST_WORKFLOW, ...workflow, id: `wf-${Date.now()}`,

@@ -15,6 +15,8 @@ pub mod validator;
 pub mod iterator;
 pub mod aggregator;
 pub mod knowledge_base;
+pub mod loop_node;
+pub mod exit;
 
 use crate::db::Database;
 use crate::sidecar::SidecarManager;
@@ -96,6 +98,9 @@ impl ExecutorRegistry {
         executors.insert("aggregator".to_string(), Box::new(aggregator::AggregatorExecutor));
         // Phase 5A — RAG
         executors.insert("knowledge_base".to_string(), Box::new(knowledge_base::KnowledgeBaseExecutor));
+        // Phase 5A — Loop & Feedback
+        executors.insert("loop".to_string(), Box::new(loop_node::LoopExecutor));
+        executors.insert("exit".to_string(), Box::new(exit::ExitExecutor));
         Self { executors }
     }
 

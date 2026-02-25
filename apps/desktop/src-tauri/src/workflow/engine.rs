@@ -47,7 +47,7 @@ pub fn extract_primary_text(val: &serde_json::Value) -> String {
         return s.to_string();
     }
     if let Some(obj) = val.as_object() {
-        for key in &["response", "content", "result"] {
+        for key in &["response", "content", "result", "value"] {
             if let Some(field) = obj.get(*key) {
                 if let Some(s) = field.as_str() {
                     return s.to_string();

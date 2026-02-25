@@ -34,8 +34,8 @@ pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String>
     for node in nodes {
         let id = node.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let ntype = node.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        if ntype == "input" || ntype == "file_read" || ntype == "file_glob" || ntype == "iterator" || ntype == "tool" || ntype == "http_request" || ntype == "shell_exec" { has_input = true; }
-        if ntype == "output" || ntype == "file_write" || ntype == "aggregator" { has_output = true; }
+        if ntype == "input" || ntype == "file_read" || ntype == "file_glob" || ntype == "iterator" || ntype == "loop" || ntype == "tool" || ntype == "http_request" || ntype == "shell_exec" { has_input = true; }
+        if ntype == "output" || ntype == "file_write" || ntype == "aggregator" || ntype == "exit" { has_output = true; }
         node_ids.push(id.clone());
         node_types.insert(id, ntype);
     }
@@ -99,6 +99,24 @@ pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String>
     let iterator_count = node_types.values().filter(|t| t.as_str() == "iterator").count();
     if iterator_count > 1 {
         warnings.push("Multiple Iterator nodes detected — nested iteration is not yet supported and may produce unexpected results".to_string());
+    }
+
+    // Loop↔Exit pairing validation
+    let loop_count = node_types.values().filter(|t| t.as_str() == "loop").count();
+    let exit_count = node_types.values().filter(|t| t.as_str() == "exit").count();
+    if loop_count > 0 && exit_count == 0 {
+        warnings.push("Loop node has no paired Exit node — add an Exit node downstream to mark the loop boundary".to_string());
+    }
+    if exit_count > 0 && loop_count == 0 {
+        warnings.push("Exit node found without a paired Loop node — Exit nodes should only be used inside a Loop".to_string());
+    }
+
+    // Nesting warnings: multiple loops or loop + iterator coexistence
+    if loop_count > 1 {
+        warnings.push("Multiple Loop nodes detected — nested loops are not yet supported and may produce unexpected results".to_string());
+    }
+    if loop_count > 0 && iterator_count > 0 {
+        warnings.push("Loop and Iterator nodes in the same workflow — nesting loops inside iterators (or vice versa) is not yet supported".to_string());
     }
 
     // Check for orphan nodes
@@ -245,5 +263,68 @@ mod tests {
     fn test_invalid_json() {
         let result = validate_graph_json("not json at all");
         assert!(result.is_err() || !result.unwrap().valid);
+    }
+
+    #[test]
+    fn test_loop_exit_valid() {
+        let graph = make_graph(
+            &[("in1", "input"), ("loop1", "loop"), ("llm1", "llm"), ("exit1", "exit"), ("out1", "output")],
+            &[("in1", "loop1"), ("loop1", "llm1"), ("llm1", "exit1"), ("exit1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid, "errors: {:?}", result.errors);
+        assert!(result.warnings.is_empty(), "warnings: {:?}", result.warnings);
+    }
+
+    #[test]
+    fn test_loop_without_exit_warning() {
+        let graph = make_graph(
+            &[("in1", "input"), ("loop1", "loop"), ("llm1", "llm"), ("out1", "output")],
+            &[("in1", "loop1"), ("loop1", "llm1"), ("llm1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid);
+        assert!(result.warnings.iter().any(|w| w.contains("no paired Exit")),
+            "warnings: {:?}", result.warnings);
+    }
+
+    #[test]
+    fn test_exit_without_loop_warning() {
+        let graph = make_graph(
+            &[("in1", "input"), ("llm1", "llm"), ("exit1", "exit"), ("out1", "output")],
+            &[("in1", "llm1"), ("llm1", "exit1"), ("exit1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid);
+        assert!(result.warnings.iter().any(|w| w.contains("without a paired Loop")),
+            "warnings: {:?}", result.warnings);
+    }
+
+    #[test]
+    fn test_multiple_loops_warning() {
+        let graph = make_graph(
+            &[("in1", "input"), ("loop1", "loop"), ("loop2", "loop"), ("llm1", "llm"),
+              ("exit1", "exit"), ("exit2", "exit"), ("out1", "output")],
+            &[("in1", "loop1"), ("loop1", "llm1"), ("llm1", "exit1"),
+              ("exit1", "loop2"), ("loop2", "exit2"), ("exit2", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid);
+        assert!(result.warnings.iter().any(|w| w.contains("Multiple Loop")),
+            "warnings: {:?}", result.warnings);
+    }
+
+    #[test]
+    fn test_loop_iterator_coexistence_warning() {
+        let graph = make_graph(
+            &[("in1", "input"), ("loop1", "loop"), ("llm1", "llm"), ("exit1", "exit"),
+              ("iter1", "iterator"), ("llm2", "llm"), ("agg1", "aggregator"), ("out1", "output")],
+            &[("in1", "loop1"), ("loop1", "llm1"), ("llm1", "exit1"),
+              ("exit1", "iter1"), ("iter1", "llm2"), ("llm2", "agg1"), ("agg1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid);
+        assert!(result.warnings.iter().any(|w| w.contains("Loop and Iterator")),
+            "warnings: {:?}", result.warnings);
     }
 }

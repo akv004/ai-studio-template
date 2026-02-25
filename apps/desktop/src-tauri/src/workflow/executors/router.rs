@@ -118,9 +118,11 @@ impl NodeExecutor for RouterExecutor {
                 "mode": mode, "selected_branch": &selected,
             }));
 
-        Ok(NodeOutput::with_skips(
-            incoming.clone().unwrap_or(serde_json::Value::Null),
-            skip_nodes,
-        ))
+        let output_value = serde_json::json!({
+            "selectedBranch": &selected,
+            "value": incoming.clone().unwrap_or(serde_json::Value::Null),
+        });
+
+        Ok(NodeOutput::with_skips(output_value, skip_nodes))
     }
 }

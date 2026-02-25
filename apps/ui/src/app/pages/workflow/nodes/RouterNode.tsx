@@ -11,7 +11,7 @@ export function RouterNode({ id, data, selected }: { id: string; data: Record<st
         <NodeShell id={id} type="router" label="ROUTER" icon={GitFork} selected={selected}
             collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="handle-row input">
-                <Handle type="target" position={Position.Left} className="custom-handle handle-text" title="text" />
+                <Handle type="target" position={Position.Left} id="input" className="custom-handle handle-text" title="text" />
                 <span className="handle-label">input</span>
             </div>
             <div onClick={e => e.stopPropagation()}>

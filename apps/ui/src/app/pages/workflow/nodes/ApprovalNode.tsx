@@ -7,7 +7,7 @@ export function ApprovalNode({ id, data, selected }: { id: string; data: Record<
         <NodeShell id={id} type="approval" label="APPROVAL" icon={ShieldCheck} selected={selected}
             collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="handle-row input">
-                <Handle type="target" position={Position.Left} className="custom-handle handle-any" title="any" />
+                <Handle type="target" position={Position.Left} id="data" className="custom-handle handle-any" title="any" />
                 <span className="handle-label">data</span>
             </div>
             <div className="text-[11px]">{((data.message as string) || 'Approve?').slice(0, 40)}</div>

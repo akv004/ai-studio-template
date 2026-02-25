@@ -10,7 +10,7 @@ export function OutputNode({ id, data, selected }: { id: string; data: Record<st
         <NodeShell id={id} type="output" label="OUTPUT" icon={FileOutput} selected={selected}
             collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="handle-row input">
-                <Handle type="target" position={Position.Left} className="custom-handle handle-text" title="text" />
+                <Handle type="target" position={Position.Left} id="value" className="custom-handle handle-text" title="text" />
                 <span className="handle-label">value</span>
             </div>
             <div className="flex flex-col gap-1" onClick={e => e.stopPropagation()}>

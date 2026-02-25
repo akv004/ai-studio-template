@@ -10,7 +10,7 @@ export function SubworkflowNode({ id, data, selected }: { id: string; data: Reco
         <NodeShell id={id} type="subworkflow" label="SUBWORKFLOW" icon={MessageSquare} selected={selected}
             collapsed={data.collapsed as boolean} customLabel={(data.label as string) || ''}>
             <div className="handle-row input">
-                <Handle type="target" position={Position.Left} className="custom-handle handle-any" title="any" />
+                <Handle type="target" position={Position.Left} id="input" className="custom-handle handle-any" title="any" />
                 <span className="handle-label">input</span>
             </div>
             <div onClick={e => e.stopPropagation()}>
@@ -20,7 +20,7 @@ export function SubworkflowNode({ id, data, selected }: { id: string; data: Reco
             </div>
             <div className="handle-row output">
                 <span className="handle-label">output</span>
-                <Handle type="source" position={Position.Right} className="custom-handle handle-any" title="any" />
+                <Handle type="source" position={Position.Right} id="output" className="custom-handle handle-any" title="any" />
             </div>
         </NodeShell>
     );

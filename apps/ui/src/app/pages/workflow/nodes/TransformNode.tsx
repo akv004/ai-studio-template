@@ -33,7 +33,7 @@ export function TransformNode({ id, data, selected }: { id: string; data: Record
             <OutputPreview nodeId={id} />
             <div className="handle-row output">
                 <span className="handle-label">output</span>
-                <Handle type="source" position={Position.Right} className="custom-handle handle-any" title="any" />
+                <Handle type="source" position={Position.Right} id="output" className="custom-handle handle-any" title="any" />
             </div>
         </NodeShell>
     );

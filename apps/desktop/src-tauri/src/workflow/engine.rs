@@ -307,10 +307,14 @@ pub async fn execute_workflow_with_visited(
     let mut skipped_nodes: HashSet<String> = HashSet::new();
 
     for node_id in &topo_order {
-        // Transitive skip
+        // Transitive skip: if ALL predecessors are skipped, skip this node too.
+        // Exception: predecessors that are skipped but have pre-computed outputs
+        // (via extra_outputs from Loop/Iterator) should NOT cause transitive skip.
         if !skipped_nodes.contains(node_id) {
             if let Some(preds) = incoming_edges.get(node_id) {
-                if !preds.is_empty() && preds.iter().all(|(src, _, _)| skipped_nodes.contains(src)) {
+                if !preds.is_empty() && preds.iter().all(|(src, _, _)| {
+                    skipped_nodes.contains(src) && !node_outputs.contains_key(src)
+                }) {
                     skipped_nodes.insert(node_id.clone());
                 }
             }
@@ -1059,6 +1063,42 @@ mod tests {
         assert!(val.is_object());
         assert!(val.get("metrics").is_some(), "should have metrics, got: {}", val);
         assert!(val.get("selectedBranch").is_none(), "should NOT have selectedBranch, got: {}", val);
+    }
+
+    // --- Transitive skip with pre-computed outputs ---
+
+    #[test]
+    fn test_transitive_skip_respects_precomputed_outputs() {
+        // Scenario: Loop marks Exit as skipped, but pre-computes Exit's output via extra_outputs.
+        // Output node (downstream of Exit) should NOT be transitively skipped because
+        // Exit has a pre-computed entry in node_outputs.
+        let mut skipped_nodes: HashSet<String> = HashSet::new();
+        skipped_nodes.insert("llm_1".to_string());  // subgraph node — truly skipped
+        skipped_nodes.insert("exit_1".to_string());  // exit — skipped but has pre-computed output
+
+        let mut node_outputs: HashMap<String, serde_json::Value> = HashMap::new();
+        // Loop pre-computed the exit output via extra_outputs
+        node_outputs.insert("exit_1".to_string(), serde_json::json!("final answer"));
+
+        // Output node has one predecessor: exit_1
+        let incoming_edges: Vec<(String, String, String)> = vec![
+            ("exit_1".to_string(), "output".to_string(), "value".to_string()),
+        ];
+
+        // Transitive skip check (mirrors engine logic):
+        // "skip if all preds are skipped AND have no pre-computed output"
+        let should_skip = !incoming_edges.is_empty() && incoming_edges.iter().all(|(src, _, _)| {
+            skipped_nodes.contains(src) && !node_outputs.contains_key(src)
+        });
+
+        assert!(!should_skip, "Output node should NOT be skipped when Exit has pre-computed output");
+
+        // Contrast: if exit had NO pre-computed output, it SHOULD be skipped
+        node_outputs.remove("exit_1");
+        let should_skip_now = !incoming_edges.is_empty() && incoming_edges.iter().all(|(src, _, _)| {
+            skipped_nodes.contains(src) && !node_outputs.contains_key(src)
+        });
+        assert!(should_skip_now, "Output node SHOULD be skipped when Exit is truly skipped with no output");
     }
 
     #[test]

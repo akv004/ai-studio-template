@@ -1,0 +1,20 @@
+{
+  "nodes": [
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 200 }, "data": { "name": "topic", "dataType": "text", "default": "Write a concise explanation of how neural networks learn" } },
+    { "id": "loop_1", "type": "loop", "position": { "x": 350, "y": 200 }, "data": { "maxIterations": 3, "exitCondition": "max_iterations", "feedbackMode": "replace" } },
+    { "id": "llm_draft", "type": "llm", "position": { "x": 650, "y": 100 }, "data": { "label": "Draft / Revise", "provider": "ollama", "model": "qwen3", "systemPrompt": "You are a skilled writer. If you receive feedback, revise your draft to address it. If this is a first draft, write a clear and concise response to the topic.", "temperature": 0.7 } },
+    { "id": "llm_critique", "type": "llm", "position": { "x": 950, "y": 100 }, "data": { "label": "Critic", "provider": "ollama", "model": "qwen3", "systemPrompt": "You are a demanding editor. Critique the draft below. List 2-3 specific improvements needed. Be constructive but direct. Focus on clarity, accuracy, and completeness.", "temperature": 0.3 } },
+    { "id": "transform_merge", "type": "transform", "position": { "x": 1250, "y": 100 }, "data": { "mode": "template", "template": "PREVIOUS DRAFT:\n{{llm_draft.output}}\n\nCRITIQUE:\n{{llm_critique.output}}\n\nPlease revise the draft addressing the critique above." } },
+    { "id": "exit_1", "type": "exit", "position": { "x": 1550, "y": 200 }, "data": {} },
+    { "id": "output_1", "type": "output", "position": { "x": 1850, "y": 200 }, "data": { "name": "refined_output", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-in-loop", "source": "input_1", "target": "loop_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-loop-draft", "source": "loop_1", "target": "llm_draft", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-draft-critique", "source": "llm_draft", "target": "llm_critique", "sourceHandle": "response", "targetHandle": "prompt" },
+    { "id": "e-critique-merge", "source": "llm_critique", "target": "transform_merge", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-merge-exit", "source": "transform_merge", "target": "exit_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-exit-out", "source": "exit_1", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.75 }
+}

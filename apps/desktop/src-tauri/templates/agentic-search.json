@@ -1,0 +1,22 @@
+{
+  "nodes": [
+    { "id": "input_1", "type": "input", "position": { "x": 50, "y": 200 }, "data": { "name": "question", "dataType": "text", "default": "What are the key differences between Rust's ownership model and C++ RAII?" } },
+    { "id": "loop_1", "type": "loop", "position": { "x": 350, "y": 200 }, "data": { "maxIterations": 5, "exitCondition": "evaluator", "feedbackMode": "replace" } },
+    { "id": "llm_plan", "type": "llm", "position": { "x": 650, "y": 100 }, "data": { "label": "Search Planner", "provider": "ollama", "model": "qwen3", "systemPrompt": "You are a research assistant. Given a question (and optionally previous search results), decide what to search next. Output ONLY a single search query — no explanation, no formatting, just the query string.", "temperature": 0.3 } },
+    { "id": "tool_search", "type": "tool", "position": { "x": 950, "y": 100 }, "data": { "label": "Web Search", "toolName": "builtin__web_search", "approval": "auto" } },
+    { "id": "router_eval", "type": "router", "position": { "x": 1250, "y": 200 }, "data": { "label": "Enough Info?", "mode": "llm", "branches": ["done", "continue"], "provider": "ollama", "model": "qwen3" } },
+    { "id": "transform_missing", "type": "transform", "position": { "x": 1550, "y": 350 }, "data": { "label": "What's Missing", "mode": "template", "template": "Question: {{input_1.output}}\n\nSearch results so far:\n{{tool_search.output}}\n\nThe evaluator said more info is needed. Plan your next search to fill the gaps." } },
+    { "id": "exit_1", "type": "exit", "position": { "x": 1550, "y": 100 }, "data": {} },
+    { "id": "output_1", "type": "output", "position": { "x": 1850, "y": 200 }, "data": { "name": "answer", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-in-loop", "source": "input_1", "target": "loop_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-loop-plan", "source": "loop_1", "target": "llm_plan", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-plan-search", "source": "llm_plan", "target": "tool_search", "sourceHandle": "response", "targetHandle": "input" },
+    { "id": "e-search-router", "source": "tool_search", "target": "router_eval", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-router-done", "source": "router_eval", "target": "exit_1", "sourceHandle": "branch-0", "targetHandle": "input" },
+    { "id": "e-router-continue", "source": "router_eval", "target": "transform_missing", "sourceHandle": "branch-1", "targetHandle": "input" },
+    { "id": "e-exit-out", "source": "exit_1", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.7 }
+}

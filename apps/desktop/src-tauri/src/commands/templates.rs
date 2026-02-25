@@ -57,6 +57,11 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
     ("smart-deployer-rag", "Smart Deployer + RAG", "RAG-powered deployment: Knowledge Base indexes deploy docs, LLM plans from context, approval gate, then execute",
         include_str!("../../templates/smart-deployer-rag.json")),
     // codebase-explorer removed — same graph as Knowledge Q&A with different config
+    // Loop & Feedback
+    ("self-refine", "Self-Refine", "Draft → critique → revise loop — LLM improves its own output iteratively (3 rounds)",
+        include_str!("../../templates/self-refine.json")),
+    ("agentic-search", "Agentic Search", "LLM decides what to search, evaluates results, searches again if needed (max 5 rounds)",
+        include_str!("../../templates/agentic-search.json")),
 ];
 
 fn templates_directory() -> PathBuf {

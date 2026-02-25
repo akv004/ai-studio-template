@@ -7,7 +7,7 @@
     { "id": "output_1", "type": "output", "position": { "x": 1250, "y": 150 }, "data": { "name": "moderation_result", "format": "json" } }
   ],
   "edges": [
-    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "value", "targetHandle": "prompt" },
     { "id": "e-llm_1-router_1", "source": "llm_1", "target": "router_1", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-router_1-output_1-safe", "source": "router_1", "target": "output_1", "sourceHandle": "branch-0", "targetHandle": "value" },
     { "id": "e-router_1-approval_1", "source": "router_1", "target": "approval_1", "sourceHandle": "branch-1", "targetHandle": "data" },

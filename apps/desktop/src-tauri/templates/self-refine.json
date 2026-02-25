@@ -9,7 +9,7 @@
     { "id": "output_1", "type": "output", "position": { "x": 1850, "y": 200 }, "data": { "name": "refined_output", "format": "text" } }
   ],
   "edges": [
-    { "id": "e-in-loop", "source": "input_1", "target": "loop_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-in-loop", "source": "input_1", "target": "loop_1", "sourceHandle": "value", "targetHandle": "input" },
     { "id": "e-loop-draft", "source": "loop_1", "target": "llm_draft", "sourceHandle": "output", "targetHandle": "prompt" },
     { "id": "e-draft-critique", "source": "llm_draft", "target": "llm_critique", "sourceHandle": "response", "targetHandle": "prompt" },
     { "id": "e-critique-merge", "source": "llm_critique", "target": "transform_merge", "sourceHandle": "response", "targetHandle": "input" },

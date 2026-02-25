@@ -7,9 +7,9 @@
     { "id": "output_1", "type": "output", "position": { "x": 1300, "y": 150 }, "data": { "name": "answer", "format": "text" } }
   ],
   "edges": [
-    { "id": "e-input_1-tool_1", "source": "input_1", "target": "tool_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-input_1-tool_1", "source": "input_1", "target": "tool_1", "sourceHandle": "value", "targetHandle": "input" },
     { "id": "e-tool_1-transform_1", "source": "tool_1", "target": "transform_1", "sourceHandle": "result", "targetHandle": "input" },
-    { "id": "e-input_1-transform_1", "source": "input_1", "target": "transform_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-input_1-transform_1", "source": "input_1", "target": "transform_1", "sourceHandle": "value", "targetHandle": "input" },
     { "id": "e-transform_1-llm_1", "source": "transform_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
     { "id": "e-llm_1-output_1", "source": "llm_1", "target": "output_1", "sourceHandle": "response", "targetHandle": "value" }
   ],

@@ -8,9 +8,9 @@
     { "id": "output_1", "type": "output", "position": { "x": 1050, "y": 250 }, "data": { "name": "comparison", "format": "text" } }
   ],
   "edges": [
-    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
-    { "id": "e-input_1-llm_2", "source": "input_1", "target": "llm_2", "sourceHandle": "output", "targetHandle": "prompt" },
-    { "id": "e-input_1-llm_3", "source": "input_1", "target": "llm_3", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "value", "targetHandle": "prompt" },
+    { "id": "e-input_1-llm_2", "source": "input_1", "target": "llm_2", "sourceHandle": "value", "targetHandle": "prompt" },
+    { "id": "e-input_1-llm_3", "source": "input_1", "target": "llm_3", "sourceHandle": "value", "targetHandle": "prompt" },
     { "id": "e-llm_1-transform_1", "source": "llm_1", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-llm_2-transform_1", "source": "llm_2", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-llm_3-transform_1", "source": "llm_3", "target": "transform_1", "sourceHandle": "response", "targetHandle": "input" },

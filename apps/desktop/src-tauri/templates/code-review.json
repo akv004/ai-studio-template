@@ -6,7 +6,7 @@
     { "id": "output_1", "type": "output", "position": { "x": 1050, "y": 150 }, "data": { "name": "review_result", "format": "text" } }
   ],
   "edges": [
-    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "value", "targetHandle": "prompt" },
     { "id": "e-llm_1-router_1", "source": "llm_1", "target": "router_1", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-router_1-output_1-0", "source": "router_1", "target": "output_1", "sourceHandle": "branch-0", "targetHandle": "value" },
     { "id": "e-router_1-output_1-1", "source": "router_1", "target": "output_1", "sourceHandle": "branch-1", "targetHandle": "value" },

@@ -8,8 +8,8 @@
     { "id": "output_1", "type": "output", "position": { "x": 1570, "y": 280 }, "data": { "name": "answer", "format": "text" } }
   ],
   "edges": [
-    { "id": "e-input-local", "source": "input_1", "target": "llm_local", "sourceHandle": "output", "targetHandle": "prompt" },
-    { "id": "e-input-cloud", "source": "input_1", "target": "llm_cloud", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-input-local", "source": "input_1", "target": "llm_local", "sourceHandle": "value", "targetHandle": "prompt" },
+    { "id": "e-input-cloud", "source": "input_1", "target": "llm_cloud", "sourceHandle": "value", "targetHandle": "prompt" },
     { "id": "e-local-combine", "source": "llm_local", "target": "transform_combine", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-cloud-combine", "source": "llm_cloud", "target": "transform_combine", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-combine-synth", "source": "transform_combine", "target": "llm_synthesizer", "sourceHandle": "output", "targetHandle": "prompt" },

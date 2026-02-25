@@ -7,7 +7,7 @@
     { "id": "output_1", "type": "output", "position": { "x": 1250, "y": 200 }, "data": { "name": "result", "format": "text" } }
   ],
   "edges": [
-    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "value", "targetHandle": "prompt" },
     { "id": "e-llm_1-router_1", "source": "llm_1", "target": "router_1", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-router_1-llm_2", "source": "router_1", "target": "llm_2", "sourceHandle": "branch-0", "targetHandle": "prompt" },
     { "id": "e-llm_2-output_1", "source": "llm_2", "target": "output_1", "sourceHandle": "response", "targetHandle": "value" },

@@ -10,7 +10,7 @@
     { "id": "output_1", "type": "output", "position": { "x": 2000, "y": 250 }, "data": { "name": "answer", "format": "text" } }
   ],
   "edges": [
-    { "id": "e-in-loop", "source": "input_1", "target": "loop_1", "sourceHandle": "output", "targetHandle": "input" },
+    { "id": "e-in-loop", "source": "input_1", "target": "loop_1", "sourceHandle": "value", "targetHandle": "input" },
     { "id": "e-loop-plan", "source": "loop_1", "target": "llm_plan", "sourceHandle": "output", "targetHandle": "prompt" },
     { "id": "e-plan-url", "source": "llm_plan", "target": "transform_url", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-url-http", "source": "transform_url", "target": "http_search", "sourceHandle": "output", "targetHandle": "url" },

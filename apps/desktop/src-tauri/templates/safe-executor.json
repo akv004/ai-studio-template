@@ -7,7 +7,7 @@
     { "id": "output_1", "type": "output", "position": { "x": 1250, "y": 150 }, "data": { "name": "result", "format": "text" } }
   ],
   "edges": [
-    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-input_1-llm_1", "source": "input_1", "target": "llm_1", "sourceHandle": "value", "targetHandle": "prompt" },
     { "id": "e-llm_1-approval_1", "source": "llm_1", "target": "approval_1", "sourceHandle": "response", "targetHandle": "data" },
     { "id": "e-approval_1-tool_1", "source": "approval_1", "target": "tool_1", "sourceHandle": "approved", "targetHandle": "input" },
     { "id": "e-tool_1-output_1", "source": "tool_1", "target": "output_1", "sourceHandle": "result", "targetHandle": "value" }

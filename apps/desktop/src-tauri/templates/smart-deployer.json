@@ -12,7 +12,7 @@
   ],
   "edges": [
     { "id": "e-config-parser", "source": "file_config", "target": "llm_parser", "sourceHandle": "content", "targetHandle": "context" },
-    { "id": "e-input-parser", "source": "input_1", "target": "llm_parser", "sourceHandle": "output", "targetHandle": "prompt" },
+    { "id": "e-input-parser", "source": "input_1", "target": "llm_parser", "sourceHandle": "value", "targetHandle": "prompt" },
     { "id": "e-parser-approval", "source": "llm_parser", "target": "approval_1", "sourceHandle": "response", "targetHandle": "input" },
     { "id": "e-approval-iterator", "source": "approval_1", "target": "iterator_1", "sourceHandle": "approved", "targetHandle": "input" },
     { "id": "e-iterator-shell", "source": "iterator_1", "target": "shell_deploy", "sourceHandle": "item", "targetHandle": "input" },

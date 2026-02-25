@@ -21,7 +21,7 @@ export function LoopNode({ id, data, selected }: { id: string; data: Record<stri
                     <input type="number" className="node-inline-input w-12 text-center"
                         min={1} max={50}
                         value={(data.maxIterations as number) ?? 5}
-                        onChange={e => updateField('maxIterations', parseInt(e.target.value) || 5)}
+                        onChange={e => updateField('maxIterations', Math.max(1, Math.min(50, parseInt(e.target.value) || 5)))}
                         onMouseDown={e => e.stopPropagation()} />
                 </div>
                 <select className="node-inline-input" value={(data.exitCondition as string) || 'max_iterations'}

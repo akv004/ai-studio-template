@@ -384,29 +384,11 @@ impl NodeExecutor for LoopExecutor {
                                 node_id, idx + 1, rid);
                             break;
                         }
-                        // Router selected "continue" — keep looping
-                        // The "continue" branch output becomes next input
-                        // Since Exit was skipped, we don't have a clean output.
-                        // We need the value from the continue branch. But synthetic graph
-                        // only returns Output node values. For continue, there's no Output node
-                        // on the continue path.
-                        //
-                        // Solution: In the synthetic graph, the continue path doesn't lead to
-                        // __loop_output__. So we keep current_input unchanged OR we need
-                        // to restructure. Actually the spec says "Router's output value becomes
-                        // next iteration's input" for continue. But we don't capture intermediate
-                        // node outputs from the synthetic execution.
-                        //
-                        // Pragmatic approach: keep the current input as-is for the next iteration
-                        // since the continue branch's transform node handles feedback internally.
-                        // The user's continue path should feed back through the subgraph.
-                        //
-                        // Actually re-reading the spec: the feedback is the last non-skipped
-                        // node's output before it cycles back. Since we can't capture that,
-                        // we'll use the current_input for continue (no-op feedback).
-                        // This works because the subgraph's continue path processes and
-                        // transforms the data internally within one iteration.
-                        continue;
+                        // Router selected "continue" — feedback is applied below.
+                        // Since Exit was skipped, iteration_output is Null and the
+                        // feedback block will preserve current_input (replace keeps it,
+                        // append skips Null values). This matches spec: the subgraph's
+                        // continue path processes data internally within the iteration.
                     }
                 }
                 "stable_output" => {
@@ -426,13 +408,29 @@ impl NodeExecutor for LoopExecutor {
                 _ => {}
             }
 
-            // Apply feedback for next iteration (unless this is the last iteration)
-            if idx + 1 < max_iterations {
+            // Apply feedback for next iteration (unless this is the last iteration).
+            // Skip feedback when iteration_output is Null (e.g., evaluator "continue"
+            // where Exit was skipped) to avoid overwriting current_input with Null.
+            if idx + 1 < max_iterations && !iteration_output.is_null() {
                 current_input = match feedback_mode {
                     "append" => {
-                        let prev_text = stringify_value(&current_input);
-                        let new_text = stringify_value(&iteration_output);
-                        Value::String(format!("{}\n---\n{}", prev_text, new_text))
+                        // If both values are strings, concatenate with separator.
+                        // If either is non-string (object/array), collect into a JSON array
+                        // to preserve structural validity instead of blindly stringifying.
+                        let both_strings = current_input.is_string() && iteration_output.is_string();
+                        if both_strings {
+                            let prev_text = stringify_value(&current_input);
+                            let new_text = stringify_value(&iteration_output);
+                            Value::String(format!("{}\n---\n{}", prev_text, new_text))
+                        } else {
+                            eprintln!("[workflow] Loop '{}': append mode with non-string values — wrapping in array", node_id);
+                            let mut items = match current_input {
+                                Value::Array(arr) => arr,
+                                other => vec![other],
+                            };
+                            items.push(iteration_output);
+                            Value::Array(items)
+                        }
                     }
                     // "replace" and default
                     _ => iteration_output,

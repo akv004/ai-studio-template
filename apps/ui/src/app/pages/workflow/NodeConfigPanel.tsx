@@ -604,7 +604,7 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                         <span className="text-xs text-[var(--text-muted)]">Max Iterations</span>
                         <input type="number" className="config-input" min={1} max={50}
                             value={(data.maxIterations as number) ?? 5}
-                            onChange={(e) => update('maxIterations', parseInt(e.target.value) || 5)} />
+                            onChange={(e) => update('maxIterations', Math.max(1, Math.min(50, parseInt(e.target.value) || 5)))} />
                     </label>
                     <label className="block">
                         <span className="text-xs text-[var(--text-muted)]">Exit Condition</span>

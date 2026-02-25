@@ -34,6 +34,14 @@ fn resolve_source_handle(
         if let Some(field_val) = obj.get(src_handle) {
             return Some(field_val.clone());
         }
+        // Router backward compatibility: branch-* handles should unwrap the "value" field
+        // from Router's {"selectedBranch": "...", "value": ...} wrapper so downstream
+        // nodes receive the original incoming value, not the wrapper.
+        if src_handle.starts_with("branch-") {
+            if let Some(inner) = obj.get("value") {
+                return Some(inner.clone());
+            }
+        }
     }
     // Fallback: whole value (simple strings, passthrough nodes)
     Some(val.clone())
@@ -51,6 +59,13 @@ pub fn extract_primary_text(val: &serde_json::Value) -> String {
             if let Some(field) = obj.get(*key) {
                 if let Some(s) = field.as_str() {
                     return s.to_string();
+                }
+                // If the field is a non-string value (object, array, number, bool),
+                // serialize just that inner value — not the entire wrapper object.
+                // This handles Router output where value is an object:
+                // {"selectedBranch": "...", "value": {complex_object}} → serialize the inner object.
+                if !field.is_null() {
+                    return field.to_string();
                 }
             }
         }
@@ -637,6 +652,31 @@ mod tests {
         assert!(resolve_source_handle(&outputs, "nonexistent", "output").is_none());
     }
 
+    #[test]
+    fn test_source_handle_branch_unwraps_router_value() {
+        // Router output wraps value: {"selectedBranch": "done", "value": "hello"}
+        // branch-0 handle should unwrap to "hello", not the whole wrapper
+        let mut outputs = HashMap::new();
+        outputs.insert("router_1".to_string(), serde_json::json!({
+            "selectedBranch": "done",
+            "value": "hello world"
+        }));
+        let val = resolve_source_handle(&outputs, "router_1", "branch-0").unwrap();
+        assert_eq!(val.as_str().unwrap(), "hello world");
+    }
+
+    #[test]
+    fn test_source_handle_branch_unwraps_router_object_value() {
+        let mut outputs = HashMap::new();
+        outputs.insert("router_1".to_string(), serde_json::json!({
+            "selectedBranch": "analyze",
+            "value": {"data": [1, 2, 3]}
+        }));
+        let val = resolve_source_handle(&outputs, "router_1", "branch-1").unwrap();
+        assert!(val.is_object());
+        assert_eq!(val.get("data").unwrap().as_array().unwrap().len(), 3);
+    }
+
     // --- extract_primary_text tests ---
 
     #[test]
@@ -663,6 +703,25 @@ mod tests {
         let text = extract_primary_text(&val);
         assert!(text.contains("foo"));
         assert!(text.contains("bar"));
+    }
+
+    #[test]
+    fn test_primary_text_router_object_value() {
+        // Router output: {"selectedBranch": "done", "value": {"data": "result"}}
+        // Should extract the inner object (value field), NOT the entire wrapper.
+        let val = serde_json::json!({"selectedBranch": "done", "value": {"data": "result"}});
+        let text = extract_primary_text(&val);
+        // Should be the serialized inner object, not the whole wrapper
+        assert!(text.contains("data"));
+        assert!(text.contains("result"));
+        assert!(!text.contains("selectedBranch"), "should not contain wrapper keys, got: {}", text);
+    }
+
+    #[test]
+    fn test_primary_text_router_string_value() {
+        // Router output: {"selectedBranch": "branch_a", "value": "hello world"}
+        let val = serde_json::json!({"selectedBranch": "branch_a", "value": "hello world"});
+        assert_eq!(extract_primary_text(&val), "hello world");
     }
 
     // --- resolve_template with structured LLM output ---

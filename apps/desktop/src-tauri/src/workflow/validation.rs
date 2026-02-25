@@ -111,12 +111,32 @@ pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String>
         warnings.push("Exit node found without a paired Loop node — Exit nodes should only be used inside a Loop".to_string());
     }
 
-    // Nesting warnings: multiple loops or loop + iterator coexistence
+    // Empty loop body: direct Loop → Exit with no nodes in between
+    if loop_count > 0 && exit_count > 0 {
+        for (id, ntype) in &node_types {
+            if ntype == "loop" {
+                if let Some(targets) = adj.get(id) {
+                    for target in targets {
+                        if node_types.get(target).map(|t| t.as_str()) == Some("exit") {
+                            warnings.push(format!(
+                                "Loop '{}' connects directly to Exit '{}' — empty loop body will produce Null results. Add processing nodes between Loop and Exit.",
+                                id, target
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Nesting errors: multiple loops or loop + iterator coexistence
+    // Elevated to errors (not warnings) because unbounded forward BFS extraction
+    // produces malformed subgraphs when structures are nested.
     if loop_count > 1 {
-        warnings.push("Multiple Loop nodes detected — nested loops are not yet supported and may produce unexpected results".to_string());
+        errors.push("Multiple Loop nodes detected — nested loops are not yet supported".to_string());
     }
     if loop_count > 0 && iterator_count > 0 {
-        warnings.push("Loop and Iterator nodes in the same workflow — nesting loops inside iterators (or vice versa) is not yet supported".to_string());
+        errors.push("Loop and Iterator nodes in the same workflow — nesting is not yet supported".to_string());
     }
 
     // Check for orphan nodes
@@ -301,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_loops_warning() {
+    fn test_multiple_loops_error() {
         let graph = make_graph(
             &[("in1", "input"), ("loop1", "loop"), ("loop2", "loop"), ("llm1", "llm"),
               ("exit1", "exit"), ("exit2", "exit"), ("out1", "output")],
@@ -309,13 +329,25 @@ mod tests {
               ("exit1", "loop2"), ("loop2", "exit2"), ("exit2", "out1")],
         );
         let result = validate_graph_json(&graph).unwrap();
-        assert!(result.valid);
-        assert!(result.warnings.iter().any(|w| w.contains("Multiple Loop")),
+        assert!(!result.valid, "should be invalid with multiple loops");
+        assert!(result.errors.iter().any(|e| e.contains("Multiple Loop")),
+            "errors: {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_direct_loop_exit_warning() {
+        let graph = make_graph(
+            &[("in1", "input"), ("loop1", "loop"), ("exit1", "exit"), ("out1", "output")],
+            &[("in1", "loop1"), ("loop1", "exit1"), ("exit1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid, "direct loop→exit is a warning, not error");
+        assert!(result.warnings.iter().any(|w| w.contains("empty loop body")),
             "warnings: {:?}", result.warnings);
     }
 
     #[test]
-    fn test_loop_iterator_coexistence_warning() {
+    fn test_loop_iterator_coexistence_error() {
         let graph = make_graph(
             &[("in1", "input"), ("loop1", "loop"), ("llm1", "llm"), ("exit1", "exit"),
               ("iter1", "iterator"), ("llm2", "llm"), ("agg1", "aggregator"), ("out1", "output")],
@@ -323,8 +355,8 @@ mod tests {
               ("exit1", "iter1"), ("iter1", "llm2"), ("llm2", "agg1"), ("agg1", "out1")],
         );
         let result = validate_graph_json(&graph).unwrap();
-        assert!(result.valid);
-        assert!(result.warnings.iter().any(|w| w.contains("Loop and Iterator")),
-            "warnings: {:?}", result.warnings);
+        assert!(!result.valid, "should be invalid with loop+iterator");
+        assert!(result.errors.iter().any(|e| e.contains("Loop and Iterator")),
+            "errors: {:?}", result.errors);
     }
 }

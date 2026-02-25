@@ -1,7 +1,7 @@
 # Triggers & Scheduling
 
-**Status**: PLANNED
-**Phase**: 5B (production-ready)
+**Status**: IN PROGRESS — Webhook backend DONE (9ee19c7), UI + Cron + File Watch pending
+**Phase**: 4C (automation canvas)
 **Priority**: P0 — critical gap for automation use cases
 **Author**: AI Studio PM
 **Date**: 2026-02-21
@@ -244,12 +244,13 @@ get_webhook_server_status() -> {port, active_hooks, uptime}
 ## Implementation Plan
 
 ### Phase 1: Webhook Trigger (2 sessions)
-- [ ] Rust: Axum HTTP server embedded in Tauri (configurable port)
-- [ ] Rust: Trigger table + CRUD commands
-- [ ] Rust: Route registration (arm/disarm)
+- [x] Rust: Axum HTTP server embedded in Tauri (configurable port) — 9ee19c7
+- [x] Rust: Trigger table + CRUD commands — schema v8, 9 IPC commands
+- [x] Rust: Route registration (arm/disarm) — TriggerManager
+- [x] Rust: Auth (None/Token/HMAC-SHA256) + rate limiting — 25 tests
 - [ ] UI: WebhookTriggerNode.tsx with URL display + copy
 - [ ] UI: Arm/Disarm toggle in workflow toolbar
-- [ ] 10 tests (routing, auth, rate limiting, concurrent)
+- [ ] UI: Activity log for webhook invocations
 
 ### Phase 2: Cron Scheduler (1 session)
 - [ ] Rust: Tokio cron scheduler (check armed schedules)

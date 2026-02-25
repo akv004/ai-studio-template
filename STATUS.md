@@ -28,7 +28,7 @@
 | 19 | rich-output.md | P1 | 5A | IN PROGRESS | Markdown, tables, JSON tree/table, code blocks — wired into 5 spots. Charts/images deferred. |
 | 20 | workflow-versioning.md | P2 | 5B | PLANNED | Version history, diff view, rollback, run comparison |
 | 21 | rag-knowledge-base.md | P0 | 5A | DONE | RAG Knowledge Base: 17th node type, full-stack (sidecar + Rust rag/ + executor + IPC + UI + templates + E2E). 160 tests. |
-| 22 | loop-feedback.md | P0 | 5A | DONE | Loop & Exit nodes: iterative refinement, 3 exit conditions, 2 feedback modes, 2 templates. 188 tests. |
+| 22 | loop-feedback.md | P0 | 5A | DONE | Loop & Exit nodes: iterative refinement, 3 exit conditions, 2 feedback modes, 2 templates. 193 tests. Peer reviewed (Gemini + Codex, 8 fixes). |
 
 **Status key**: DONE | IN PROGRESS | PLANNED | BLOCKED | REFERENCE (non-implementable)
 
@@ -89,6 +89,7 @@
 | **v0.1.2 tagged** | DONE | Streaming + Rich Output + RAG spec + README overhaul |
 | **RAG Knowledge Base** | DONE | Full-stack: sidecar /embed, Rust rag/ (chunker+index+search+format, 31 tests), KnowledgeBaseExecutor, 4 IPC commands, UI node+config, 3 templates (#14-16), 2 E2E tests. 160 total tests. (09ca3d0) |
 | **Loop & Feedback nodes** | DONE | Loop + Exit node types: 3 exit conditions (max_iterations, evaluator, stable_output), 2 feedback modes (replace, append), Router selectedBranch for evaluator mode, 2 templates (self-refine, agentic-search). 188 Rust tests, 8 E2E tests. |
+| **Loop peer review fixes** | DONE | Gemini + Codex review: 8 fixes applied. Router value unwrap, branch-* backward compat, evaluator feedback fix, append array wrap, nesting errors, empty body warning, UI clamp. 193 tests. (9dba659) |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -246,9 +247,10 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 37: Rich Output wiring + Hybrid Intelligence template (ensemble synthesis)
 - Session 38: RAG Knowledge Base full-stack implementation (17th node type, 31 tests, 3 templates)
 - Session 39: Loop & Feedback nodes (18th+19th node types, 26 new tests, 2 templates)
+- Session 40: Loop & Feedback peer review — Gemini (architecture) + Codex (implementation), 8 fixes applied, 193 tests
 
 **Next session should**:
-1. **Peer review Loop & Feedback** — `/peer-review` for Gemini (architecture) + Codex (code quality)
-2. Consider v0.2.0 tag for Phase 4 completion
-3. Or start **A/B Eval Node** (Phase 5 #11 — highest demo impact, parallel LLM calls already exist)
-4. Or start **connections-manager** (P0 prerequisite for SQL, HTTP, webhook nodes)
+1. Consider v0.2.0 tag for Phase 4 completion
+2. Or start **A/B Eval Node** (Phase 5 #11 — highest demo impact, parallel LLM calls already exist)
+3. Or start **connections-manager** (P0 prerequisite for SQL, HTTP, webhook nodes)
+4. Or start **Container/group nodes** (visual grouping on canvas)

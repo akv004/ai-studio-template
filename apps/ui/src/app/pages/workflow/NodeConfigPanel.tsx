@@ -798,12 +798,23 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                             <option value="America/Chicago">America/Chicago (CST/CDT)</option>
                             <option value="America/Denver">America/Denver (MST/MDT)</option>
                             <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
+                            <option value="America/Sao_Paulo">America/Sao_Paulo (BRT)</option>
+                            <option value="America/Toronto">America/Toronto (EST/EDT)</option>
+                            <option value="America/Mexico_City">America/Mexico_City (CST)</option>
                             <option value="Europe/London">Europe/London (GMT/BST)</option>
                             <option value="Europe/Berlin">Europe/Berlin (CET/CEST)</option>
+                            <option value="Europe/Paris">Europe/Paris (CET/CEST)</option>
+                            <option value="Europe/Amsterdam">Europe/Amsterdam (CET/CEST)</option>
+                            <option value="Europe/Moscow">Europe/Moscow (MSK)</option>
                             <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                            <option value="Asia/Dubai">Asia/Dubai (GST)</option>
+                            <option value="Asia/Singapore">Asia/Singapore (SGT)</option>
                             <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
                             <option value="Asia/Shanghai">Asia/Shanghai (CST)</option>
+                            <option value="Asia/Seoul">Asia/Seoul (KST)</option>
+                            <option value="Asia/Hong_Kong">Asia/Hong_Kong (HKT)</option>
                             <option value="Australia/Sydney">Australia/Sydney (AEST/AEDT)</option>
+                            <option value="Pacific/Auckland">Pacific/Auckland (NZST/NZDT)</option>
                         </select>
                     </label>
                     <label className="block">

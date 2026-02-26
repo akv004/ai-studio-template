@@ -447,18 +447,22 @@ impl TriggerManager {
             }
         }
 
-        // Log trigger fire
+        // Log trigger fire (C6: log DB errors instead of silently ignoring)
         let log_id = Uuid::new_v4().to_string();
         {
             if let Ok(conn) = db.conn.lock() {
-                let _ = conn.execute(
+                if let Err(e) = conn.execute(
                     "INSERT INTO trigger_log (id, trigger_id, run_id, fired_at, status) VALUES (?1, ?2, ?3, ?4, 'fired')",
                     params![log_id, trigger_id, session_id, now],
-                );
-                let _ = conn.execute(
+                ) {
+                    eprintln!("[cron] Failed to insert trigger_log: {e}");
+                }
+                if let Err(e) = conn.execute(
                     "UPDATE triggers SET last_fired = ?1, fire_count = fire_count + 1, updated_at = ?1 WHERE id = ?2",
                     params![now, trigger_id],
-                );
+                ) {
+                    eprintln!("[cron] Failed to update trigger fire_count: {e}");
+                }
             }
         }
 

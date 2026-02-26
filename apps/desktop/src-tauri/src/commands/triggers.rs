@@ -339,13 +339,15 @@ pub async fn arm_trigger(
                 .ok_or_else(|| AppError::Validation("Cron config missing 'expression'".into()))?
                 .to_string();
 
-            // Validate expression parses (cron crate uses 6/7-field format: sec min hour dom month dow [year])
-            // We accept 5-field user input and prepend "0 " for the seconds field
-            let cron_expr = if expression.split_whitespace().count() == 5 {
-                format!("0 {} *", expression)
-            } else {
-                expression.clone()
-            };
+            // Enforce standard 5-field cron (min hour dom month dow).
+            // Scheduler dedup is minute-based, so sub-minute (6/7-field) expressions are rejected.
+            let field_count = expression.split_whitespace().count();
+            if field_count != 5 {
+                return Err(AppError::Validation(format!(
+                    "Cron expression must be standard 5-field format (min hour dom month dow), got {} fields", field_count
+                )));
+            }
+            let cron_expr = format!("0 {} *", expression);
 
             use std::str::FromStr;
             cron::Schedule::from_str(&cron_expr)
@@ -367,7 +369,14 @@ pub async fn arm_trigger(
             let max_concurrent = trigger.config.get("maxConcurrent")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(1)
+                .max(1)  // C7: prevent 0 which causes permanent skip
                 .min(10) as u32;
+
+            // G2: Initialize last_fired_minute from DB to prevent double-fire on restart
+            let initial_minute = trigger.last_fired.as_ref().and_then(|ts| {
+                chrono::DateTime::parse_from_rfc3339(ts).ok()
+                    .map(|dt| dt.timestamp() / 60)
+            });
 
             let entry = CronScheduleEntry {
                 trigger_id: trigger.id.clone(),
@@ -378,7 +387,7 @@ pub async fn arm_trigger(
                 max_concurrent,
                 active_runs: Arc::new(AtomicU32::new(0)),
                 fire_count: Arc::new(AtomicI64::new(trigger.fire_count)),
-                last_fired_minute: Arc::new(Mutex::new(None)),
+                last_fired_minute: Arc::new(Mutex::new(initial_minute)),
             };
 
             trigger_mgr.arm_cron(entry, db.inner(), sidecar.inner(), &app).await

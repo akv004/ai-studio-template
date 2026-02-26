@@ -107,8 +107,11 @@ export function WorkflowCanvas({ workflow, onBack }: {
     const [showSaveTemplate, setShowSaveTemplate] = useState(false);
     const [templateName, setTemplateName] = useState('');
     const [templateDesc, setTemplateDesc] = useState('');
-    const [triggerId, setTriggerId] = useState<string | null>(null);
-    const [triggerArmed, setTriggerArmed] = useState(false);
+    // Per-type trigger state (C4: independent arm/disarm for cron vs webhook)
+    const [webhookTriggerId, setWebhookTriggerId] = useState<string | null>(null);
+    const [cronTriggerId, setCronTriggerId] = useState<string | null>(null);
+    const [webhookArmed, setWebhookArmed] = useState(false);
+    const [cronArmed, setCronArmed] = useState(false);
     const [webhookPort, setWebhookPort] = useState(9876);
     const [triggerLoading, setTriggerLoading] = useState(false);
     const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
@@ -128,14 +131,14 @@ export function WorkflowCanvas({ workflow, onBack }: {
     useEffect(() => {
         setNodes(nds => nds.map(n =>
             n.type === 'webhook_trigger'
-                ? { ...n, data: { ...n.data, _armed: triggerArmed, _webhookPort: webhookPort } }
+                ? { ...n, data: { ...n.data, _armed: webhookArmed, _webhookPort: webhookPort } }
                 : n.type === 'cron_trigger'
-                    ? { ...n, data: { ...n.data, _armed: triggerArmed } }
+                    ? { ...n, data: { ...n.data, _armed: cronArmed } }
                     : n
         ));
-    }, [triggerArmed, webhookPort, setNodes]);
+    }, [webhookArmed, cronArmed, webhookPort, setNodes]);
 
-    // Load trigger state on mount
+    // Load trigger state on mount (C4: per-type trigger loading)
     useEffect(() => {
         if (!hasTrigger) return;
         let cancelled = false;
@@ -143,27 +146,30 @@ export function WorkflowCanvas({ workflow, onBack }: {
             try {
                 const { invoke } = await import('@tauri-apps/api/core');
                 const triggers = await invoke<{ id: string; triggerType: string; enabled: boolean }[]>('list_triggers', {
-                    request: { workflowId: workflow.id },
+                    workflowId: workflow.id,
                 });
                 if (cancelled) return;
-                if (triggers.length > 0) {
-                    setTriggerId(triggers[0].id);
-                    const ttype = triggers[0].triggerType || 'webhook';
-                    try {
-                        if (ttype === 'cron') {
+                for (const t of triggers) {
+                    const ttype = t.triggerType || 'webhook';
+                    if (ttype === 'cron') {
+                        setCronTriggerId(t.id);
+                        try {
                             const status = await invoke<{ running: boolean; activeSchedules: number }>('get_cron_scheduler_status');
-                            if (!cancelled) {
-                                setTriggerArmed(status.running && triggers[0].enabled);
-                            }
-                        } else {
+                            if (!cancelled) setCronArmed(status.running && t.enabled);
+                        } catch {
+                            if (!cancelled) setCronArmed(false);
+                        }
+                    } else {
+                        setWebhookTriggerId(t.id);
+                        try {
                             const status = await invoke<{ running: boolean; port: number }>('get_webhook_server_status');
                             if (!cancelled) {
-                                setTriggerArmed(status.running && triggers[0].enabled);
+                                setWebhookArmed(status.running && t.enabled);
                                 if (status.port) setWebhookPort(status.port);
                             }
+                        } catch {
+                            if (!cancelled) setWebhookArmed(false);
                         }
-                    } catch {
-                        if (!cancelled) setTriggerArmed(false);
                     }
                 }
             } catch {
@@ -509,7 +515,8 @@ export function WorkflowCanvas({ workflow, onBack }: {
         await stopLiveWorkflow(workflow.id);
     }, [workflow.id, stopLiveWorkflow]);
 
-    const handleArmTrigger = useCallback(async () => {
+    // C4: Per-type arm/disarm handlers
+    const handleArmTrigger = useCallback(async (armType: 'webhook' | 'cron') => {
         setTriggerLoading(true);
         try {
             // Auto-save graph first
@@ -518,14 +525,11 @@ export function WorkflowCanvas({ workflow, onBack }: {
             setHasChanges(false);
 
             const { invoke } = await import('@tauri-apps/api/core');
-
-            // Find trigger node — webhook or cron
-            const triggerNode = nodes.find(n => n.type === 'webhook_trigger') ||
-                                nodes.find(n => n.type === 'cron_trigger');
+            const isCron = armType === 'cron';
+            const nodeType = isCron ? 'cron_trigger' : 'webhook_trigger';
+            const triggerNode = nodes.find(n => n.type === nodeType);
             if (!triggerNode) return;
             const nd = triggerNode.data;
-            const isCron = triggerNode.type === 'cron_trigger';
-            const triggerType = isCron ? 'cron' : 'webhook';
 
             const config = isCron
                 ? {
@@ -556,13 +560,13 @@ export function WorkflowCanvas({ workflow, onBack }: {
                 }
             }
 
-            let tid = triggerId;
+            let tid = isCron ? cronTriggerId : webhookTriggerId;
             if (!tid) {
                 const result = await invoke<{ id: string }>('create_trigger', {
-                    request: { workflowId: workflow.id, triggerType, config: finalConfig },
+                    request: { workflowId: workflow.id, triggerType: armType, config: finalConfig },
                 });
                 tid = result.id;
-                setTriggerId(tid);
+                if (isCron) setCronTriggerId(tid); else setWebhookTriggerId(tid);
             } else {
                 await invoke('update_trigger', {
                     request: { triggerId: tid, config: finalConfig },
@@ -570,7 +574,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
             }
 
             await invoke('arm_trigger', { triggerId: tid });
-            setTriggerArmed(true);
+            if (isCron) setCronArmed(true); else setWebhookArmed(true);
 
             // Get actual port for webhook
             if (!isCron) {
@@ -586,23 +590,23 @@ export function WorkflowCanvas({ workflow, onBack }: {
         } finally {
             setTriggerLoading(false);
         }
-    }, [nodes, edges, workflow.id, triggerId, updateWorkflow, addToast]);
+    }, [nodes, edges, workflow.id, cronTriggerId, webhookTriggerId, updateWorkflow, addToast]);
 
-    const handleDisarmTrigger = useCallback(async () => {
-        if (!triggerId) return;
+    const handleDisarmTrigger = useCallback(async (disarmType: 'webhook' | 'cron') => {
+        const tid = disarmType === 'cron' ? cronTriggerId : webhookTriggerId;
+        if (!tid) return;
         setTriggerLoading(true);
         try {
             const { invoke } = await import('@tauri-apps/api/core');
-            await invoke('disarm_trigger', { triggerId });
-            setTriggerArmed(false);
-            const isCron = nodes.some(n => n.type === 'cron_trigger');
-            addToast(`${isCron ? 'Cron schedule' : 'Webhook'} disarmed`, 'success');
+            await invoke('disarm_trigger', { triggerId: tid });
+            if (disarmType === 'cron') setCronArmed(false); else setWebhookArmed(false);
+            addToast(`${disarmType === 'cron' ? 'Cron schedule' : 'Webhook'} disarmed`, 'success');
         } catch (e) {
             addToast(`Failed to disarm: ${e}`, 'error');
         } finally {
             setTriggerLoading(false);
         }
-    }, [triggerId, nodes, addToast]);
+    }, [cronTriggerId, webhookTriggerId, addToast]);
 
     const handleSaveAsTemplate = useCallback(async () => {
         if (!templateName.trim()) return;
@@ -918,31 +922,48 @@ export function WorkflowCanvas({ workflow, onBack }: {
                     {hasTrigger && (
                         <>
                             <div className="toolbar-divider mx-1 h-5 border-l border-[var(--border-subtle)]" />
-                            {triggerArmed ? (
-                                <button
-                                    className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-red-500 hover:text-red-400 disabled:opacity-50 transition-colors"
-                                    disabled={triggerLoading || workflowRunning}
-                                    onClick={handleDisarmTrigger}
-                                    title={hasCronTrigger ? 'Stop cron schedule' : 'Disarm endpoint'}
-                                >
-                                    {triggerLoading ? <Loader2 size={16} className="animate-spin" /> : <Square size={16} />}
-                                </button>
-                            ) : (
-                                <button
-                                    className={`p-1.5 rounded hover:bg-[var(--bg-tertiary)] disabled:opacity-50 transition-colors ${
-                                        hasCronTrigger
-                                            ? 'text-cyan-500 hover:text-cyan-400'
-                                            : 'text-yellow-500 hover:text-yellow-400'
-                                    }`}
-                                    disabled={triggerLoading || workflowRunning}
-                                    onClick={handleArmTrigger}
-                                    title={hasCronTrigger ? 'Arm cron schedule' : 'Arm webhook endpoint'}
-                                >
-                                    {triggerLoading
-                                        ? <Loader2 size={16} className="animate-spin" />
-                                        : hasCronTrigger ? <Clock size={16} /> : <Zap size={16} />
-                                    }
-                                </button>
+                            {/* C4: Separate buttons per trigger type */}
+                            {hasWebhookTrigger && (
+                                webhookArmed ? (
+                                    <button
+                                        className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-red-500 hover:text-red-400 disabled:opacity-50 transition-colors"
+                                        disabled={triggerLoading || workflowRunning}
+                                        onClick={() => handleDisarmTrigger('webhook')}
+                                        title="Disarm webhook endpoint"
+                                    >
+                                        {triggerLoading ? <Loader2 size={16} className="animate-spin" /> : <Square size={16} />}
+                                    </button>
+                                ) : (
+                                    <button
+                                        className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition-colors"
+                                        disabled={triggerLoading || workflowRunning}
+                                        onClick={() => handleArmTrigger('webhook')}
+                                        title="Arm webhook endpoint"
+                                    >
+                                        {triggerLoading ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
+                                    </button>
+                                )
+                            )}
+                            {hasCronTrigger && (
+                                cronArmed ? (
+                                    <button
+                                        className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-red-500 hover:text-red-400 disabled:opacity-50 transition-colors"
+                                        disabled={triggerLoading || workflowRunning}
+                                        onClick={() => handleDisarmTrigger('cron')}
+                                        title="Stop cron schedule"
+                                    >
+                                        {triggerLoading ? <Loader2 size={16} className="animate-spin" /> : <Square size={16} />}
+                                    </button>
+                                ) : (
+                                    <button
+                                        className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-cyan-500 hover:text-cyan-400 disabled:opacity-50 transition-colors"
+                                        disabled={triggerLoading || workflowRunning}
+                                        onClick={() => handleArmTrigger('cron')}
+                                        title="Arm cron schedule"
+                                    >
+                                        {triggerLoading ? <Loader2 size={16} className="animate-spin" /> : <Clock size={16} />}
+                                    </button>
+                                )
                             )}
                         </>
                     )}

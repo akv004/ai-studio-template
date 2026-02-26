@@ -1,6 +1,16 @@
 use super::{ExecutionContext, NodeExecutor, NodeOutput};
 use crate::workflow::engine::resolve_template;
 
+/// Expand ~ or ~/ at the start of a path to the user's home directory.
+pub fn expand_tilde(path: &str) -> String {
+    if path == "~" || path.starts_with("~/") {
+        if let Some(home) = dirs::home_dir() {
+            return format!("{}{}", home.display(), &path[1..]);
+        }
+    }
+    path.to_string()
+}
+
 /// Paths that are always denied for security reasons
 const DENIED_PATHS: &[&str] = &[
     ".ssh", ".gnupg", ".config/ai-studio",
@@ -55,6 +65,7 @@ impl NodeExecutor for FileReadExecutor {
             config_path.to_string()
         };
         let path_str = resolve_template(&path_str, ctx.node_outputs, ctx.inputs);
+        let path_str = expand_tilde(&path_str);
 
         if path_str.is_empty() {
             return Err("File Read: path is empty".into());

@@ -15,7 +15,26 @@ Bundled workflow templates for AI Studio's Node Editor.
 | **Content Moderator** | 5 | Input → LLM → Router → Approval → Output | Screen content with human review for borderline |
 | **Translation Pipeline** | 6 | 2x Input → LLM → Transform → LLM → Output | Detect language, translate to target |
 | **Meeting Notes** | 5 | Input → 2x LLM → Transform → Output | Parallel summarize + extract action items |
-| **RAG Search** | 5 | Input → Tool → Transform → LLM → Output | Search then answer with retrieved context |
+| **Webcam Monitor** | 5 | Input → Tool → Router → LLM → Output | Capture webcam frame, detect person, describe scene |
+| **Hybrid Intelligence** | 6 | Input → 2x LLM (parallel) → LLM → Output | Two models think differently, synthesizer merges best of both |
+| **Smart Deployer** | 6 | File Read → LLM → Approval → Iterator → Shell Exec → Output | Natural language microservice deployment |
+| **Knowledge Q&A** | 4 | Input → Knowledge Base → LLM → Output | Index any folder, ask questions, get cited answers |
+| **Smart Deployer + RAG** | 6 | Knowledge Base → LLM → Approval → Iterator → Shell Exec → Output | RAG-powered deployment with deploy docs context |
+| **Self-Refine** | 5 | Input → Loop → LLM → Exit → Output | Draft → critique → revise loop (3 rounds) |
+| **Agentic Search** | 6 | Input → Loop → LLM → Tool → Router → Exit → Output | Smart search loop with early exit (5 rounds) |
+| **Webhook Chat API** | 4 | Webhook → Transform → LLM → Output | Expose an LLM as an HTTP endpoint |
+| **Daily Meeting Digest** | 6 | Cron → File Glob → LLM → Email → Output + Note | Scheduled transcript summarization + email digest |
+
+## Prerequisites for Specific Templates
+
+Some templates need external services to work:
+
+| Template | Requires | Setup |
+|----------|----------|-------|
+| **Daily Meeting Digest** | Local SMTP server + transcript folder | `docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit` then `mkdir -p ~/meetings/transcripts` and add .txt files. View emails at http://localhost:8025 |
+| **Webcam Monitor** | Webcam + local vision model | Qwen3-VL or similar at localhost:8003 |
+| **Smart Deployer** | GitHub CLI (`gh`) | `brew install gh` or `apt install gh`, then `gh auth login` |
+| **Knowledge Q&A** | Embedding provider configured | Azure OpenAI or OpenAI API key in Settings |
 
 ## Template Format
 

@@ -1,5 +1,6 @@
 use super::{ExecutionContext, NodeExecutor, NodeOutput};
 use crate::workflow::engine::resolve_template;
+use crate::workflow::executors::file_read::expand_tilde;
 
 /// Same denied paths as file_read
 fn is_path_denied(path: &std::path::Path) -> bool {
@@ -45,6 +46,7 @@ impl NodeExecutor for FileWriteExecutor {
             config_path.to_string()
         };
         let path_str = resolve_template(&path_str, ctx.node_outputs, ctx.inputs);
+        let path_str = expand_tilde(&path_str);
 
         if path_str.is_empty() {
             return Err("File Write: path is empty".into());

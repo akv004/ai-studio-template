@@ -1,6 +1,6 @@
 use super::{ExecutionContext, NodeExecutor, NodeOutput};
 use crate::workflow::engine::resolve_template;
-use crate::workflow::executors::file_read::{is_path_denied, guess_mime_type, parse_csv};
+use crate::workflow::executors::file_read::{is_path_denied, guess_mime_type, parse_csv, expand_tilde};
 use serde_json::Value;
 
 pub struct FileGlobExecutor;
@@ -30,6 +30,7 @@ impl NodeExecutor for FileGlobExecutor {
             config_dir.to_string()
         };
         let dir_str = resolve_template(&dir_str, ctx.node_outputs, ctx.inputs);
+        let dir_str = expand_tilde(&dir_str);
 
         if dir_str.is_empty() {
             return Err("File Glob: directory is empty".into());

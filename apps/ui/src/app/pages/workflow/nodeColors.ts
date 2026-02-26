@@ -20,6 +20,7 @@ export const nodeColors: Record<string, string> = {
     loop: '#4a2a6a',
     exit: '#4a2a6a',
     webhook_trigger: '#7a4a1a',
+    email_send: '#6a2a2a',
 };
 
 export const PROVIDER_MODELS: Record<string, string[]> = {

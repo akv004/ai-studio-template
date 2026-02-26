@@ -656,6 +656,106 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                 </>
             )}
 
+            {type === 'email_send' && (
+                <>
+                    <div className="text-[10px] font-semibold uppercase text-[var(--text-muted)] pt-2">SMTP Server</div>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Host</span>
+                        <input className="config-input" value={(data.smtpHost as string) || ''}
+                            onChange={(e) => update('smtpHost', e.target.value)}
+                            placeholder="smtp.gmail.com" />
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                        <label className="block">
+                            <span className="text-xs text-[var(--text-muted)]">Port</span>
+                            <input type="number" className="config-input"
+                                value={(data.smtpPort as number) ?? 587}
+                                onChange={(e) => update('smtpPort', parseInt(e.target.value) || 587)}
+                                min={1} max={65535} />
+                        </label>
+                        <label className="block">
+                            <span className="text-xs text-[var(--text-muted)]">Encryption</span>
+                            <select className="config-input" value={(data.encryption as string) || 'tls'}
+                                onChange={(e) => update('encryption', e.target.value)}>
+                                <option value="tls">TLS (STARTTLS)</option>
+                                <option value="ssl">SSL (Implicit)</option>
+                                <option value="none">None</option>
+                            </select>
+                        </label>
+                    </div>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Username</span>
+                        <input className="config-input" value={(data.smtpUser as string) || ''}
+                            onChange={(e) => update('smtpUser', e.target.value)}
+                            placeholder="user@gmail.com" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Password</span>
+                        <input type="password" className="config-input" value={(data.smtpPass as string) || ''}
+                            onChange={(e) => update('smtpPass', e.target.value)}
+                            placeholder="App password or SMTP password" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">From Address</span>
+                        <input className="config-input" value={(data.fromAddress as string) || ''}
+                            onChange={(e) => update('fromAddress', e.target.value)}
+                            placeholder="alerts@acme.com" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">From Name</span>
+                        <input className="config-input" value={(data.fromName as string) || ''}
+                            onChange={(e) => update('fromName', e.target.value)}
+                            placeholder="AI Studio (optional)" />
+                    </label>
+
+                    <div className="text-[10px] font-semibold uppercase text-[var(--text-muted)] pt-2">Email</div>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">To</span>
+                        <input className="config-input" value={(data.to as string) || ''}
+                            onChange={(e) => update('to', e.target.value)}
+                            placeholder="recipient@example.com" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">CC</span>
+                        <input className="config-input" value={(data.cc as string) || ''}
+                            onChange={(e) => update('cc', e.target.value)}
+                            placeholder="cc@example.com (optional)" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">BCC</span>
+                        <input className="config-input" value={(data.bcc as string) || ''}
+                            onChange={(e) => update('bcc', e.target.value)}
+                            placeholder="bcc@example.com (optional)" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Reply-To</span>
+                        <input className="config-input" value={(data.replyTo as string) || ''}
+                            onChange={(e) => update('replyTo', e.target.value)}
+                            placeholder="reply@example.com (optional)" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Subject</span>
+                        <input className="config-input" value={(data.subject as string) || ''}
+                            onChange={(e) => update('subject', e.target.value)}
+                            placeholder="Report for {{input.date}}" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Body</span>
+                        <textarea className="config-input min-h-[80px] resize-y" value={(data.body as string) || ''}
+                            onChange={(e) => update('body', e.target.value)}
+                            placeholder="{{llm_1.output}}" />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Body Type</span>
+                        <select className="config-input" value={(data.bodyType as string) || 'plain'}
+                            onChange={(e) => update('bodyType', e.target.value)}>
+                            <option value="plain">Plain Text</option>
+                            <option value="html">HTML</option>
+                        </select>
+                    </label>
+                </>
+            )}
+
             {type === 'webhook_trigger' && (
                 <>
                     <label className="block">

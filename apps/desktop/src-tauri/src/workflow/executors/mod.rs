@@ -18,6 +18,7 @@ pub mod knowledge_base;
 pub mod loop_node;
 pub mod exit;
 pub mod webhook_trigger;
+pub mod email_send;
 
 use crate::db::Database;
 use crate::sidecar::SidecarManager;
@@ -104,6 +105,8 @@ impl ExecutorRegistry {
         executors.insert("exit".to_string(), Box::new(exit::ExitExecutor));
         // Webhook trigger
         executors.insert("webhook_trigger".to_string(), Box::new(webhook_trigger::WebhookTriggerExecutor));
+        // Communication
+        executors.insert("email_send".to_string(), Box::new(email_send::EmailSendExecutor));
         Self { executors }
     }
 

@@ -41,6 +41,12 @@ export function defaultDataForType(type: string): Record<string, unknown> {
         case 'aggregator': return {
             label: '', strategy: 'array', separator: '\n',
         };
+        case 'email_send': return {
+            label: '', smtpHost: '', smtpPort: 587, encryption: 'tls',
+            smtpUser: '', smtpPass: '', fromAddress: '', fromName: '',
+            to: '', subject: '', body: '', cc: '', bcc: '', replyTo: '',
+            bodyType: 'plain',
+        };
         case 'webhook_trigger': return {
             label: '', path: '', methods: ['POST'],
             authMode: 'none', authToken: '', hmacSecret: '',

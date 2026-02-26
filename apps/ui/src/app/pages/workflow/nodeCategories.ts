@@ -2,7 +2,7 @@ import {
     FileInput, FileOutput, Cpu, GitFork,
     Wrench, ShieldCheck, Repeat, MessageSquare,
     Globe, Terminal, CheckSquare, FolderOpen, Layers,
-    BookOpen, RefreshCw, LogOut, Webhook,
+    BookOpen, RefreshCw, LogOut, Webhook, Mail,
 } from 'lucide-react';
 
 export interface NodeCategory {
@@ -46,6 +46,12 @@ export const NODE_CATEGORIES: NodeCategory[] = [
             { type: 'file_read', label: 'File Read', icon: FileInput, description: 'Read local files' },
             { type: 'file_write', label: 'File Write', icon: FileOutput, description: 'Write local files' },
             { type: 'shell_exec', label: 'Shell Exec', icon: Terminal, description: 'Run shell commands' },
+        ],
+    },
+    {
+        label: 'Communication',
+        types: [
+            { type: 'email_send', label: 'Email Send', icon: Mail, description: 'Send email via SMTP' },
         ],
     },
     {

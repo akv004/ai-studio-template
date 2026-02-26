@@ -97,6 +97,8 @@
 | **Email Send node** | DONE | SMTP integration via lettre crate: TLS/SSL/plain, template resolution, address validation, error→extra_outputs. 21st node type, "Communication" palette category. 229 tests. (6483d21) |
 | **Cron Trigger node** | DONE | Time-based schedule automation. CronScheduler (1s tick loop in TriggerManager), arm/disarm IPC, validation (max 1, cron+webhook coexist). UI: CronTriggerNode, config panel (expression, presets, timezone, max concurrent, catch-up policy), toolbar arm/disarm. 22nd node type, Triggers category. 251 tests (+14 new). (9eb843d) |
 | **Cron Trigger peer review** | DONE | Gemini (arch) + Codex (impl): 8 fixes — last_fired_minute init from DB, 5-field enforcement, list_triggers payload fix, dual-trigger toolbar split, maxConcurrent≥1, executor tests rewrite, DB error logging, 22 timezones. 253 tests. (a8649fe) |
+| **Note node** | DONE | Documentation-only canvas node (23rd node type). StickyNote icon, text preview on canvas, full textarea in config panel. Utility category. Orphan warning suppressed in validation. 254 tests. (5621c26) |
+| **Daily Meeting Digest template** | DONE | Cron (9 AM) → File Glob (transcripts) → LLM (summarize) → Email Send (digest). 19th bundled template. Includes Note node explaining setup. (5621c26) |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -204,22 +206,14 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-26 (session 44)
+**Date**: 2026-02-26 (session 45)
 **What happened**:
-- **Cron Trigger peer review — Gemini + Codex** (a8649fe):
-  - Gemini (7 findings): 1 fixed, 3 PASS, 3 deferred to Phase 5+
-  - Codex (10 findings): 7 fixed, 1 PASS, 2 deferred to Phase 5+
-  - **8 fixes applied**:
-    - G2: `last_fired_minute` initialized from DB `last_fired` timestamp (prevents double-fire on restart)
-    - C2: Enforce strict 5-field cron expressions (reject 6/7-field to match minute-based dedup)
-    - C3: Fix `list_triggers` IPC payload (`workflowId` directly, not `{request: {workflowId}}`)
-    - C4: Split toolbar for dual-trigger workflows (per-type triggerId, armed state, independent arm/disarm)
-    - C6: Log DB errors in `execute_cron_run` instead of `let _ =`
-    - C7: Clamp `maxConcurrent >= 1` (prevents permanent skip at 0)
-    - C8: Rewrite executor tests with `build_cron_output()` pure function (6 tests)
-    - C10: Expand timezone dropdown from 11 to 22 IANA zones
-  - Deferred: catchUpPolicy (skip-only fine for v1), graceful drain (JoinSet), scheduler integration tests
-  - **253 total Rust tests** passing
+- **Note node** (5621c26): 23rd node type — documentation-only canvas node. StickyNote icon, text preview (200 chars) on canvas, full textarea in config panel. New "Utility" palette category. Orphan warning suppressed in validation (+1 test). No executor needed.
+- **Daily Meeting Digest template** (5621c26): 19th bundled template — Cron Trigger (9 AM daily) → File Glob (~/meetings/transcripts/*.txt) → LLM (summarize decisions, action items, takeaways) → Email Send (digest to team). Note node explains setup. Uses Azure OpenAI gpt-4o-mini.
+- **254 total Rust tests** passing
+
+**Previous session (44)**:
+- Cron Trigger peer review — Gemini + Codex, 8 fixes, 253 tests (a8649fe)
 
 **Previous session (43)**:
 - Cron Trigger node — full implementation, 22nd node type (9eb843d)
@@ -227,20 +221,15 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 **Previous session (42)**:
 - Email Send node + peer review — 21st node type (6483d21 + 85f3a81)
 
-**Previous session (41)**:
-- Webhook Chat API template + toolbar UX redesign per Gemini review
-
-**Previous session (40)**:
-- Loop & Feedback peer review — Gemini + Codex, 8 fixes, 193 tests
-
 **Previous sessions**:
+- Session 41: Webhook Chat API template + toolbar UX redesign per Gemini review
+- Session 40: Loop & Feedback peer review — Gemini + Codex, 8 fixes, 193 tests
 - Session 39: Loop & Feedback nodes (18th+19th node types, 26 new tests, 2 templates)
-- Session 38: RAG Knowledge Base full-stack (17th node type, 31 tests, 3 templates)
-- Sessions 1-37: See git log for full history
+- Sessions 1-38: See git log for full history
 
 **Next session should**:
-1. **Cron + Email demo template** — scheduled daily report via cron → LLM → email (quick win)
-2. Consider v0.2.0 tag for Phase 4 completion
-3. Start **A/B Eval Node** (Phase 5 #11 — highest demo impact)
-4. Or start **connections-manager** (P0 — SMTP/cron creds in node config, needs encrypted store)
-5. Or start **Dual-Mode Deployment** (desktop + server from same codebase)
+1. Consider **v0.2.0 tag** for Phase 4 completion milestone
+2. Start **A/B Eval Node** (Phase 5 #11 — highest demo impact, parallel LLM comparison)
+3. Or start **Connections Manager** (P0 — encrypted credential store for SMTP, webhooks, DB)
+4. Or start **Dual-Mode Deployment** (desktop + server from same Rust codebase)
+5. **Peer review** Note node + Daily Meeting Digest template (quick — small changes)

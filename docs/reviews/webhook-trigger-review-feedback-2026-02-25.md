@@ -129,8 +129,12 @@ Based on the current Node Editor implementation (reviewed via screenshot), the f
 - **Node Density:** Move secondary or advanced configuration toggles from the nodes themselves into the right-hand Properties Panel to keep the canvas view clean and compact.
 
 ### Alignment & Affordance
-- **Workflow Title:** The `Self Refine unsaved` title at the top left feels cramped. Increase padding and consider using a standard asterisk `*` or a dedicated unsaved indicator pill.
-- **Action Buttons:** Differentiate the `Run` and `Go Live` buttons. If `Go Live` is the primary action, make `Run` a secondary button style (e.g., ghost button or a more neutral color) so they don't compete for attention.
+- **Workflow Title:** The `unsaved` title at the top left feels cramped and slightly off-center. Increase padding and consider using a standard asterisk `*` or a dedicated unsaved indicator pill for a cleaner header.
+- **Top Toolbar Design (Run, Go Live, Arm, Test):**
+  - **The "Maya/Professional App" Approach:** Professional software like Maya uses high-density, icon-driven toolbars with distinct geometric grouping rather than large, text-heavy colored pill buttons.
+  - **Icon-Driven Consistency:** Instead of four large purple text buttons, transition this top right area into a docked, compact toolbar. Use simple, high-contrast monochrome icons (like Play for Run, Stop for Go Live, Shield for Arm, Bug for Test) with tooltip text rather than permanent text labels to save and clean up space.
+  - **Tool Grouping / Separators:** In Maya, related tools are tightly grouped together on a "shelf" with subtle vertical separator lines dividing categories. Group `[Save, Download, Save As]` into a "File" cluster, `[Run, Test]` into an "Execute" cluster, and `[Arm, Go Live]` into a "Deploy" cluster. Use a 1px dark gray vertical separator `|` between clusters.
+  - **Primary Action Accent:** If "Go Live" or "Run" needs to be obvious, keep it as the *only* colored accent button (e.g., the only element with a purple gradient background), while the other toolbar items remain neutral gray icons that simply highlight on hover.
 - **Status Context:** Provide a hover tooltip on the `READY` status badge to clarify what system is ready (e.g., "Backend Connected").
 
 ### QoL (Quality of Life)

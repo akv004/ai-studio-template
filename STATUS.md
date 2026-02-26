@@ -96,6 +96,7 @@
 | **Toolbar UX redesign** | DONE | Icon-driven toolbar per Gemini UX review (767a670) |
 | **Email Send node** | DONE | SMTP integration via lettre crate: TLS/SSL/plain, template resolution, address validation, error→extra_outputs. 21st node type, "Communication" palette category. 229 tests. (6483d21) |
 | **Cron Trigger node** | DONE | Time-based schedule automation. CronScheduler (1s tick loop in TriggerManager), arm/disarm IPC, validation (max 1, cron+webhook coexist). UI: CronTriggerNode, config panel (expression, presets, timezone, max concurrent, catch-up policy), toolbar arm/disarm. 22nd node type, Triggers category. 251 tests (+14 new). (9eb843d) |
+| **Cron Trigger peer review** | DONE | Gemini (arch) + Codex (impl): 8 fixes — last_fired_minute init from DB, 5-field enforcement, list_triggers payload fix, dual-trigger toolbar split, maxConcurrent≥1, executor tests rewrite, DB error logging, 22 timezones. 253 tests. (a8649fe) |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -203,25 +204,28 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-26 (session 43)
+**Date**: 2026-02-26 (session 44)
 **What happened**:
-- **Cron Trigger node — full implementation** (9eb843d):
-  - Rust `CronTriggerExecutor`: reads `__cron_*` injected inputs, outputs `{timestamp, iteration, input, schedule}`
-  - `CronScheduler` in TriggerManager: 1-second tick loop (tokio::select), per-minute dedup, timezone-aware matching via chrono-tz
-  - `CronScheduleEntry`: expression, timezone, static_input, max_concurrent (AtomicU32), fire_count (AtomicI64), last_fired_minute dedup
-  - `arm_trigger`/`disarm_trigger` IPC dispatches on trigger_type ("webhook" or "cron")
-  - 5-field user cron expressions auto-prepend "0 " seconds field for cron crate compatibility
-  - Validation: `cron_trigger` as valid input source, max 1 per workflow, cron+webhook coexistence OK
-  - UI: `CronTriggerNode.tsx` (Clock icon, armed/disarmed status, human-readable schedule description, 4 output handles)
-  - Config panel: expression input with quick presets (5min/hourly/daily/weekday/weekly), timezone dropdown (11 zones), max concurrent, catch-up policy, static input JSON textarea
-  - Toolbar: unified trigger detection (webhook OR cron), cyan Clock icon for cron, Zap icon for webhook
-  - Deps: `cron 0.13`, `chrono-tz 0.10`
-  - **251 total Rust tests** passing (237 existing + 14 new)
-  - This is the **22nd node type** and 2nd in the Triggers category
+- **Cron Trigger peer review — Gemini + Codex** (a8649fe):
+  - Gemini (7 findings): 1 fixed, 3 PASS, 3 deferred to Phase 5+
+  - Codex (10 findings): 7 fixed, 1 PASS, 2 deferred to Phase 5+
+  - **8 fixes applied**:
+    - G2: `last_fired_minute` initialized from DB `last_fired` timestamp (prevents double-fire on restart)
+    - C2: Enforce strict 5-field cron expressions (reject 6/7-field to match minute-based dedup)
+    - C3: Fix `list_triggers` IPC payload (`workflowId` directly, not `{request: {workflowId}}`)
+    - C4: Split toolbar for dual-trigger workflows (per-type triggerId, armed state, independent arm/disarm)
+    - C6: Log DB errors in `execute_cron_run` instead of `let _ =`
+    - C7: Clamp `maxConcurrent >= 1` (prevents permanent skip at 0)
+    - C8: Rewrite executor tests with `build_cron_output()` pure function (6 tests)
+    - C10: Expand timezone dropdown from 11 to 22 IANA zones
+  - Deferred: catchUpPolicy (skip-only fine for v1), graceful drain (JoinSet), scheduler integration tests
+  - **253 total Rust tests** passing
+
+**Previous session (43)**:
+- Cron Trigger node — full implementation, 22nd node type (9eb843d)
 
 **Previous session (42)**:
-- Email Send node — SMTP integration, 21st node type (6483d21)
-- Email Send peer review fixes — Gemini + Codex, 9 fixes (85f3a81)
+- Email Send node + peer review — 21st node type (6483d21 + 85f3a81)
 
 **Previous session (41)**:
 - Webhook Chat API template + toolbar UX redesign per Gemini review
@@ -229,62 +233,14 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 **Previous session (40)**:
 - Loop & Feedback peer review — Gemini + Codex, 8 fixes, 193 tests
 
-**Previous session (39)**:
-- **Loop & Feedback nodes — full implementation** (4 commits):
-  - `exit.rs`: pass-through stub (same pattern as Aggregator)
-  - `loop_node.rs` (~400 lines): subgraph extraction, synthetic graph builder, levenshtein similarity, 3 exit conditions (max_iterations, evaluator, stable_output), 2 feedback modes (replace, append), 20 unit tests
-  - Router output now includes `selectedBranch` for evaluator mode detection
-  - Engine `extract_primary_text` adds "value" key for Router output unwrapping
-  - Validation: Loop↔Exit pairing warnings, nesting warnings (loop+loop, loop+iterator), 5 new tests
-  - UI: LoopNode (RefreshCw icon, 3 outputs) + ExitNode (LogOut icon, pass-through)
-  - NodeConfigPanel: Loop config section with conditional stabilityThreshold
-  - 2 templates: Self-Refine (#15), Agentic Search (#16) — 16 bundled total
-  - 2 Playwright E2E tests (canvas render + palette presence)
-  - **188 total Rust tests** (162 existing + 26 new), **8 E2E tests** passing
-  - This is the **18th and 19th node types** (loop + exit)
-
-**Previous session (38)**:
-- **RAG Knowledge Base — full-stack implementation** (09ca3d0):
-  - Sidecar: `POST /embed` endpoint with `EmbeddingClient` (Azure OpenAI + OpenAI-compatible), batching, token validation, retry
-  - Rust `rag/` module: 4 chunking strategies, binary vector index (memmap2), dot-product search with BinaryHeap top-K, atomic writes (fs2), citation formatting. 31 unit tests.
-  - `KnowledgeBaseExecutor`: auto-index on stale, streaming progress events, path security
-  - 4 IPC commands: `index_folder`, `search_index`, `get_index_stats`, `delete_index`
-  - UI: `KnowledgeBaseNode` component (BookOpen icon, 3 handles), full config panel
-  - 3 templates: Knowledge Q&A (#14), Smart Deployer + RAG (#15), Codebase Explorer (#16)
-  - 2 Playwright E2E tests (canvas render + palette presence), screenshots captured
-  - **160 total Rust tests** (129 existing + 31 new), **10 E2E tests** passing
-  - This is the **17th node type** and completes the RAG spec
-
 **Previous sessions**:
-- Sessions 1-17: See git log for full history
-- Session 18: Rust refactoring, budget enforcement, plugin foundation, README update
-- Session 19: One-click installers, plugin subprocess lifecycle, open-source infra
-- Session 20: Docker cleanup, template gallery (10 total), launch prep
-- Session 21: Phase 4 spec v1.1 written (10+ nodes, EIP patterns, Unreal architecture, containers)
-- Session 22: Phase 4 spec v1.2, peer reviews triaged, engine bugs fixed, 4A.1 monolith split
-- Session 23: Phase 4A.V visual overhaul (TypedEdge, TypedConnectionLine, inline editing, CSS polish)
-- Session 24: Output truncation fix, vision pipeline, EIP spec, Playwright E2E (15 tests)
-- Session 25: v0.1.0 tag, Transform jsonpath+script, File Glob, Iterator+Aggregator
-- Session 26: LLM Session mode (4B.4), 5 tests, Playwright verification
-- Session 27: EIP peer reviews (Gemini+Codex), 5 code fixes (UTF-8, containment, cycle detection)
-- Session 28: Agent edit mode, click-to-place nodes, custom node labels
-- Session 29: Toolbar polish, node editor guide, Phase 5+ backlog, v0.1.1 tag, rename → Workflows
-- Session 30: Live Workflow execution, vision pipeline fix, multi-provider vision support
-- Session 31: Vision OOM fix (image dedup + prompt safety net for Qwen3-VL)
-- Session 32: Node variable interpolation fixes, Input node textarea, repo cleanup
-- Session 33: User templates (Save & Load)
-- Session 34: Competitive gap analysis + 6 Phase 5 specs
-- Session 35: SSE token streaming (Ollama), Playwright test fix
-- Session 36: Streaming for all remaining providers (OpenAI, Azure, Google, Anthropic, Local)
-- Session 37: Rich Output wiring + Hybrid Intelligence template (ensemble synthesis)
-- Session 38: RAG Knowledge Base full-stack implementation (17th node type, 31 tests, 3 templates)
 - Session 39: Loop & Feedback nodes (18th+19th node types, 26 new tests, 2 templates)
-- Session 40: Loop & Feedback peer review — Gemini (architecture) + Codex (implementation), 8 fixes applied, 193 tests
+- Session 38: RAG Knowledge Base full-stack (17th node type, 31 tests, 3 templates)
+- Sessions 1-37: See git log for full history
 
 **Next session should**:
-1. **Cron Trigger UI session** — friendly mode (dropdowns), next-execution preview, Settings > Triggers tab
-2. **Peer review** for cron_trigger (Gemini architecture + Codex implementation)
-3. **Cron + Email demo template** — scheduled daily report via cron → LLM → email
-4. Consider v0.2.0 tag for Phase 4 completion
-5. Or start **A/B Eval Node** (Phase 5 #11 — highest demo impact)
-6. Or start **connections-manager** (P0 — SMTP/cron creds in node config, needs encrypted store)
+1. **Cron + Email demo template** — scheduled daily report via cron → LLM → email (quick win)
+2. Consider v0.2.0 tag for Phase 4 completion
+3. Start **A/B Eval Node** (Phase 5 #11 — highest demo impact)
+4. Or start **connections-manager** (P0 — SMTP/cron creds in node config, needs encrypted store)
+5. Or start **Dual-Mode Deployment** (desktop + server from same codebase)

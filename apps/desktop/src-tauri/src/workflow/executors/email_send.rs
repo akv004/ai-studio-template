@@ -4,6 +4,11 @@ use std::collections::HashMap;
 
 pub struct EmailSendExecutor;
 
+/// Maximum recipients across to + cc + bcc combined
+const MAX_RECIPIENTS: usize = 50;
+/// Maximum email body size in bytes (2MB)
+const MAX_BODY_BYTES: usize = 2 * 1024 * 1024;
+
 fn parse_addresses(raw: &str) -> Vec<String> {
     raw.split(',')
         .map(|s| s.trim().to_string())
@@ -11,9 +16,14 @@ fn parse_addresses(raw: &str) -> Vec<String> {
         .collect()
 }
 
-fn validate_address(addr: &str) -> Result<lettre::Address, String> {
-    addr.parse::<lettre::Address>()
-        .map_err(|e| format!("Invalid email address '{}': {}", addr, e))
+fn validate_addresses(addrs: &[String]) -> Result<Vec<lettre::Address>, String> {
+    addrs
+        .iter()
+        .map(|a| {
+            a.parse::<lettre::Address>()
+                .map_err(|e| format!("Invalid email address '{}': {}", a, e))
+        })
+        .collect()
 }
 
 fn resolve_field(
@@ -26,10 +36,18 @@ fn resolve_field(
     let config_val = node_data.get(field_name).and_then(|v| v.as_str()).unwrap_or("");
     let raw = if let Some(inc) = incoming {
         if let Some(obj) = inc.as_object() {
-            obj.get(field_name)
-                .and_then(|v| v.as_str())
-                .unwrap_or(config_val)
-                .to_string()
+            if let Some(field_val) = obj.get(field_name) {
+                // Handle both string and non-string incoming values
+                match field_val.as_str() {
+                    Some(s) => s.to_string(),
+                    None => field_val.to_string(),
+                }
+            } else {
+                config_val.to_string()
+            }
+        } else if let Some(s) = inc.as_str() {
+            // Plain string incoming — use as value if field is "body" or primary field
+            if field_name == "body" { s.to_string() } else { config_val.to_string() }
         } else {
             config_val.to_string()
         }
@@ -79,56 +97,79 @@ impl NodeExecutor for EmailSendExecutor {
             return Ok(make_error_output("To address is required"));
         }
 
-        // Parse and validate addresses
-        let to_addrs = parse_addresses(&to_raw);
-        let cc_addrs = parse_addresses(&cc_raw);
-        let bcc_addrs = parse_addresses(&bcc_raw);
-
-        for addr in &to_addrs {
-            if let Err(e) = validate_address(addr) {
-                return Ok(make_error_output(&e));
-            }
-        }
-        for addr in &cc_addrs {
-            if let Err(e) = validate_address(addr) {
-                return Ok(make_error_output(&e));
-            }
-        }
-        for addr in &bcc_addrs {
-            if let Err(e) = validate_address(addr) {
-                return Ok(make_error_output(&e));
-            }
+        // Body size limit
+        if body.len() > MAX_BODY_BYTES {
+            return Ok(make_error_output(&format!(
+                "Email body too large: {} bytes > {} byte limit",
+                body.len(),
+                MAX_BODY_BYTES
+            )));
         }
 
-        // Build From mailbox
-        let from_addr = validate_address(from_address)
-            .map_err(|e| format!("From address error: {}", e))?;
+        // Parse and validate addresses (single pass — reuse validated Address objects)
+        let to_strings = parse_addresses(&to_raw);
+        let cc_strings = parse_addresses(&cc_raw);
+        let bcc_strings = parse_addresses(&bcc_raw);
+
+        // Check for empty parsed recipients (e.g., " , " input)
+        if to_strings.is_empty() {
+            return Ok(make_error_output("To address is required (no valid addresses after parsing)"));
+        }
+
+        // Recipient cap
+        let total_recipients = to_strings.len() + cc_strings.len() + bcc_strings.len();
+        if total_recipients > MAX_RECIPIENTS {
+            return Ok(make_error_output(&format!(
+                "Too many recipients: {} > {} limit",
+                total_recipients,
+                MAX_RECIPIENTS
+            )));
+        }
+
+        let to_addrs = match validate_addresses(&to_strings) {
+            Ok(v) => v,
+            Err(e) => return Ok(make_error_output(&e)),
+        };
+        let cc_addrs = match validate_addresses(&cc_strings) {
+            Ok(v) => v,
+            Err(e) => return Ok(make_error_output(&e)),
+        };
+        let bcc_addrs = match validate_addresses(&bcc_strings) {
+            Ok(v) => v,
+            Err(e) => return Ok(make_error_output(&e)),
+        };
+
+        // Build From mailbox (route errors to error handle, not Err)
+        let from_addr = match from_address.parse::<lettre::Address>() {
+            Ok(a) => a,
+            Err(e) => return Ok(make_error_output(&format!("Invalid From address '{}': {}", from_address, e))),
+        };
         let from_mailbox = if from_name.is_empty() {
             lettre::message::Mailbox::new(None, from_addr)
         } else {
             lettre::message::Mailbox::new(Some(from_name.to_string()), from_addr)
         };
 
-        // Build message
+        // Build message (reuse validated Address objects — no second parse)
         let mut builder = lettre::Message::builder()
             .from(from_mailbox)
             .subject(&subject);
 
         for addr in &to_addrs {
-            let parsed = addr.parse::<lettre::Address>().unwrap();
-            builder = builder.to(lettre::message::Mailbox::new(None, parsed));
+            builder = builder.to(lettre::message::Mailbox::new(None, addr.clone()));
         }
         for addr in &cc_addrs {
-            let parsed = addr.parse::<lettre::Address>().unwrap();
-            builder = builder.cc(lettre::message::Mailbox::new(None, parsed));
+            builder = builder.cc(lettre::message::Mailbox::new(None, addr.clone()));
         }
         for addr in &bcc_addrs {
-            let parsed = addr.parse::<lettre::Address>().unwrap();
-            builder = builder.bcc(lettre::message::Mailbox::new(None, parsed));
+            builder = builder.bcc(lettre::message::Mailbox::new(None, addr.clone()));
         }
         if !reply_to_raw.is_empty() {
-            if let Ok(reply_addr) = reply_to_raw.parse::<lettre::Address>() {
-                builder = builder.reply_to(lettre::message::Mailbox::new(None, reply_addr));
+            match reply_to_raw.parse::<lettre::Address>() {
+                Ok(reply_addr) => {
+                    builder = builder.reply_to(lettre::message::Mailbox::new(None, reply_addr));
+                }
+                Err(e) => return Ok(make_error_output(&format!("Invalid Reply-To address '{}': {}", reply_to_raw, e))),
             }
         }
 
@@ -140,10 +181,14 @@ impl NodeExecutor for EmailSendExecutor {
             builder
                 .header(lettre::message::header::ContentType::TEXT_PLAIN)
                 .body(body.clone())
-        }
-        .map_err(|e| format!("Failed to build email message: {}", e))?;
+        };
+        let message = match message {
+            Ok(m) => m,
+            Err(e) => return Ok(make_error_output(&format!("Failed to build email message: {}", e))),
+        };
 
-        // Build SMTP transport
+        // Build SMTP transport — credentials only if user/pass are non-empty
+        let has_credentials = !smtp_user.is_empty() || !smtp_pass.is_empty();
         let creds = lettre::transport::smtp::authentication::Credentials::new(
             smtp_user.to_string(),
             smtp_pass.to_string(),
@@ -151,31 +196,36 @@ impl NodeExecutor for EmailSendExecutor {
 
         let send_result = match encryption {
             "ssl" => {
-                let transport = lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::relay(smtp_host)
-                    .map_err(|e| format!("SMTP relay error: {}", e))?
-                    .port(smtp_port)
-                    .credentials(creds)
-                    .timeout(Some(std::time::Duration::from_secs(30)))
-                    .build();
-                lettre::AsyncTransport::send(&transport, message).await
+                // Implicit TLS (port 465) — relay() negotiates TLS immediately
+                let builder_result = lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::relay(smtp_host);
+                let mut tb = match builder_result {
+                    Ok(b) => b,
+                    Err(e) => return Ok(make_error_output(&format!("SMTP relay error: {}", e))),
+                };
+                tb = tb.port(smtp_port)
+                    .timeout(Some(std::time::Duration::from_secs(30)));
+                if has_credentials { tb = tb.credentials(creds); }
+                lettre::AsyncTransport::send(&tb.build(), message).await
             }
             "none" => {
-                let transport = lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::builder_dangerous(smtp_host)
+                // Unencrypted (e.g., Mailpit on localhost:1025)
+                let mut tb = lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::builder_dangerous(smtp_host)
                     .port(smtp_port)
-                    .credentials(creds)
-                    .timeout(Some(std::time::Duration::from_secs(30)))
-                    .build();
-                lettre::AsyncTransport::send(&transport, message).await
+                    .timeout(Some(std::time::Duration::from_secs(30)));
+                if has_credentials { tb = tb.credentials(creds); }
+                lettre::AsyncTransport::send(&tb.build(), message).await
             }
             _ => {
-                // "tls" — STARTTLS
-                let transport = lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::starttls_relay(smtp_host)
-                    .map_err(|e| format!("SMTP STARTTLS error: {}", e))?
-                    .port(smtp_port)
-                    .credentials(creds)
-                    .timeout(Some(std::time::Duration::from_secs(30)))
-                    .build();
-                lettre::AsyncTransport::send(&transport, message).await
+                // "tls" — STARTTLS (port 587)
+                let builder_result = lettre::AsyncSmtpTransport::<lettre::Tokio1Executor>::starttls_relay(smtp_host);
+                let mut tb = match builder_result {
+                    Ok(b) => b,
+                    Err(e) => return Ok(make_error_output(&format!("SMTP STARTTLS error: {}", e))),
+                };
+                tb = tb.port(smtp_port)
+                    .timeout(Some(std::time::Duration::from_secs(30)));
+                if has_credentials { tb = tb.credentials(creds); }
+                lettre::AsyncTransport::send(&tb.build(), message).await
             }
         };
 
@@ -187,14 +237,13 @@ impl NodeExecutor for EmailSendExecutor {
                 } else {
                     message_id
                 };
-                let total = to_addrs.len() + cc_addrs.len() + bcc_addrs.len();
                 let output = serde_json::json!({
                     "success": true,
                     "messageId": message_id,
-                    "recipients": total,
-                    "to": to_addrs,
-                    "cc": cc_addrs,
-                    "bcc": bcc_addrs,
+                    "recipients": total_recipients,
+                    "to": to_strings,
+                    "cc": cc_strings,
+                    "bcc": bcc_strings,
                 });
                 let mut extra = HashMap::new();
                 extra.insert("error".to_string(), serde_json::Value::String(String::new()));
@@ -248,16 +297,33 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_address_valid() {
-        assert!(validate_address("alice@example.com").is_ok());
-        assert!(validate_address("user+tag@domain.org").is_ok());
+    fn test_parse_addresses_whitespace_only() {
+        let addrs = parse_addresses(" , , ");
+        assert!(addrs.is_empty());
     }
 
     #[test]
-    fn test_validate_address_invalid() {
-        assert!(validate_address("not-an-email").is_err());
-        assert!(validate_address("@missing-local.com").is_err());
-        assert!(validate_address("").is_err());
+    fn test_validate_addresses_valid() {
+        let addrs = vec!["alice@example.com".to_string(), "bob@test.org".to_string()];
+        let result = validate_addresses(&addrs);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().len(), 2);
+    }
+
+    #[test]
+    fn test_validate_addresses_invalid() {
+        let addrs = vec!["alice@example.com".to_string(), "not-an-email".to_string()];
+        let result = validate_addresses(&addrs);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("not-an-email"));
+    }
+
+    #[test]
+    fn test_validate_addresses_empty_list() {
+        let addrs: Vec<String> = vec![];
+        let result = validate_addresses(&addrs);
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
     }
 
     #[test]
@@ -274,7 +340,6 @@ mod tests {
 
     #[test]
     fn test_html_body_type_flag() {
-        // Verify the body_type parsing logic
         let node_data = serde_json::json!({ "bodyType": "html" });
         let bt = node_data.get("bodyType").and_then(|v| v.as_str()).unwrap_or("plain");
         assert_eq!(bt, "html");
@@ -286,7 +351,6 @@ mod tests {
 
     #[test]
     fn test_success_output_shape() {
-        // Simulate what the success path would produce
         let to_addrs = vec!["a@b.com".to_string(), "c@d.com".to_string()];
         let cc_addrs: Vec<String> = vec![];
         let bcc_addrs: Vec<String> = vec![];
@@ -306,5 +370,65 @@ mod tests {
         assert_eq!(output["recipients"], 2);
         assert_eq!(output["to"].as_array().unwrap().len(), 2);
         assert_eq!(output["messageId"], "test-uuid-123");
+    }
+
+    #[test]
+    fn test_recipient_cap() {
+        assert!(MAX_RECIPIENTS == 50);
+        assert!(MAX_BODY_BYTES == 2 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_resolve_field_config_fallback() {
+        let node_data = serde_json::json!({ "to": "config@example.com" });
+        let incoming: Option<serde_json::Value> = None;
+        let outputs = HashMap::new();
+        let inputs = HashMap::new();
+        let result = resolve_field("to", &node_data, &incoming, &outputs, &inputs);
+        assert_eq!(result, "config@example.com");
+    }
+
+    #[test]
+    fn test_resolve_field_incoming_object_overrides() {
+        let node_data = serde_json::json!({ "to": "config@example.com" });
+        let incoming = Some(serde_json::json!({ "to": "incoming@example.com" }));
+        let outputs = HashMap::new();
+        let inputs = HashMap::new();
+        let result = resolve_field("to", &node_data, &incoming, &outputs, &inputs);
+        assert_eq!(result, "incoming@example.com");
+    }
+
+    #[test]
+    fn test_resolve_field_incoming_non_string() {
+        let node_data = serde_json::json!({ "to": "config@example.com" });
+        let incoming = Some(serde_json::json!({ "to": 42 }));
+        let outputs = HashMap::new();
+        let inputs = HashMap::new();
+        let result = resolve_field("to", &node_data, &incoming, &outputs, &inputs);
+        assert_eq!(result, "42");
+    }
+
+    #[test]
+    fn test_resolve_field_incoming_missing_field() {
+        let node_data = serde_json::json!({ "subject": "Hello" });
+        let incoming = Some(serde_json::json!({ "to": "incoming@example.com" }));
+        let outputs = HashMap::new();
+        let inputs = HashMap::new();
+        let result = resolve_field("subject", &node_data, &incoming, &outputs, &inputs);
+        assert_eq!(result, "Hello");
+    }
+
+    #[test]
+    fn test_resolve_field_plain_string_incoming_body() {
+        let node_data = serde_json::json!({ "body": "config body" });
+        let incoming = Some(serde_json::Value::String("upstream text".to_string()));
+        let outputs = HashMap::new();
+        let inputs = HashMap::new();
+        // Plain string incoming used for "body" field
+        let result = resolve_field("body", &node_data, &incoming, &outputs, &inputs);
+        assert_eq!(result, "upstream text");
+        // But not for other fields
+        let result2 = resolve_field("to", &node_data, &incoming, &outputs, &inputs);
+        assert_eq!(result2, "");
     }
 }

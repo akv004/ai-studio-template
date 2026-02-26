@@ -90,6 +90,9 @@
 | **RAG Knowledge Base** | DONE | Full-stack: sidecar /embed, Rust rag/ (chunker+index+search+format, 31 tests), KnowledgeBaseExecutor, 4 IPC commands, UI node+config, 3 templates (#14-16), 2 E2E tests. 160 total tests. (09ca3d0) |
 | **Loop & Feedback nodes** | DONE | Loop + Exit node types: 3 exit conditions (max_iterations, evaluator, stable_output), 2 feedback modes (replace, append), Router selectedBranch for evaluator mode, 2 templates (self-refine, agentic-search). 188 Rust tests, 8 E2E tests. |
 | **Loop peer review fixes** | DONE | Gemini + Codex review: 8 fixes applied. Router value unwrap, branch-* backward compat, evaluator feedback fix, append array wrap, nesting errors, empty body warning, UI clamp. 193 tests. (9dba659) |
+| **Webhook trigger** | DONE | HTTP webhook entry point, HMAC auth, rate limiting, response modes. 20th node type. |
+| **Toolbar UX redesign** | DONE | Icon-driven toolbar per Gemini UX review (767a670) |
+| **Email Send node** | DONE | SMTP integration via lettre crate: TLS/SSL/plain, template resolution, address validation, error→extra_outputs. 21st node type, "Communication" palette category. 229 tests. (6483d21) |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -196,8 +199,27 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-24 (session 39)
+**Date**: 2026-02-25 (session 42)
 **What happened**:
+- **Email Send node — full implementation** (6483d21):
+  - Rust `EmailSendExecutor` using `lettre` crate: async SMTP with TLS/SSL/plain modes
+  - Template resolution on all 6 email fields (to, subject, body, cc, bcc, replyTo)
+  - Address validation via lettre's RFC 5321 `Address::from_str`
+  - Error→extra_outputs pattern (node does NOT stop workflow on failure)
+  - UI: `EmailSendNode.tsx` with 6 input + 2 output handles, SMTP/From preview
+  - New "Communication" palette category (Mail icon)
+  - Config panel: SMTP server section + email section with body textarea
+  - 8 unit tests (parse addresses, validation, error shape, success shape, body type)
+  - **229 total Rust tests** passing (193 existing + 36 new across recent sessions)
+  - This is the **21st node type** and first in the Communication category
+
+**Previous session (41)**:
+- Webhook Chat API template + toolbar UX redesign per Gemini review
+
+**Previous session (40)**:
+- Loop & Feedback peer review — Gemini + Codex, 8 fixes, 193 tests
+
+**Previous session (39)**:
 - **Loop & Feedback nodes — full implementation** (4 commits):
   - `exit.rs`: pass-through stub (same pattern as Aggregator)
   - `loop_node.rs` (~400 lines): subgraph extraction, synthetic graph builder, levenshtein similarity, 3 exit conditions (max_iterations, evaluator, stable_output), 2 feedback modes (replace, append), 20 unit tests
@@ -250,7 +272,8 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 40: Loop & Feedback peer review — Gemini (architecture) + Codex (implementation), 8 fixes applied, 193 tests
 
 **Next session should**:
-1. Consider v0.2.0 tag for Phase 4 completion
-2. Or start **A/B Eval Node** (Phase 5 #11 — highest demo impact, parallel LLM calls already exist)
-3. Or start **connections-manager** (P0 prerequisite for SQL, HTTP, webhook nodes)
-4. Or start **Container/group nodes** (visual grouping on canvas)
+1. **Email Send E2E test** + Mailpit integration test
+2. Consider **peer review** for email_send (Gemini architecture + Codex implementation)
+3. Consider v0.2.0 tag for Phase 4 completion
+4. Or start **A/B Eval Node** (Phase 5 #11 — highest demo impact, parallel LLM calls already exist)
+5. Or start **connections-manager** (P0 — SMTP creds currently in node config, needs encrypted store)

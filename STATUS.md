@@ -29,6 +29,8 @@
 | 20 | workflow-versioning.md | P2 | 5B | PLANNED | Version history, diff view, rollback, run comparison |
 | 21 | rag-knowledge-base.md | P0 | 5A | DONE | RAG Knowledge Base: 17th node type, full-stack (sidecar + Rust rag/ + executor + IPC + UI + templates + E2E). 160 tests. |
 | 22 | loop-feedback.md | P0 | 5A | DONE | Loop & Exit nodes: iterative refinement, 3 exit conditions, 2 feedback modes, 2 templates. 193 tests. Peer reviewed (Gemini + Codex, 8 fixes). |
+| 23 | scheduler-and-workflow-ux.md | P0 | 4C | DRAFT | Cron Trigger node, Workflow List UX upgrades, 3 demo templates |
+| 24 | dual-mode-deployment.md | P1 | 5+ | PLANNED | Desktop + Server mode from same codebase. Core crate extraction, Axum HTTP, Docker, JWT auth. |
 
 **Status key**: DONE | IN PROGRESS | PLANNED | BLOCKED | REFERENCE (non-implementable)
 
@@ -93,6 +95,7 @@
 | **Webhook trigger** | DONE | HTTP webhook entry point, HMAC auth, rate limiting, response modes. 20th node type. |
 | **Toolbar UX redesign** | DONE | Icon-driven toolbar per Gemini UX review (767a670) |
 | **Email Send node** | DONE | SMTP integration via lettre crate: TLS/SSL/plain, template resolution, address validation, error→extra_outputs. 21st node type, "Communication" palette category. 229 tests. (6483d21) |
+| **Cron Trigger node** | DONE | Time-based schedule automation. CronScheduler (1s tick loop in TriggerManager), arm/disarm IPC, validation (max 1, cron+webhook coexist). UI: CronTriggerNode, config panel (expression, presets, timezone, max concurrent, catch-up policy), toolbar arm/disarm. 22nd node type, Triggers category. 251 tests (+14 new). (9eb843d) |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -150,6 +153,7 @@
 20. **SQL Query Node** — Connect to Postgres/MySQL/SQLite, run queries, return rows. Settings gets a Connections tab. Enables natural language → SQL → results → LLM summary pipelines.
 21. Phase 4C: Streaming, containers, UX polish
 22. v0.2.0 tag for Phase 4B completion
+23. **Dual-Mode Deployment** — Desktop + Server mode from same Rust codebase. Core crate extraction (pure functions), Axum HTTP shell, Docker image, JWT auth, WebSocket events. Same 237+ tests, same UI. Spec: `dual-mode-deployment.md`. ~7 sessions, low risk (mechanical refactor).
 
 ---
 
@@ -199,19 +203,25 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-25 (session 42)
+**Date**: 2026-02-26 (session 43)
 **What happened**:
-- **Email Send node — full implementation** (6483d21):
-  - Rust `EmailSendExecutor` using `lettre` crate: async SMTP with TLS/SSL/plain modes
-  - Template resolution on all 6 email fields (to, subject, body, cc, bcc, replyTo)
-  - Address validation via lettre's RFC 5321 `Address::from_str`
-  - Error→extra_outputs pattern (node does NOT stop workflow on failure)
-  - UI: `EmailSendNode.tsx` with 6 input + 2 output handles, SMTP/From preview
-  - New "Communication" palette category (Mail icon)
-  - Config panel: SMTP server section + email section with body textarea
-  - 8 unit tests (parse addresses, validation, error shape, success shape, body type)
-  - **229 total Rust tests** passing (193 existing + 36 new across recent sessions)
-  - This is the **21st node type** and first in the Communication category
+- **Cron Trigger node — full implementation** (9eb843d):
+  - Rust `CronTriggerExecutor`: reads `__cron_*` injected inputs, outputs `{timestamp, iteration, input, schedule}`
+  - `CronScheduler` in TriggerManager: 1-second tick loop (tokio::select), per-minute dedup, timezone-aware matching via chrono-tz
+  - `CronScheduleEntry`: expression, timezone, static_input, max_concurrent (AtomicU32), fire_count (AtomicI64), last_fired_minute dedup
+  - `arm_trigger`/`disarm_trigger` IPC dispatches on trigger_type ("webhook" or "cron")
+  - 5-field user cron expressions auto-prepend "0 " seconds field for cron crate compatibility
+  - Validation: `cron_trigger` as valid input source, max 1 per workflow, cron+webhook coexistence OK
+  - UI: `CronTriggerNode.tsx` (Clock icon, armed/disarmed status, human-readable schedule description, 4 output handles)
+  - Config panel: expression input with quick presets (5min/hourly/daily/weekday/weekly), timezone dropdown (11 zones), max concurrent, catch-up policy, static input JSON textarea
+  - Toolbar: unified trigger detection (webhook OR cron), cyan Clock icon for cron, Zap icon for webhook
+  - Deps: `cron 0.13`, `chrono-tz 0.10`
+  - **251 total Rust tests** passing (237 existing + 14 new)
+  - This is the **22nd node type** and 2nd in the Triggers category
+
+**Previous session (42)**:
+- Email Send node — SMTP integration, 21st node type (6483d21)
+- Email Send peer review fixes — Gemini + Codex, 9 fixes (85f3a81)
 
 **Previous session (41)**:
 - Webhook Chat API template + toolbar UX redesign per Gemini review
@@ -272,8 +282,9 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 - Session 40: Loop & Feedback peer review — Gemini (architecture) + Codex (implementation), 8 fixes applied, 193 tests
 
 **Next session should**:
-1. **Email Send E2E test** + Mailpit integration test
-2. Consider **peer review** for email_send (Gemini architecture + Codex implementation)
-3. Consider v0.2.0 tag for Phase 4 completion
-4. Or start **A/B Eval Node** (Phase 5 #11 — highest demo impact, parallel LLM calls already exist)
-5. Or start **connections-manager** (P0 — SMTP creds currently in node config, needs encrypted store)
+1. **Cron Trigger UI session** — friendly mode (dropdowns), next-execution preview, Settings > Triggers tab
+2. **Peer review** for cron_trigger (Gemini architecture + Codex implementation)
+3. **Cron + Email demo template** — scheduled daily report via cron → LLM → email
+4. Consider v0.2.0 tag for Phase 4 completion
+5. Or start **A/B Eval Node** (Phase 5 #11 — highest demo impact)
+6. Or start **connections-manager** (P0 — SMTP/cron creds in node config, needs encrypted store)

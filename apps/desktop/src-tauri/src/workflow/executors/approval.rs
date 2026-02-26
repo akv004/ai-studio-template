@@ -56,7 +56,28 @@ impl NodeExecutor for ApprovalExecutor {
         approvals.remove(&approval_id).await;
 
         if approved {
-            Ok(NodeOutput::value(incoming.clone().unwrap_or(serde_json::Value::Null)))
+            // Extract the actual value from incoming — when multiple edges
+            // connect to the approval node (e.g. "input" + "data" handles),
+            // incoming is an object like {"input": "...", "data": "..."}.
+            // We extract the real value rather than passing the wrapper object.
+            let value = match incoming {
+                Some(val) => {
+                    if val.is_string() || val.is_array() || val.is_number() || val.is_boolean() {
+                        val.clone()
+                    } else if let Some(obj) = val.as_object() {
+                        // Prefer "input" handle, then "data", then first value
+                        obj.get("input")
+                            .or_else(|| obj.get("data"))
+                            .or_else(|| obj.values().next())
+                            .cloned()
+                            .unwrap_or(val.clone())
+                    } else {
+                        val.clone()
+                    }
+                }
+                None => serde_json::Value::Null,
+            };
+            Ok(NodeOutput::value(value))
         } else {
             Err(format!("Approval denied or timed out for node '{}'", node_id))
         }

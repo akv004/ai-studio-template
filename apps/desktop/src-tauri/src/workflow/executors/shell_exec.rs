@@ -48,6 +48,16 @@ impl NodeExecutor for ShellExecExecutor {
         }
         let command = resolve_template(&command, ctx.node_outputs, &local_inputs);
 
+        // Strip enclosing quotes — LLMs often wrap commands in quotes like
+        // "/path/to/script --args" which bash interprets as a single filename token
+        let command = command.trim();
+        let command = if (command.starts_with('"') && command.ends_with('"'))
+            || (command.starts_with('\'') && command.ends_with('\'')) {
+            command[1..command.len()-1].trim().to_string()
+        } else {
+            command.to_string()
+        };
+
         if command.is_empty() {
             return Err("Shell Exec: command is empty".into());
         }

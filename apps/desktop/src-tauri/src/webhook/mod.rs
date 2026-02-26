@@ -40,6 +40,8 @@ impl TriggerManager {
     }
 
     /// Register a webhook route and start the server if it's the first trigger.
+    /// Checks server state atomically to prevent concurrent arm calls from
+    /// both trying to start the server.
     pub async fn arm_webhook(
         &self,
         path: &str,
@@ -48,17 +50,17 @@ impl TriggerManager {
         sidecar: &SidecarManager,
         app: &tauri::AppHandle,
     ) -> Result<(), String> {
-        let should_start = {
+        let needs_server = {
             let mut routes = self.routes.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
             routes.insert(path.to_string(), route);
-            let is_first = routes.len() == 1;
+            // Check if server is already running while we hold the routes lock
             let has_server = self.shutdown_tx.lock()
                 .map(|s| s.is_some())
                 .unwrap_or(false);
-            is_first || !has_server
+            !has_server
         };
 
-        if should_start {
+        if needs_server {
             let port = *self.port.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
             let state = WebhookState {
                 routes: self.routes.clone(),
@@ -68,9 +70,14 @@ impl TriggerManager {
                 app_handle: app.clone(),
             };
             let tx = server::start_server(state, port).await?;
+            // Re-check under lock: another arm call may have started server first
             let mut shutdown = self.shutdown_tx.lock().map_err(|e| format!("Lock poisoned: {e}"))?;
-            *shutdown = Some(tx);
-            eprintln!("[webhook] Server started on port {}", port);
+            if shutdown.is_none() {
+                *shutdown = Some(tx);
+                eprintln!("[webhook] Server started on port {}", port);
+            }
+            // If shutdown.is_some(), another call won the race — our server will fail
+            // to bind or we just drop our tx (harmless)
         }
 
         Ok(())

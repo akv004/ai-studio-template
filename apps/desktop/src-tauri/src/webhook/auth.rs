@@ -40,8 +40,12 @@ pub fn validate_auth(
         AuthMode::Token(expected) => {
             let header = authorization_header
                 .ok_or_else(|| "Missing Authorization header".to_string())?;
-            let token = header.strip_prefix("Bearer ").unwrap_or(header);
-            // Constant-time comparison
+            // Case-insensitive "Bearer " prefix, trim whitespace from token
+            let token = if header.len() > 7 && header[..7].eq_ignore_ascii_case("bearer ") {
+                header[7..].trim()
+            } else {
+                header.trim()
+            };
             if constant_time_eq(token.as_bytes(), expected.as_bytes()) {
                 Ok(())
             } else {
@@ -49,8 +53,13 @@ pub fn validate_auth(
             }
         }
         AuthMode::HmacSha256(secret) => {
-            let sig = signature_header
+            let sig_raw = signature_header
                 .ok_or_else(|| "Missing X-Signature header".to_string())?;
+            // Strip common prefixes: "sha256=<hex>" (GitHub), "sha256=<hex>" etc.
+            let sig = sig_raw.strip_prefix("sha256=")
+                .or_else(|| sig_raw.strip_prefix("SHA256="))
+                .unwrap_or(sig_raw)
+                .trim();
             let expected_sig = compute_hmac(secret.as_bytes(), body);
             if constant_time_eq(sig.as_bytes(), expected_sig.as_bytes()) {
                 Ok(())
@@ -145,5 +154,35 @@ mod tests {
         let result = validate_auth(&mode, None, Some("deadbeef"), b"body");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid HMAC"));
+    }
+
+    #[test]
+    fn test_auth_token_case_insensitive_bearer() {
+        let mode = AuthMode::Token("secret123".to_string());
+        assert!(validate_auth(&mode, Some("bearer secret123"), None, b"").is_ok());
+        assert!(validate_auth(&mode, Some("BEARER secret123"), None, b"").is_ok());
+        assert!(validate_auth(&mode, Some("Bearer  secret123 "), None, b"").is_ok()); // extra whitespace trimmed
+        assert!(validate_auth(&mode, Some("Bearer wrong"), None, b"").is_err()); // wrong token
+    }
+
+    #[test]
+    fn test_auth_token_trim_whitespace() {
+        let mode = AuthMode::Token("mytoken".to_string());
+        assert!(validate_auth(&mode, Some("Bearer mytoken "), None, b"").is_ok());
+        assert!(validate_auth(&mode, Some("Bearer  mytoken"), None, b"").is_ok());
+    }
+
+    #[test]
+    fn test_auth_hmac_sha256_prefix() {
+        let secret = "my-secret";
+        let body = b"hello world";
+        let sig = compute_hmac(secret.as_bytes(), body);
+        let mode = AuthMode::HmacSha256(secret.to_string());
+        // With sha256= prefix (GitHub format)
+        assert!(validate_auth(&mode, None, Some(&format!("sha256={}", sig)), body).is_ok());
+        // With SHA256= prefix
+        assert!(validate_auth(&mode, None, Some(&format!("SHA256={}", sig)), body).is_ok());
+        // Raw hex (existing behavior)
+        assert!(validate_auth(&mode, None, Some(&sig), body).is_ok());
     }
 }

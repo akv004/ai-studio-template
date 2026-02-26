@@ -59,7 +59,10 @@ export function LLMNode({ id, data, selected }: { id: string; data: Record<strin
                             className="node-inline-slider flex-1"
                             value={temperature}
                             onChange={e => updateField('temperature', parseFloat(e.target.value))}
-                            onMouseDown={e => e.stopPropagation()} />
+                            onMouseDown={e => e.stopPropagation()}
+                            onPointerUp={e => (e.target as HTMLElement).blur()}
+                            onKeyDown={e => { if (e.key === 'Escape' || e.key === 'Tab') (e.target as HTMLElement).blur(); }}
+                        />
                     </div>
                     {/* Session Mode */}
                     <div className="flex items-center gap-1">

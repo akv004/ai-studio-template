@@ -5,7 +5,7 @@ use crate::sidecar::SidecarManager;
 use crate::workflow::engine::execute_workflow_ephemeral;
 use crate::workflow::validation::validate_graph_json;
 use axum::body::Bytes;
-use axum::extract::{Path, State};
+use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, Method, StatusCode};
 use axum::response::{IntoResponse, Json};
 use axum::routing::any;
@@ -80,6 +80,7 @@ async fn health_handler() -> impl IntoResponse {
 async fn webhook_handler(
     State(state): State<WebhookState>,
     Path(path): Path<String>,
+    Query(query_params): Query<HashMap<String, String>>,
     method: Method,
     headers: HeaderMap,
     body: Bytes,
@@ -154,7 +155,7 @@ async fn webhook_handler(
         serde_json::to_value(map).unwrap_or_default()
     };
 
-    let query_value = serde_json::Value::Object(serde_json::Map::new());
+    let query_value = serde_json::to_value(&query_params).unwrap_or_default();
 
     let mut inputs = HashMap::new();
     inputs.insert("__webhook_body".to_string(), body_value.clone());
@@ -198,13 +199,20 @@ async fn webhook_handler(
             ).unwrap_or_default()
         });
 
-        let mut stmt = conn.prepare("SELECT key, value FROM settings").unwrap();
         let mut settings = HashMap::<String, String>::new();
-        let rows = stmt.query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        }).unwrap();
-        for row in rows.flatten() {
-            settings.insert(row.0, row.1);
+        match conn.prepare("SELECT key, value FROM settings") {
+            Ok(mut stmt) => {
+                if let Ok(rows) = stmt.query_map([], |row| {
+                    Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                }) {
+                    for row in rows.flatten() {
+                        settings.insert(row.0, row.1);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("[webhook] Warning: failed to load settings: {e}");
+            }
         }
 
         (graph, settings, name, agent)
@@ -308,11 +316,31 @@ async fn webhook_handler(
             error: None,
         }))
     } else {
-        // Wait mode: execute and return the result
-        let result = execute_workflow_ephemeral(
+        // Wait mode: execute with timeout enforcement
+        let timeout_duration = std::time::Duration::from_secs(route.timeout_secs);
+        let execution = execute_workflow_ephemeral(
             &state.db, &state.sidecar, &state.app_handle,
             &session_id, &graph_json, &inputs, &all_settings, false,
-        ).await;
+        );
+
+        let result = match tokio::time::timeout(timeout_duration, execution).await {
+            Ok(r) => r,
+            Err(_) => {
+                // Timeout — update log and return 408
+                if let Ok(conn) = state.db.conn.lock() {
+                    let _ = conn.execute(
+                        "UPDATE trigger_log SET status = 'error', metadata = '{\"error\":\"timeout\"}' WHERE id = ?1",
+                        params![log_id],
+                    );
+                }
+                return (StatusCode::REQUEST_TIMEOUT, Json(WebhookResponse {
+                    run_id: Some(session_id),
+                    status: "error".into(),
+                    output: None,
+                    error: Some(format!("Workflow execution timed out after {}s", route.timeout_secs)),
+                }));
+            }
+        };
 
         match result {
             Ok(run_result) => {

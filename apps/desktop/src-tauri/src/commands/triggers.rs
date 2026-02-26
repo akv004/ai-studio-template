@@ -287,6 +287,24 @@ pub async fn arm_trigger(
         .and_then(|v| v.as_str())
         .unwrap_or("immediate");
 
+    // Validate auth secrets are not empty when auth is configured
+    let auth_mode_str = trigger.config.get("authMode").and_then(|v| v.as_str()).unwrap_or("none");
+    match auth_mode_str {
+        "token" => {
+            let token = trigger.config.get("authToken").and_then(|v| v.as_str()).unwrap_or("");
+            if token.is_empty() {
+                return Err(AppError::Validation("Cannot arm: authMode is 'token' but authToken is empty".into()));
+            }
+        }
+        "hmac" => {
+            let secret = trigger.config.get("hmacSecret").and_then(|v| v.as_str()).unwrap_or("");
+            if secret.is_empty() {
+                return Err(AppError::Validation("Cannot arm: authMode is 'hmac' but hmacSecret is empty".into()));
+            }
+        }
+        _ => {}
+    }
+
     let route = WebhookRoute {
         trigger_id: trigger.id.clone(),
         workflow_id: trigger.workflow_id.clone(),

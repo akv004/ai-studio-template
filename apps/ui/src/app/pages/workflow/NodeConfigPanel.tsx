@@ -756,6 +756,81 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                 </>
             )}
 
+            {type === 'cron_trigger' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Cron Expression</span>
+                        <input className="config-input font-mono" value={(data.expression as string) || ''}
+                            onChange={(e) => update('expression', e.target.value)}
+                            placeholder="0 9 * * *" />
+                    </label>
+                    <div className="text-[10px] text-[var(--text-muted)] -mt-1">
+                        min hour day-of-month month day-of-week
+                    </div>
+                    <div className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Quick Presets</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                            {[
+                                { expr: '*/5 * * * *', label: '5 min' },
+                                { expr: '0 * * * *', label: 'Hourly' },
+                                { expr: '0 9 * * *', label: 'Daily 9am' },
+                                { expr: '0 18 * * 1-5', label: 'Weekday 6pm' },
+                                { expr: '0 8 * * 1', label: 'Mon 8am' },
+                            ].map(({ expr, label }) => (
+                                <button key={expr}
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono border transition-colors ${
+                                        (data.expression as string) === expr
+                                            ? 'border-green-500/50 bg-green-500/10 text-green-300'
+                                            : 'border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-secondary)] hover:border-[#555]'
+                                    }`}
+                                    onClick={() => update('expression', expr)}>
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Timezone</span>
+                        <select className="config-input" value={(data.timezone as string) || 'UTC'}
+                            onChange={(e) => update('timezone', e.target.value)}>
+                            <option value="UTC">UTC</option>
+                            <option value="America/New_York">America/New_York (EST/EDT)</option>
+                            <option value="America/Chicago">America/Chicago (CST/CDT)</option>
+                            <option value="America/Denver">America/Denver (MST/MDT)</option>
+                            <option value="America/Los_Angeles">America/Los_Angeles (PST/PDT)</option>
+                            <option value="Europe/London">Europe/London (GMT/BST)</option>
+                            <option value="Europe/Berlin">Europe/Berlin (CET/CEST)</option>
+                            <option value="Asia/Kolkata">Asia/Kolkata (IST)</option>
+                            <option value="Asia/Tokyo">Asia/Tokyo (JST)</option>
+                            <option value="Asia/Shanghai">Asia/Shanghai (CST)</option>
+                            <option value="Australia/Sydney">Australia/Sydney (AEST/AEDT)</option>
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Max Concurrent Runs</span>
+                        <input type="number" className="config-input"
+                            value={(data.maxConcurrent as number) ?? 1}
+                            onChange={(e) => update('maxConcurrent', Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
+                            min={1} max={10} />
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Catch-up Policy</span>
+                        <select className="config-input" value={(data.catchUpPolicy as string) || 'skip'}
+                            onChange={(e) => update('catchUpPolicy', e.target.value)}>
+                            <option value="skip">Skip missed runs</option>
+                            <option value="run_once">Run once on catch-up</option>
+                        </select>
+                    </label>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Static Input (JSON)</span>
+                        <textarea className="config-input font-mono text-[11px] min-h-[60px] resize-y"
+                            value={(data.staticInput as string) || '{}'}
+                            onChange={(e) => update('staticInput', e.target.value)}
+                            placeholder='{"key": "value"}' />
+                    </label>
+                </>
+            )}
+
             {type === 'webhook_trigger' && (
                 <>
                     <label className="block">

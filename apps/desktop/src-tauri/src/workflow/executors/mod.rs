@@ -18,6 +18,7 @@ pub mod knowledge_base;
 pub mod loop_node;
 pub mod exit;
 pub mod webhook_trigger;
+pub mod cron_trigger;
 pub mod email_send;
 
 use crate::db::Database;
@@ -103,8 +104,9 @@ impl ExecutorRegistry {
         // Phase 5A — Loop & Feedback
         executors.insert("loop".to_string(), Box::new(loop_node::LoopExecutor));
         executors.insert("exit".to_string(), Box::new(exit::ExitExecutor));
-        // Webhook trigger
+        // Triggers
         executors.insert("webhook_trigger".to_string(), Box::new(webhook_trigger::WebhookTriggerExecutor));
+        executors.insert("cron_trigger".to_string(), Box::new(cron_trigger::CronTriggerExecutor));
         // Communication
         executors.insert("email_send".to_string(), Box::new(email_send::EmailSendExecutor));
         Self { executors }

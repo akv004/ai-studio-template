@@ -19,6 +19,7 @@ import { KnowledgeBaseNode } from './nodes/KnowledgeBaseNode';
 import { LoopNode } from './nodes/LoopNode';
 import { ExitNode } from './nodes/ExitNode';
 import { WebhookTriggerNode } from './nodes/WebhookTriggerNode';
+import { CronTriggerNode } from './nodes/CronTriggerNode';
 import { EmailSendNode } from './nodes/EmailSendNode';
 
 export const customNodeTypes: NodeTypes = {
@@ -42,5 +43,6 @@ export const customNodeTypes: NodeTypes = {
     loop: LoopNode,
     exit: ExitNode,
     webhook_trigger: WebhookTriggerNode,
+    cron_trigger: CronTriggerNode,
     email_send: EmailSendNode,
 };

@@ -52,6 +52,10 @@ export function defaultDataForType(type: string): Record<string, unknown> {
             authMode: 'none', authToken: '', hmacSecret: '',
             responseMode: 'immediate', timeoutSecs: 30, maxPerMinute: 60,
         };
+        case 'cron_trigger': return {
+            label: '', expression: '0 9 * * *', timezone: 'UTC',
+            staticInput: '{}', maxConcurrent: 1, catchUpPolicy: 'skip',
+        };
         default: return { label: '' };
     }
 }

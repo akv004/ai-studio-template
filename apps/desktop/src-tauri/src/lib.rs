@@ -133,7 +133,7 @@ pub fn run() {
             search_index,
             get_index_stats,
             delete_index,
-            // Triggers (Webhooks)
+            // Triggers (Webhooks + Cron)
             create_trigger,
             update_trigger,
             delete_trigger,
@@ -143,6 +143,7 @@ pub fn run() {
             disarm_trigger,
             test_trigger,
             get_webhook_server_status,
+            get_cron_scheduler_status,
             // Sidecar
             sidecar_start,
             sidecar_stop,

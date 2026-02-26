@@ -3,9 +3,11 @@ use crate::error::AppError;
 use crate::sidecar::SidecarManager;
 use crate::webhook::auth::AuthMode;
 use crate::webhook::server::{ResponseMode, WebhookRoute};
-use crate::webhook::{TriggerManager, WebhookServerStatus};
+use crate::webhook::{CronScheduleEntry, CronSchedulerStatus, TriggerManager, WebhookServerStatus};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
+use std::sync::atomic::{AtomicI64, AtomicU32};
+use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Clone)]
@@ -126,20 +128,32 @@ pub async fn delete_trigger(
     trigger_id: String,
 ) -> Result<(), AppError> {
     // Disarm if armed
-    let path = {
+    let (trigger_type, config) = {
         let conn = db.conn.lock()?;
-        let config_str: String = conn.query_row(
-            "SELECT config FROM triggers WHERE id = ?1",
+        let (ttype, config_str): (String, String) = conn.query_row(
+            "SELECT trigger_type, config FROM triggers WHERE id = ?1",
             params![trigger_id],
-            |row| row.get(0),
+            |row| Ok((row.get(0)?, row.get(1)?)),
         ).map_err(|_| AppError::NotFound("Trigger not found".into()))?;
         let config: serde_json::Value = serde_json::from_str(&config_str).unwrap_or_default();
-        config.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string()
+        (ttype, config)
     };
 
-    if !path.is_empty() && trigger_mgr.is_armed(&path) {
-        trigger_mgr.disarm_webhook(&path)
-            .map_err(|e| AppError::Workflow(e))?;
+    match trigger_type.as_str() {
+        "webhook" => {
+            let path = config.get("path").and_then(|v| v.as_str()).unwrap_or("").to_string();
+            if !path.is_empty() && trigger_mgr.is_armed(&path) {
+                trigger_mgr.disarm_webhook(&path)
+                    .map_err(|e| AppError::Workflow(e))?;
+            }
+        }
+        "cron" => {
+            if trigger_mgr.is_cron_armed(&trigger_id) {
+                trigger_mgr.disarm_cron(&trigger_id)
+                    .map_err(|e| AppError::Workflow(e))?;
+            }
+        }
+        _ => {}
     }
 
     let conn = db.conn.lock()?;
@@ -244,81 +258,141 @@ pub async fn arm_trigger(
     if !trigger.enabled {
         return Err(AppError::Validation("Trigger is disabled".into()));
     }
-    if trigger.trigger_type != "webhook" {
-        return Err(AppError::Validation(format!("Cannot arm trigger type '{}' — only webhook supported", trigger.trigger_type)));
-    }
 
-    let path = trigger.config.get("path")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| AppError::Validation("Webhook config missing 'path' field".into()))?
-        .to_string();
+    match trigger.trigger_type.as_str() {
+        "webhook" => {
+            let path = trigger.config.get("path")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Validation("Webhook config missing 'path' field".into()))?
+                .to_string();
 
-    if path.is_empty() {
-        return Err(AppError::Validation("Webhook path cannot be empty".into()));
-    }
-
-    // Check if port override exists in settings
-    {
-        let conn = db.conn.lock()?;
-        if let Ok(port_str) = conn.query_row(
-            "SELECT value FROM settings WHERE key = 'webhook.port'",
-            [], |row| row.get::<_, String>(0),
-        ) {
-            if let Ok(port) = port_str.trim_matches('"').parse::<u16>() {
-                trigger_mgr.set_port(port);
+            if path.is_empty() {
+                return Err(AppError::Validation("Webhook path cannot be empty".into()));
             }
+
+            // Check if port override exists in settings
+            {
+                let conn = db.conn.lock()?;
+                if let Ok(port_str) = conn.query_row(
+                    "SELECT value FROM settings WHERE key = 'webhook.port'",
+                    [], |row| row.get::<_, String>(0),
+                ) {
+                    if let Ok(port) = port_str.trim_matches('"').parse::<u16>() {
+                        trigger_mgr.set_port(port);
+                    }
+                }
+            }
+
+            let methods: Vec<String> = trigger.config.get("methods")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_else(|| vec!["POST".to_string()]);
+
+            let timeout_secs = trigger.config.get("timeoutSecs")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(30);
+
+            let max_per_minute = trigger.config.get("maxPerMinute")
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+
+            let response_mode = trigger.config.get("responseMode")
+                .and_then(|v| v.as_str())
+                .unwrap_or("immediate");
+
+            // Validate auth secrets are not empty when auth is configured
+            let auth_mode_str = trigger.config.get("authMode").and_then(|v| v.as_str()).unwrap_or("none");
+            match auth_mode_str {
+                "token" => {
+                    let token = trigger.config.get("authToken").and_then(|v| v.as_str()).unwrap_or("");
+                    if token.is_empty() {
+                        return Err(AppError::Validation("Cannot arm: authMode is 'token' but authToken is empty".into()));
+                    }
+                }
+                "hmac" => {
+                    let secret = trigger.config.get("hmacSecret").and_then(|v| v.as_str()).unwrap_or("");
+                    if secret.is_empty() {
+                        return Err(AppError::Validation("Cannot arm: authMode is 'hmac' but hmacSecret is empty".into()));
+                    }
+                }
+                _ => {}
+            }
+
+            let route = WebhookRoute {
+                trigger_id: trigger.id.clone(),
+                workflow_id: trigger.workflow_id.clone(),
+                auth_mode: AuthMode::from_config(&trigger.config),
+                response_mode: ResponseMode::from_str(response_mode),
+                timeout_secs,
+                methods,
+                max_per_minute,
+            };
+
+            trigger_mgr.arm_webhook(&path, route, db.inner(), sidecar.inner(), &app).await
+                .map_err(|e| AppError::Workflow(e))?;
+
+            eprintln!("[triggers] Armed webhook: trigger_id={}, path={}", trigger.id, path);
+        }
+        "cron" => {
+            let expression = trigger.config.get("expression")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| AppError::Validation("Cron config missing 'expression'".into()))?
+                .to_string();
+
+            // Validate expression parses (cron crate uses 6/7-field format: sec min hour dom month dow [year])
+            // We accept 5-field user input and prepend "0 " for the seconds field
+            let cron_expr = if expression.split_whitespace().count() == 5 {
+                format!("0 {} *", expression)
+            } else {
+                expression.clone()
+            };
+
+            use std::str::FromStr;
+            cron::Schedule::from_str(&cron_expr)
+                .map_err(|e| AppError::Validation(format!("Invalid cron expression '{}': {e}", expression)))?;
+
+            let timezone = trigger.config.get("timezone")
+                .and_then(|v| v.as_str())
+                .unwrap_or("UTC")
+                .to_string();
+
+            // Validate timezone parses
+            timezone.parse::<chrono_tz::Tz>()
+                .map_err(|_| AppError::Validation(format!("Invalid timezone: {}", timezone)))?;
+
+            let static_input = trigger.config.get("staticInput")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!({}));
+
+            let max_concurrent = trigger.config.get("maxConcurrent")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1)
+                .min(10) as u32;
+
+            let entry = CronScheduleEntry {
+                trigger_id: trigger.id.clone(),
+                workflow_id: trigger.workflow_id.clone(),
+                expression: cron_expr,
+                timezone,
+                static_input,
+                max_concurrent,
+                active_runs: Arc::new(AtomicU32::new(0)),
+                fire_count: Arc::new(AtomicI64::new(trigger.fire_count)),
+                last_fired_minute: Arc::new(Mutex::new(None)),
+            };
+
+            trigger_mgr.arm_cron(entry, db.inner(), sidecar.inner(), &app).await
+                .map_err(|e| AppError::Workflow(e))?;
+
+            eprintln!("[triggers] Armed cron: trigger_id={}, expression={}", trigger.id, expression);
+        }
+        other => {
+            return Err(AppError::Validation(format!(
+                "Cannot arm trigger type '{}' — only 'webhook' and 'cron' are supported", other
+            )));
         }
     }
 
-    let methods: Vec<String> = trigger.config.get("methods")
-        .and_then(|v| v.as_array())
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
-        .unwrap_or_else(|| vec!["POST".to_string()]);
-
-    let timeout_secs = trigger.config.get("timeoutSecs")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(30);
-
-    let max_per_minute = trigger.config.get("maxPerMinute")
-        .and_then(|v| v.as_u64())
-        .map(|v| v as u32);
-
-    let response_mode = trigger.config.get("responseMode")
-        .and_then(|v| v.as_str())
-        .unwrap_or("immediate");
-
-    // Validate auth secrets are not empty when auth is configured
-    let auth_mode_str = trigger.config.get("authMode").and_then(|v| v.as_str()).unwrap_or("none");
-    match auth_mode_str {
-        "token" => {
-            let token = trigger.config.get("authToken").and_then(|v| v.as_str()).unwrap_or("");
-            if token.is_empty() {
-                return Err(AppError::Validation("Cannot arm: authMode is 'token' but authToken is empty".into()));
-            }
-        }
-        "hmac" => {
-            let secret = trigger.config.get("hmacSecret").and_then(|v| v.as_str()).unwrap_or("");
-            if secret.is_empty() {
-                return Err(AppError::Validation("Cannot arm: authMode is 'hmac' but hmacSecret is empty".into()));
-            }
-        }
-        _ => {}
-    }
-
-    let route = WebhookRoute {
-        trigger_id: trigger.id.clone(),
-        workflow_id: trigger.workflow_id.clone(),
-        auth_mode: AuthMode::from_config(&trigger.config),
-        response_mode: ResponseMode::from_str(response_mode),
-        timeout_secs,
-        methods,
-        max_per_minute,
-    };
-
-    trigger_mgr.arm_webhook(&path, route, db.inner(), sidecar.inner(), &app).await
-        .map_err(|e| AppError::Workflow(e))?;
-
-    eprintln!("[triggers] Armed webhook: trigger_id={}, path={}", trigger.id, path);
     Ok(())
 }
 
@@ -330,19 +404,35 @@ pub async fn disarm_trigger(
 ) -> Result<(), AppError> {
     let trigger = get_trigger_by_id(&db, &trigger_id)?;
 
-    let path = trigger.config.get("path")
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string();
+    match trigger.trigger_type.as_str() {
+        "webhook" => {
+            let path = trigger.config.get("path")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
 
-    if path.is_empty() {
-        return Err(AppError::Validation("Trigger has no path configured".into()));
+            if path.is_empty() {
+                return Err(AppError::Validation("Trigger has no path configured".into()));
+            }
+
+            trigger_mgr.disarm_webhook(&path)
+                .map_err(|e| AppError::Workflow(e))?;
+
+            eprintln!("[triggers] Disarmed webhook: trigger_id={}, path={}", trigger_id, path);
+        }
+        "cron" => {
+            trigger_mgr.disarm_cron(&trigger.id)
+                .map_err(|e| AppError::Workflow(e))?;
+
+            eprintln!("[triggers] Disarmed cron: trigger_id={}", trigger_id);
+        }
+        other => {
+            return Err(AppError::Validation(format!(
+                "Cannot disarm trigger type '{}' — only 'webhook' and 'cron' are supported", other
+            )));
+        }
     }
 
-    trigger_mgr.disarm_webhook(&path)
-        .map_err(|e| AppError::Workflow(e))?;
-
-    eprintln!("[triggers] Disarmed webhook: trigger_id={}, path={}", trigger_id, path);
     Ok(())
 }
 
@@ -431,6 +521,13 @@ pub fn get_webhook_server_status(
     trigger_mgr: tauri::State<'_, TriggerManager>,
 ) -> Result<WebhookServerStatus, AppError> {
     Ok(trigger_mgr.status())
+}
+
+#[tauri::command]
+pub fn get_cron_scheduler_status(
+    trigger_mgr: tauri::State<'_, TriggerManager>,
+) -> Result<CronSchedulerStatus, AppError> {
+    Ok(trigger_mgr.cron_status())
 }
 
 fn get_trigger_by_id(db: &Database, trigger_id: &str) -> Result<Trigger, AppError> {

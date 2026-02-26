@@ -34,7 +34,7 @@ pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String>
     for node in nodes {
         let id = node.get("id").and_then(|v| v.as_str()).unwrap_or("").to_string();
         let ntype = node.get("type").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        if ntype == "input" || ntype == "file_read" || ntype == "file_glob" || ntype == "iterator" || ntype == "loop" || ntype == "tool" || ntype == "http_request" || ntype == "shell_exec" || ntype == "webhook_trigger" { has_input = true; }
+        if ntype == "input" || ntype == "file_read" || ntype == "file_glob" || ntype == "iterator" || ntype == "loop" || ntype == "tool" || ntype == "http_request" || ntype == "shell_exec" || ntype == "webhook_trigger" || ntype == "cron_trigger" { has_input = true; }
         if ntype == "output" || ntype == "file_write" || ntype == "aggregator" || ntype == "exit" { has_output = true; }
         node_ids.push(id.clone());
         node_types.insert(id, ntype);
@@ -143,6 +143,12 @@ pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String>
     let webhook_trigger_count = node_types.values().filter(|t| t.as_str() == "webhook_trigger").count();
     if webhook_trigger_count > 1 {
         errors.push("Only one Webhook Trigger node is allowed per workflow".to_string());
+    }
+
+    // Max 1 cron trigger per workflow
+    let cron_trigger_count = node_types.values().filter(|t| t.as_str() == "cron_trigger").count();
+    if cron_trigger_count > 1 {
+        errors.push("Only one Cron Trigger node is allowed per workflow".to_string());
     }
 
     // Check for orphan nodes
@@ -372,6 +378,38 @@ mod tests {
         assert!(!result.valid, "should be invalid with multiple webhook triggers");
         assert!(result.errors.iter().any(|e| e.contains("Webhook Trigger")),
             "errors: {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_cron_trigger_valid_as_input() {
+        let graph = make_graph(
+            &[("cron1", "cron_trigger"), ("llm1", "llm"), ("out1", "output")],
+            &[("cron1", "llm1"), ("llm1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid, "errors: {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_multiple_cron_triggers_error() {
+        let graph = make_graph(
+            &[("cron1", "cron_trigger"), ("cron2", "cron_trigger"), ("llm1", "llm"), ("out1", "output")],
+            &[("cron1", "llm1"), ("cron2", "llm1"), ("llm1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(!result.valid, "should be invalid with multiple cron triggers");
+        assert!(result.errors.iter().any(|e| e.contains("Cron Trigger")),
+            "errors: {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_cron_and_webhook_coexistence_ok() {
+        let graph = make_graph(
+            &[("cron1", "cron_trigger"), ("wh1", "webhook_trigger"), ("llm1", "llm"), ("out1", "output")],
+            &[("cron1", "llm1"), ("wh1", "llm1"), ("llm1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid, "cron + webhook should coexist. errors: {:?}", result.errors);
     }
 
     #[test]

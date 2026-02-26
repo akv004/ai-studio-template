@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Plus, Trash2, Check, X, Copy } from 'lucide-react';
 import type { Node } from '@xyflow/react';
 import { useAppStore } from '../../../state/store';
@@ -140,23 +141,7 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
             )}
 
             {type === 'tool' && (
-                <>
-                    <label className="block">
-                        <span className="text-xs text-[var(--text-muted)]">Tool Name</span>
-                        <input className="config-input" value={(data.toolName as string) || ''}
-                            onChange={(e) => update('toolName', e.target.value)}
-                            placeholder="e.g. builtin__shell" />
-                    </label>
-                    <label className="block">
-                        <span className="text-xs text-[var(--text-muted)]">Approval</span>
-                        <select className="config-input" value={(data.approval as string) || 'auto'}
-                            onChange={(e) => update('approval', e.target.value)}>
-                            <option value="auto">Auto</option>
-                            <option value="ask">Ask</option>
-                            <option value="deny">Deny</option>
-                        </select>
-                    </label>
-                </>
+                <ToolConfig data={data} update={update} />
             )}
 
             {type === 'router' && (
@@ -992,5 +977,83 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                 </button>
             </div>
         </div>
+    );
+}
+
+function ToolConfig({ data, update }: { data: Record<string, unknown>; update: (field: string, value: unknown) => void }) {
+    const { availableTools, fetchAvailableTools } = useAppStore();
+    const [customMode, setCustomMode] = useState(false);
+    const toolName = (data.toolName as string) || '';
+
+    useEffect(() => { fetchAvailableTools(); }, [fetchAvailableTools]);
+
+    // Group tools by server
+    const grouped: Record<string, typeof availableTools> = {};
+    for (const t of availableTools) {
+        (grouped[t.server] ||= []).push(t);
+    }
+
+    const selectedTool = availableTools.find(t => t.qualified_name === toolName);
+    const showDropdown = availableTools.length > 0 && !customMode;
+
+    return (
+        <>
+            <label className="block">
+                <span className="text-xs text-[var(--text-muted)]">Tool</span>
+                {showDropdown ? (
+                    <select
+                        className="config-input"
+                        value={toolName}
+                        onChange={(e) => {
+                            if (e.target.value === '__custom__') {
+                                setCustomMode(true);
+                                return;
+                            }
+                            const tool = availableTools.find(t => t.qualified_name === e.target.value);
+                            update('toolName', e.target.value);
+                            update('serverName', tool?.server || '');
+                        }}
+                    >
+                        <option value="">Select a tool...</option>
+                        {Object.entries(grouped).map(([server, tools]) => (
+                            <optgroup key={server} label={server}>
+                                {tools.map(t => (
+                                    <option key={t.qualified_name} value={t.qualified_name}>
+                                        {t.name}
+                                    </option>
+                                ))}
+                            </optgroup>
+                        ))}
+                        <option value="__custom__">Custom tool name...</option>
+                    </select>
+                ) : (
+                    <>
+                        <input className="config-input" value={toolName}
+                            onChange={(e) => update('toolName', e.target.value)}
+                            placeholder="e.g. builtin__shell" />
+                        {availableTools.length > 0 && (
+                            <button className="text-[10px] text-blue-400 hover:text-blue-300 mt-1"
+                                onClick={() => setCustomMode(false)}>
+                                Browse available tools
+                            </button>
+                        )}
+                    </>
+                )}
+            </label>
+            {selectedTool?.description && (
+                <p className="text-[10px] text-[var(--text-muted)] leading-snug">
+                    {selectedTool.description.slice(0, 200)}
+                </p>
+            )}
+            <label className="block">
+                <span className="text-xs text-[var(--text-muted)]">Approval</span>
+                <select className="config-input" value={(data.approval as string) || 'auto'}
+                    onChange={(e) => update('approval', e.target.value)}>
+                    <option value="auto">Auto</option>
+                    <option value="ask">Ask</option>
+                    <option value="deny">Deny</option>
+                </select>
+            </label>
+        </>
     );
 }

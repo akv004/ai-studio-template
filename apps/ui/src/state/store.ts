@@ -132,6 +132,10 @@ interface AppState {
     removeMcpServer: (id: string) => Promise<void>;
     connectEnabledMcpServers: () => Promise<void>;
 
+    // MCP Tools (discovered from sidecar)
+    availableTools: { server: string; name: string; qualified_name: string; description: string }[];
+    fetchAvailableTools: () => Promise<void>;
+
     // Approval Rules
     approvalRules: ApprovalRule[];
     approvalRulesLoading: boolean;
@@ -432,7 +436,7 @@ export const useAppStore = create<AppState>((set, get) => ({
             await invoke<void>('wipe_database');
             set({
                 agents: [], sessions: [], runs: [], messages: [], events: [],
-                mcpServers: [], workflows: [], settings: {}, sessionStats: null,
+                mcpServers: [], availableTools: [], workflows: [], settings: {}, sessionStats: null,
                 selectedWorkflow: null,
                 workflowRunning: false, workflowNodeStates: {}, workflowRunSessionId: null,
             });
@@ -548,6 +552,17 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
         if (connected > 0) {
             get().addToast(`Connected ${connected} MCP server(s)`, 'success');
+        }
+    },
+
+    // MCP Tools (discovered from sidecar)
+    availableTools: [],
+    fetchAvailableTools: async () => {
+        try {
+            const res = await sidecarRequest<{ tools: { server: string; name: string; qualified_name: string; description: string }[] }>('GET', '/mcp/tools');
+            set({ availableTools: res.tools || [] });
+        } catch {
+            // Sidecar not running — leave empty, text input fallback works
         }
     },
 

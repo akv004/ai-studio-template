@@ -99,6 +99,8 @@
 | **Cron Trigger peer review** | DONE | Gemini (arch) + Codex (impl): 8 fixes — last_fired_minute init from DB, 5-field enforcement, list_triggers payload fix, dual-trigger toolbar split, maxConcurrent≥1, executor tests rewrite, DB error logging, 22 timezones. 253 tests. (a8649fe) |
 | **Note node** | DONE | Documentation-only canvas node (23rd node type). StickyNote icon, text preview on canvas, full textarea in config panel. Utility category. Orphan warning suppressed in validation. 254 tests. (5621c26) |
 | **Daily Meeting Digest template** | DONE | Cron (9 AM) → File Glob (transcripts) → LLM (summarize) → Email Send (digest). 19th bundled template. Includes Note node explaining setup. (5621c26) |
+| **Tilde expansion fix** | DONE | `expand_tilde()` shared helper in file_read.rs — applied to File Read, File Glob, File Write executors. `~/path` now resolves correctly. (db16b37) |
+| **Tool Picker dropdown** | DONE | Replace hardcoded text input with grouped `<select>` that discovers MCP tools via sidecar `GET /mcp/tools`. Grouped by server, shows description, custom fallback. ToolNode shows friendly name + server subtitle. (49be3ad) |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -206,10 +208,12 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-26 (session 45)
+**Date**: 2026-02-26 (session 45, continued)
 **What happened**:
 - **Note node** (5621c26): 23rd node type — documentation-only canvas node. StickyNote icon, text preview (200 chars) on canvas, full textarea in config panel. New "Utility" palette category. Orphan warning suppressed in validation (+1 test). No executor needed.
-- **Daily Meeting Digest template** (5621c26): 19th bundled template — Cron Trigger (9 AM daily) → File Glob (~/meetings/transcripts/*.txt) → LLM (summarize decisions, action items, takeaways) → Email Send (digest to team). Note node explains setup. Uses Azure OpenAI gpt-4o-mini.
+- **Daily Meeting Digest template** (5621c26): 19th bundled template — Cron Trigger (9 AM daily) → File Glob (~/meetings/transcripts/*.txt) → LLM (summarize) → Email Send (digest). Note node explains setup. Uses Azure OpenAI gpt-4o-mini.
+- **Tilde expansion fix** (db16b37): File Glob didn't expand `~` — added shared `expand_tilde()` helper in `file_read.rs`, applied to all 3 file executors (Read, Glob, Write). Also documented Mailpit SMTP setup in template Note node + templates/README.md prerequisites.
+- **Tool Picker dropdown** (49be3ad): Replaced Tool node's hardcoded text input with a grouped `<select>` that fetches available tools from sidecar `GET /mcp/tools`. Grouped by server (`<optgroup>`), shows tool description, "Custom tool name..." fallback for manual entry. Store: `availableTools[]` + `fetchAvailableTools()`. ToolNode canvas shows friendly name (e.g. "shell") with server subtitle (e.g. "builtin").
 - **254 total Rust tests** passing
 
 **Previous session (44)**:
@@ -232,4 +236,4 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 2. Start **A/B Eval Node** (Phase 5 #11 — highest demo impact, parallel LLM comparison)
 3. Or start **Connections Manager** (P0 — encrypted credential store for SMTP, webhooks, DB)
 4. Or start **Dual-Mode Deployment** (desktop + server from same Rust codebase)
-5. **Peer review** Note node + Daily Meeting Digest template (quick — small changes)
+5. **Peer review** Note node + tilde fix + tool picker (quick — small changes)

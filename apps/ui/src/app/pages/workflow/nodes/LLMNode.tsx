@@ -32,7 +32,7 @@ export function LLMNode({ id, data, selected }: { id: string; data: Record<strin
                 </div>
 
                 {/* Inline Controls */}
-                <div className="py-1 border-t border-b border-[#333] my-1 flex flex-col gap-1.5" onClick={e => e.stopPropagation()}>
+                <div className="nodrag nopan py-1 border-t border-b border-[#333] my-1 flex flex-col gap-1.5" onClick={e => e.stopPropagation()}>
                     <select className="node-inline-input" value={provider}
                         onChange={e => {
                             const p = e.target.value;
@@ -60,8 +60,15 @@ export function LLMNode({ id, data, selected }: { id: string; data: Record<strin
                             value={temperature}
                             onChange={e => updateField('temperature', parseFloat(e.target.value))}
                             onMouseDown={e => e.stopPropagation()}
-                            onPointerUp={e => (e.target as HTMLElement).blur()}
-                            onKeyDown={e => { if (e.key === 'Escape' || e.key === 'Tab') (e.target as HTMLElement).blur(); }}
+                            onPointerUp={e => e.currentTarget.blur()}
+                            onMouseUp={e => e.currentTarget.blur()}
+                            onTouchEnd={e => e.currentTarget.blur()}
+                            onKeyDown={e => {
+                                if (e.key === 'Escape' || e.key === 'Enter' || e.key === 'Tab') {
+                                    e.stopPropagation();
+                                    e.currentTarget.blur();
+                                }
+                            }}
                         />
                     </div>
                     {/* Session Mode */}

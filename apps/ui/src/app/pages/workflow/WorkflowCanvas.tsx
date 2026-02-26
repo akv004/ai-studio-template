@@ -306,11 +306,24 @@ export function WorkflowCanvas({ workflow, onBack }: {
         [setEdges, getHandleType],
     );
 
-    const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-        setSelectedNodeId(node.id);
+    const blurActiveFormControl = useCallback(() => {
+        const active = document.activeElement;
+        if (
+            active instanceof HTMLInputElement
+            || active instanceof HTMLTextAreaElement
+            || active instanceof HTMLSelectElement
+        ) {
+            active.blur();
+        }
     }, []);
 
+    const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
+        blurActiveFormControl();
+        setSelectedNodeId(node.id);
+    }, [blurActiveFormControl]);
+
     const onPaneClick = useCallback((event: React.MouseEvent) => {
+        blurActiveFormControl();
         setContextMenu(null);
 
         // Click-to-place: if a palette item is selected, place it at click position
@@ -331,7 +344,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
         }
 
         setSelectedNodeId(null);
-    }, [pendingNodeType, setNodes]);
+    }, [pendingNodeType, setNodes, blurActiveFormControl]);
 
     const onDragOver = useCallback((event: React.DragEvent) => {
         event.preventDefault();
@@ -647,7 +660,15 @@ export function WorkflowCanvas({ workflow, onBack }: {
     // Keyboard shortcuts
     useEffect(() => {
         const handler = (e: KeyboardEvent) => {
-            const inInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
+            const inInput = e.target instanceof HTMLInputElement
+                || e.target instanceof HTMLTextAreaElement
+                || e.target instanceof HTMLSelectElement;
+
+            if (inInput && e.key === 'Escape') {
+                (e.target as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).blur();
+                e.stopPropagation();
+                return;
+            }
 
             if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                 e.preventDefault();

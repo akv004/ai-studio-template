@@ -19,6 +19,7 @@ import {
     Save, Play, Copy, ChevronLeft,
     Loader2, Check, X, Download, ShieldCheck,
     Square, Radio, Settings2, BookmarkPlus,
+    Zap, ZapOff, TestTube,
 } from 'lucide-react';
 import { useAppStore } from '../../../state/store';
 import type { Workflow, LiveFeedItem } from '@ai-studio/shared';
@@ -106,6 +107,10 @@ export function WorkflowCanvas({ workflow, onBack }: {
     const [showSaveTemplate, setShowSaveTemplate] = useState(false);
     const [templateName, setTemplateName] = useState('');
     const [templateDesc, setTemplateDesc] = useState('');
+    const [triggerId, setTriggerId] = useState<string | null>(null);
+    const [triggerArmed, setTriggerArmed] = useState(false);
+    const [webhookPort, setWebhookPort] = useState(9876);
+    const [triggerLoading, setTriggerLoading] = useState(false);
     const clipboardRef = useRef<{ nodes: Node[]; edges: Edge[] } | null>(null);
     const reactFlowRef = useRef<HTMLDivElement>(null);
     const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -113,6 +118,49 @@ export function WorkflowCanvas({ workflow, onBack }: {
 
     // A1: Derive selectedNode from nodes array — always fresh, never stale
     const selectedNode = selectedNodeId ? nodes.find(n => n.id === selectedNodeId) ?? null : null;
+
+    // Webhook trigger detection
+    const hasWebhookTrigger = nodes.some(n => n.type === 'webhook_trigger');
+
+    // Sync _armed and _webhookPort into webhook trigger node data so the canvas node can display it
+    useEffect(() => {
+        setNodes(nds => nds.map(n =>
+            n.type === 'webhook_trigger'
+                ? { ...n, data: { ...n.data, _armed: triggerArmed, _webhookPort: webhookPort } }
+                : n
+        ));
+    }, [triggerArmed, webhookPort, setNodes]);
+
+    // Load trigger state on mount
+    useEffect(() => {
+        if (!hasWebhookTrigger) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const { invoke } = await import('@tauri-apps/api/core');
+                const triggers = await invoke<{ id: string; enabled: boolean }[]>('list_triggers', {
+                    request: { workflowId: workflow.id },
+                });
+                if (cancelled) return;
+                if (triggers.length > 0) {
+                    setTriggerId(triggers[0].id);
+                    // Check if webhook server is running to determine armed status
+                    try {
+                        const status = await invoke<{ running: boolean; port: number }>('get_webhook_server_status');
+                        if (!cancelled) {
+                            setTriggerArmed(status.running && triggers[0].enabled);
+                            if (status.port) setWebhookPort(status.port);
+                        }
+                    } catch {
+                        if (!cancelled) setTriggerArmed(false);
+                    }
+                }
+            } catch {
+                // Not running under Tauri or IPC not available
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [workflow.id, hasWebhookTrigger]);
 
     const handleNameSubmit = useCallback(async () => {
         const trimmed = nameDraft.trim();
@@ -437,6 +485,108 @@ export function WorkflowCanvas({ workflow, onBack }: {
         await stopLiveWorkflow(workflow.id);
     }, [workflow.id, stopLiveWorkflow]);
 
+    const handleArmTrigger = useCallback(async () => {
+        setTriggerLoading(true);
+        try {
+            // Auto-save graph first
+            const graphJson = JSON.stringify({ nodes, edges, viewport: { x: 0, y: 0, zoom: 1 } });
+            await updateWorkflow(workflow.id, { graphJson });
+            setHasChanges(false);
+
+            const { invoke } = await import('@tauri-apps/api/core');
+
+            // Find webhook trigger node config
+            const triggerNode = nodes.find(n => n.type === 'webhook_trigger');
+            if (!triggerNode) return;
+            const nd = triggerNode.data;
+
+            let tid = triggerId;
+            if (!tid) {
+                // Create trigger
+                const result = await invoke<{ id: string }>('create_trigger', {
+                    request: {
+                        workflowId: workflow.id,
+                        triggerType: 'webhook',
+                        config: {
+                            path: (nd.path as string) || '',
+                            methods: (nd.methods as string[]) || ['POST'],
+                            auth_mode: (nd.authMode as string) || 'none',
+                            auth_token: (nd.authToken as string) || '',
+                            hmac_secret: (nd.hmacSecret as string) || '',
+                            response_mode: (nd.responseMode as string) || 'immediate',
+                            timeout_secs: (nd.timeoutSecs as number) ?? 30,
+                            max_per_minute: (nd.maxPerMinute as number) ?? 60,
+                        },
+                    },
+                });
+                tid = result.id;
+                setTriggerId(tid);
+            } else {
+                // Update trigger config
+                await invoke('update_trigger', {
+                    request: {
+                        triggerId: tid,
+                        config: {
+                            path: (nd.path as string) || '',
+                            methods: (nd.methods as string[]) || ['POST'],
+                            auth_mode: (nd.authMode as string) || 'none',
+                            auth_token: (nd.authToken as string) || '',
+                            hmac_secret: (nd.hmacSecret as string) || '',
+                            response_mode: (nd.responseMode as string) || 'immediate',
+                            timeout_secs: (nd.timeoutSecs as number) ?? 30,
+                            max_per_minute: (nd.maxPerMinute as number) ?? 60,
+                        },
+                    },
+                });
+            }
+
+            await invoke('arm_trigger', { triggerId: tid });
+            setTriggerArmed(true);
+
+            // Get actual port
+            try {
+                const status = await invoke<{ running: boolean; port: number }>('get_webhook_server_status');
+                if (status.port) setWebhookPort(status.port);
+            } catch { /* use default */ }
+
+            addToast('Webhook armed', 'success');
+        } catch (e) {
+            addToast(`Failed to arm: ${e}`, 'error');
+        } finally {
+            setTriggerLoading(false);
+        }
+    }, [nodes, edges, workflow.id, triggerId, updateWorkflow, addToast]);
+
+    const handleDisarmTrigger = useCallback(async () => {
+        if (!triggerId) return;
+        setTriggerLoading(true);
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            await invoke('disarm_trigger', { triggerId });
+            setTriggerArmed(false);
+            addToast('Webhook disarmed', 'success');
+        } catch (e) {
+            addToast(`Failed to disarm: ${e}`, 'error');
+        } finally {
+            setTriggerLoading(false);
+        }
+    }, [triggerId, addToast]);
+
+    const handleTestTrigger = useCallback(async () => {
+        if (!triggerId) {
+            addToast('Arm the webhook first', 'error');
+            return;
+        }
+        try {
+            const { invoke } = await import('@tauri-apps/api/core');
+            resetNodeStates();
+            await invoke('test_trigger', { triggerId });
+            addToast('Test webhook fired', 'success');
+        } catch (e) {
+            addToast(`Test failed: ${e}`, 'error');
+        }
+    }, [triggerId, addToast, resetNodeStates]);
+
     const handleSaveAsTemplate = useCallback(async () => {
         if (!templateName.trim()) return;
         try {
@@ -745,6 +895,41 @@ export function WorkflowCanvas({ workflow, onBack }: {
                             </div>
                         )}
                     </div>
+                    {hasWebhookTrigger && (
+                        <>
+                            <div className="toolbar-divider" />
+                            {triggerArmed ? (
+                                <button
+                                    className="btn-secondary text-green-400 border-green-500/40"
+                                    disabled={triggerLoading || workflowRunning}
+                                    onClick={handleDisarmTrigger}
+                                    title="Disarm webhook trigger"
+                                >
+                                    {triggerLoading ? <Loader2 size={14} className="animate-spin" /> : <ZapOff size={14} />}
+                                    Disarm
+                                </button>
+                            ) : (
+                                <button
+                                    className="btn-primary bg-amber-700 hover:bg-amber-600"
+                                    disabled={triggerLoading || workflowRunning}
+                                    onClick={handleArmTrigger}
+                                    title="Arm webhook trigger"
+                                >
+                                    {triggerLoading ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
+                                    Arm
+                                </button>
+                            )}
+                            <button
+                                className="btn-secondary"
+                                disabled={triggerLoading || !triggerArmed || workflowRunning}
+                                onClick={handleTestTrigger}
+                                title="Send test webhook"
+                            >
+                                <TestTube size={14} />
+                                Test
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 

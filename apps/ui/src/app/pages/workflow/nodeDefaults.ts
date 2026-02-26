@@ -41,6 +41,11 @@ export function defaultDataForType(type: string): Record<string, unknown> {
         case 'aggregator': return {
             label: '', strategy: 'array', separator: '\n',
         };
+        case 'webhook_trigger': return {
+            label: '', path: '', methods: ['POST'],
+            authMode: 'none', authToken: '', hmacSecret: '',
+            responseMode: 'immediate', timeoutSecs: 30, maxPerMinute: 60,
+        };
         default: return { label: '' };
     }
 }

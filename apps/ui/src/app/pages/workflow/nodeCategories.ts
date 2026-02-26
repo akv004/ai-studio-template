@@ -2,7 +2,7 @@ import {
     FileInput, FileOutput, Cpu, GitFork,
     Wrench, ShieldCheck, Repeat, MessageSquare,
     Globe, Terminal, CheckSquare, FolderOpen, Layers,
-    BookOpen, RefreshCw, LogOut,
+    BookOpen, RefreshCw, LogOut, Webhook,
 } from 'lucide-react';
 
 export interface NodeCategory {
@@ -11,6 +11,12 @@ export interface NodeCategory {
 }
 
 export const NODE_CATEGORIES: NodeCategory[] = [
+    {
+        label: 'Triggers',
+        types: [
+            { type: 'webhook_trigger', label: 'Webhook', icon: Webhook, description: 'HTTP webhook entry point' },
+        ],
+    },
     {
         label: 'Inputs / Outputs',
         types: [

@@ -2,7 +2,7 @@ export interface Trigger {
   id: string;
   workflowId: string;
   triggerType: 'webhook' | 'cron' | 'file_watch';
-  config: WebhookConfig;
+  config: Record<string, unknown>;
   enabled: boolean;
   lastFired: string | null;
   fireCount: number;

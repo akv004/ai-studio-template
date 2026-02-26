@@ -1,4 +1,4 @@
-import { Plus, Trash2, Check, X } from 'lucide-react';
+import { Plus, Trash2, Check, X, Copy } from 'lucide-react';
 import type { Node } from '@xyflow/react';
 import { useAppStore } from '../../../state/store';
 import { PROVIDER_MODELS } from './nodeColors';
@@ -652,6 +652,103 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                                 onChange={(e) => update('separator', e.target.value)}
                                 placeholder="\n" />
                         </label>
+                    )}
+                </>
+            )}
+
+            {type === 'webhook_trigger' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Path</span>
+                        <input className="config-input" value={(data.path as string) || ''}
+                            onChange={(e) => update('path', e.target.value)}
+                            placeholder="/my-webhook" />
+                    </label>
+                    <div className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Methods</span>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                            {['POST', 'GET', 'PUT', 'DELETE'].map((m) => {
+                                const methods = (data.methods as string[]) || ['POST'];
+                                const checked = methods.includes(m);
+                                return (
+                                    <label key={m} className="flex items-center gap-1 text-xs text-[var(--text-secondary)]">
+                                        <input type="checkbox" checked={checked}
+                                            onChange={() => {
+                                                const next = checked
+                                                    ? methods.filter((v) => v !== m)
+                                                    : [...methods, m];
+                                                if (next.length > 0) update('methods', next);
+                                            }} />
+                                        {m}
+                                    </label>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Auth Mode</span>
+                        <select className="config-input" value={(data.authMode as string) || 'none'}
+                            onChange={(e) => update('authMode', e.target.value)}>
+                            <option value="none">None</option>
+                            <option value="token">Bearer Token</option>
+                            <option value="hmac">HMAC-SHA256</option>
+                        </select>
+                    </label>
+                    {(data.authMode as string) === 'token' && (
+                        <label className="block">
+                            <span className="text-xs text-[var(--text-muted)]">Auth Token</span>
+                            <input type="password" className="config-input" value={(data.authToken as string) || ''}
+                                onChange={(e) => update('authToken', e.target.value)}
+                                placeholder="Bearer token value" />
+                        </label>
+                    )}
+                    {(data.authMode as string) === 'hmac' && (
+                        <label className="block">
+                            <span className="text-xs text-[var(--text-muted)]">HMAC Secret</span>
+                            <input type="password" className="config-input" value={(data.hmacSecret as string) || ''}
+                                onChange={(e) => update('hmacSecret', e.target.value)}
+                                placeholder="HMAC signing secret" />
+                        </label>
+                    )}
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Response Mode</span>
+                        <select className="config-input" value={(data.responseMode as string) || 'immediate'}
+                            onChange={(e) => update('responseMode', e.target.value)}>
+                            <option value="immediate">Immediate (202 Accepted)</option>
+                            <option value="wait">Wait (block until complete)</option>
+                        </select>
+                    </label>
+                    {(data.responseMode as string) === 'wait' && (
+                        <label className="block">
+                            <span className="text-xs text-[var(--text-muted)]">Timeout (seconds)</span>
+                            <input type="number" className="config-input"
+                                value={(data.timeoutSecs as number) ?? 30}
+                                onChange={(e) => update('timeoutSecs', parseInt(e.target.value) || 30)}
+                                min={1} max={300} />
+                        </label>
+                    )}
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Rate Limit (req/min)</span>
+                        <input type="number" className="config-input"
+                            value={(data.maxPerMinute as number) ?? 60}
+                            onChange={(e) => update('maxPerMinute', parseInt(e.target.value) || 60)}
+                            min={1} max={10000} />
+                    </label>
+                    {(data.path as string) && (
+                        <div className="pt-1">
+                            <span className="text-xs text-[var(--text-muted)]">Webhook URL</span>
+                            <div className="flex items-center gap-1 mt-1 px-2 py-1.5 rounded bg-[var(--bg-tertiary)] border border-[var(--border-subtle)]">
+                                <span className="text-[11px] font-mono text-[var(--text-secondary)] truncate flex-1">
+                                    http://localhost:{(data._webhookPort as number) || 9876}/hook/{(data.path as string).replace(/^\//, '')}
+                                </span>
+                                <button className="btn-icon shrink-0" title="Copy URL" onClick={async () => {
+                                    const url = `http://localhost:${(data._webhookPort as number) || 9876}/hook/${(data.path as string).replace(/^\//, '')}`;
+                                    try { await navigator.clipboard.writeText(url); } catch { /* ignore */ }
+                                }}>
+                                    <Copy size={12} />
+                                </button>
+                            </div>
+                        </div>
                     )}
                 </>
             )}

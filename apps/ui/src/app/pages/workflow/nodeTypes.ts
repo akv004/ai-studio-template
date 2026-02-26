@@ -18,6 +18,7 @@ import { AggregatorNode } from './nodes/AggregatorNode';
 import { KnowledgeBaseNode } from './nodes/KnowledgeBaseNode';
 import { LoopNode } from './nodes/LoopNode';
 import { ExitNode } from './nodes/ExitNode';
+import { WebhookTriggerNode } from './nodes/WebhookTriggerNode';
 
 export const customNodeTypes: NodeTypes = {
     input: InputNode,
@@ -39,4 +40,5 @@ export const customNodeTypes: NodeTypes = {
     knowledge_base: KnowledgeBaseNode,
     loop: LoopNode,
     exit: ExitNode,
+    webhook_trigger: WebhookTriggerNode,
 };

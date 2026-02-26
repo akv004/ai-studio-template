@@ -1,0 +1,14 @@
+{
+  "nodes": [
+    { "id": "webhook_1", "type": "webhook_trigger", "position": { "x": 50, "y": 150 }, "data": { "label": "Chat Endpoint", "path": "chat", "methods": ["POST"], "authMode": "none", "authToken": "", "hmacSecret": "", "responseMode": "wait", "timeoutSecs": 60, "maxPerMinute": 60 } },
+    { "id": "transform_1", "type": "transform", "position": { "x": 350, "y": 150 }, "data": { "label": "Extract Message", "mode": "jsonpath", "template": "$.message", "inputs": ["input"] } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 650, "y": 100 }, "data": { "label": "Assistant", "provider": "azure_openai", "model": "gpt-4o-mini", "systemPrompt": "You are a helpful assistant. Answer questions clearly and concisely.", "temperature": 0.2, "maxTokens": 4096, "sessionMode": "stateless", "streaming": true } },
+    { "id": "output_1", "type": "output", "position": { "x": 1000, "y": 150 }, "data": { "name": "response", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-webhook-transform", "source": "webhook_1", "target": "transform_1", "sourceHandle": "body", "targetHandle": "input", "type": "typed", "data": { "handleType": "json" } },
+    { "id": "e-transform-llm", "source": "transform_1", "target": "llm_1", "sourceHandle": "output", "targetHandle": "prompt", "type": "typed", "data": { "handleType": "text" } },
+    { "id": "e-llm-output", "source": "llm_1", "target": "output_1", "sourceHandle": "response", "targetHandle": "value", "type": "typed", "data": { "handleType": "text" } }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}

@@ -62,6 +62,9 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
         include_str!("../../templates/self-refine.json")),
     ("agentic-search", "Agentic Search", "Smart search loop — LLM plans queries, DuckDuckGo fetches results, Router evaluates if answer is sufficient, exits early or searches again (up to 5 rounds)",
         include_str!("../../templates/agentic-search.json")),
+    // Webhook triggers
+    ("webhook-chat-api", "Webhook Chat API", "Expose an LLM as an HTTP endpoint — POST a message, get a response back. Uses Wait mode so callers get the answer in the HTTP response.",
+        include_str!("../../templates/webhook-chat-api.json")),
 ];
 
 fn templates_directory() -> PathBuf {

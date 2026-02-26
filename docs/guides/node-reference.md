@@ -12,7 +12,7 @@ All nodes support custom labels — double-click the header to rename.
 
 **Type ID:** `webhook_trigger`
 
-Exposes an HTTP endpoint that starts a workflow run when a request arrives. Source-only node — no input handles.
+Turns your desktop app into an API server. Drop a Webhook node, arm it, and your machine starts listening for HTTP requests on a local port. When a request arrives, it triggers the workflow — no cloud, no deployment.
 
 **Output Handles**
 
@@ -27,7 +27,7 @@ Exposes an HTTP endpoint that starts a workflow run when a request arrives. Sour
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| Path | *(empty)* | URL path segment, e.g. `/my-hook` → `http://localhost:9876/hook/my-hook` |
+| Path | *(empty)* | URL path segment, e.g. `/chat` → `http://localhost:9876/hook/chat` |
 | Methods | POST | Which HTTP methods to accept (POST, GET, PUT, DELETE) |
 | Auth Mode | None | `None`, `Bearer Token`, or `HMAC-SHA256` |
 | Auth Token | — | Bearer token value (shown when Auth Mode = Bearer Token) |
@@ -44,9 +44,99 @@ When a Webhook node is on the canvas, the toolbar shows Arm / Disarm / Test butt
 - **Disarm** — Stops listening for requests. Status dot turns gray.
 - **Test** — Fires a mock request to trigger one execution (must be armed first).
 
-**Example**
+#### How It Works
 
-Connect `body` → LLM `prompt` to build a chatbot API, or connect `body` → Transform to extract fields from incoming webhooks.
+When you click **Arm**, AI Studio starts a local HTTP server inside your desktop app:
+
+```
+AI Studio Desktop App
+├── Main App (UI, workflows, inspector)
+└── Webhook Server (port 9876)       ← starts when you arm
+    └── /hook/chat                    ← your registered path
+```
+
+**The port** is `9876` by default (configurable in Settings → `webhook.port`). It binds to `127.0.0.1` (localhost only) — not exposed to the internet.
+
+#### Request Lifecycle
+
+When someone sends a request to your webhook:
+
+```
+curl -X POST http://localhost:9876/hook/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What is Kubernetes?"}'
+         │
+         ▼
+┌──────────────────────────────┐
+│  Webhook Server (:9876)      │
+│                              │
+│  1. Match route /hook/chat   │
+│  2. Check HTTP method: POST? │
+│  3. Check rate limit         │
+│  4. Validate auth (if set)   │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────────────┐
+│  Workflow Engine                     │
+│                                      │
+│  Webhook node outputs:               │
+│    body    = {"message": "What..."}  │
+│    headers = {content-type: ...}     │
+│    query   = {}                      │
+│    method  = "POST"                  │
+│         │                            │
+│         ▼                            │
+│  ... rest of your workflow runs ...  │
+│         │                            │
+│         ▼                            │
+│  Output node collects final result   │
+└──────────────┬───────────────────────┘
+               │
+               ▼
+┌──────────────────────────────────┐
+│  HTTP Response                   │
+│                                  │
+│  Wait mode → 200 OK + result    │
+│  Immediate → 202 Accepted       │
+└──────────────────────────────────┘
+```
+
+#### Two Response Modes
+
+**Immediate** (default) — The caller gets `202 Accepted` instantly with a run ID. The workflow runs in the background. Use this for long-running workflows where the caller doesn't need to wait.
+
+```json
+{ "runId": "abc-123", "status": "accepted", "output": null }
+```
+
+**Wait** — The HTTP connection stays open until the workflow finishes or times out. The caller gets the actual output back. This is what makes a **Chat API** possible — send a question, get an answer in the same HTTP response.
+
+```json
+{ "runId": "abc-123", "status": "completed", "output": "Kubernetes is..." }
+```
+
+#### Security Layers
+
+| Layer | What it does |
+|-------|-------------|
+| **Port binding** | Localhost only (127.0.0.1) — not accessible from the internet |
+| **Auth** | Bearer token or HMAC-SHA256 signature verification |
+| **Rate limit** | Token bucket per path — default 60 req/min, configurable |
+| **Timeout** | Wait mode kills execution after configurable seconds |
+
+#### Use Cases
+
+| Use Case | Workflow |
+|----------|---------|
+| **Chat API** | Webhook → Transform (extract .message) → LLM → Output |
+| **GitHub hooks** | Webhook → Router (by event type) → LLM summarize |
+| **Slack bot** | Webhook → Transform → LLM → HTTP Request (reply to Slack) |
+| **Form processor** | Webhook → Validator → LLM (extract fields) → File Write |
+| **CI/CD trigger** | Webhook → Approval → Shell Exec (deploy script) |
+| **RAG API** | Webhook → Knowledge Base → LLM → Output |
+
+To expose beyond localhost, use a reverse proxy or tunnel (ngrok, cloudflared).
 
 ---
 

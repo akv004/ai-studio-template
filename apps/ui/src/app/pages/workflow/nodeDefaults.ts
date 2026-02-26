@@ -56,6 +56,7 @@ export function defaultDataForType(type: string): Record<string, unknown> {
             label: '', expression: '0 9 * * *', timezone: 'UTC',
             staticInput: '{}', maxConcurrent: 1, catchUpPolicy: 'skip',
         };
+        case 'note': return { label: '', content: '' };
         default: return { label: '' };
     }
 }

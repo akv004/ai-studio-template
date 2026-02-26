@@ -65,6 +65,9 @@ pub const TEMPLATES: &[(&str, &str, &str, &str)] = &[
     // Webhook triggers
     ("webhook-chat-api", "Webhook Chat API", "Expose an LLM as an HTTP endpoint — POST a message, get a response back. Uses Wait mode so callers get the answer in the HTTP response.",
         include_str!("../../templates/webhook-chat-api.json")),
+    // Cron + Email
+    ("daily-meeting-digest", "Daily Meeting Digest", "Cron runs at 9 AM → reads meeting transcripts from folder → LLM summarizes decisions, action items, takeaways → emails digest to team",
+        include_str!("../../templates/daily-meeting-digest.json")),
 ];
 
 fn templates_directory() -> PathBuf {

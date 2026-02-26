@@ -22,6 +22,7 @@ export const nodeColors: Record<string, string> = {
     webhook_trigger: '#7a4a1a',
     cron_trigger: '#5a6a2a',
     email_send: '#6a2a2a',
+    note: '#6a6a3a',
 };
 
 export const PROVIDER_MODELS: Record<string, string[]> = {

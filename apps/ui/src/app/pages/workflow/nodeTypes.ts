@@ -21,6 +21,7 @@ import { ExitNode } from './nodes/ExitNode';
 import { WebhookTriggerNode } from './nodes/WebhookTriggerNode';
 import { CronTriggerNode } from './nodes/CronTriggerNode';
 import { EmailSendNode } from './nodes/EmailSendNode';
+import { NoteNode } from './nodes/NoteNode';
 
 export const customNodeTypes: NodeTypes = {
     input: InputNode,
@@ -45,4 +46,5 @@ export const customNodeTypes: NodeTypes = {
     webhook_trigger: WebhookTriggerNode,
     cron_trigger: CronTriggerNode,
     email_send: EmailSendNode,
+    note: NoteNode,
 };

@@ -1,0 +1,17 @@
+{
+  "nodes": [
+    { "id": "note_1", "type": "note", "position": { "x": 50, "y": 20 }, "data": { "label": "How This Works", "content": "Daily Meeting Digest\n\nThis workflow runs every morning at 9:00 AM and:\n1. Reads all .txt transcript files from ~/meetings/transcripts/\n2. Sends them to an LLM to extract decisions, action items, and key takeaways\n3. Emails the digest to your team\n\nSetup:\n- Create ~/meetings/transcripts/ and drop .txt files there\n- Configure the Email Send node with your SMTP server\n- Update the 'to' address in Email Send config panel\n- Arm the schedule using the clock button in the toolbar\n\nTo test without waiting for the cron schedule, just click Run." } },
+    { "id": "cron_1", "type": "cron_trigger", "position": { "x": 50, "y": 280 }, "data": { "label": "9 AM Daily", "expression": "0 9 * * *", "timezone": "UTC", "staticInput": "{}", "maxConcurrent": 1, "catchUpPolicy": "skip" } },
+    { "id": "glob_1", "type": "file_glob", "position": { "x": 50, "y": 450 }, "data": { "label": "Read Transcripts", "directory": "~/meetings/transcripts", "pattern": "*.txt", "mode": "text", "recursive": false, "maxFiles": 20, "maxSize": 10, "sortBy": "modified", "sortOrder": "desc" } },
+    { "id": "llm_1", "type": "llm", "position": { "x": 400, "y": 350 }, "data": { "label": "Summarizer", "provider": "azure_openai", "model": "gpt-4o-mini", "systemPrompt": "You are a meeting digest assistant. Given meeting transcripts, produce a clear daily digest with these sections:\n\n## Decisions Made\nBullet list of decisions reached\n\n## Action Items\nBullet list with owner and deadline if mentioned\n\n## Key Takeaways\n3-5 most important points across all meetings\n\n## Attendance Summary\nWho participated in which meetings\n\nBe concise. Use markdown formatting. If no transcripts are provided, say 'No meeting transcripts found for today.'", "temperature": 0.2, "maxTokens": 4096, "sessionMode": "stateless", "streaming": true } },
+    { "id": "email_1", "type": "email_send", "position": { "x": 750, "y": 350 }, "data": { "label": "Send Digest", "smtpHost": "localhost", "smtpPort": 1025, "encryption": "none", "smtpUser": "", "smtpPass": "", "fromAddress": "digest@myteam.local", "fromName": "Meeting Digest Bot", "to": "team@myteam.local", "subject": "Daily Meeting Digest", "body": "", "cc": "", "bcc": "", "replyTo": "", "bodyType": "plain" } },
+    { "id": "output_1", "type": "output", "position": { "x": 1050, "y": 350 }, "data": { "name": "result", "format": "text" } }
+  ],
+  "edges": [
+    { "id": "e-cron-llm", "source": "cron_1", "target": "llm_1", "sourceHandle": "timestamp", "targetHandle": "context" },
+    { "id": "e-glob-llm", "source": "glob_1", "target": "llm_1", "sourceHandle": "files", "targetHandle": "prompt" },
+    { "id": "e-llm-email-body", "source": "llm_1", "target": "email_1", "sourceHandle": "response", "targetHandle": "body" },
+    { "id": "e-email-output", "source": "email_1", "target": "output_1", "sourceHandle": "output", "targetHandle": "value" }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 0.85 }
+}

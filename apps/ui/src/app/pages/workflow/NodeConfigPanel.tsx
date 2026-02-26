@@ -939,6 +939,25 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                 </>
             )}
 
+            {type === 'note' && (
+                <>
+                    <label className="block">
+                        <span className="text-xs text-[var(--text-muted)]">Note Content</span>
+                        <textarea
+                            className="config-input font-mono"
+                            rows={12}
+                            value={(data.content as string) || ''}
+                            placeholder="Explain what this workflow does, how to configure it, prerequisites..."
+                            onChange={(e) => update('content', e.target.value)}
+                            style={{ minHeight: 200, resize: 'vertical' }}
+                        />
+                    </label>
+                    <p className="text-[10px] text-[var(--text-muted)]">
+                        This node is for documentation only — it is not connected to the workflow and does not execute.
+                    </p>
+                </>
+            )}
+
             {/* Last run output */}
             {nodeState && nodeState.status === 'completed' && nodeState.output && (
                 <div className="pt-2 border-t border-[var(--border-subtle)]">

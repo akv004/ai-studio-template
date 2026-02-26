@@ -2,7 +2,7 @@ import {
     FileInput, FileOutput, Cpu, GitFork,
     Wrench, ShieldCheck, Repeat, MessageSquare,
     Globe, Terminal, CheckSquare, FolderOpen, Layers,
-    BookOpen, RefreshCw, LogOut, Webhook, Mail, Clock,
+    BookOpen, RefreshCw, LogOut, Webhook, Mail, Clock, StickyNote,
 } from 'lucide-react';
 
 export interface NodeCategory {
@@ -71,6 +71,12 @@ export const NODE_CATEGORIES: NodeCategory[] = [
         label: 'Composition',
         types: [
             { type: 'subworkflow', label: 'Subworkflow', icon: MessageSquare, description: 'Embed another workflow' },
+        ],
+    },
+    {
+        label: 'Utility',
+        types: [
+            { type: 'note', label: 'Note', icon: StickyNote, description: 'Documentation note — explain your workflow' },
         ],
     },
 ];

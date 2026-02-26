@@ -151,9 +151,10 @@ pub fn validate_graph_json(graph_json: &str) -> Result<ValidationResult, String>
         errors.push("Only one Cron Trigger node is allowed per workflow".to_string());
     }
 
-    // Check for orphan nodes
+    // Check for orphan nodes (skip note nodes — they are documentation-only)
     for id in &node_ids {
         let ntype = node_types.get(id).map(|s| s.as_str()).unwrap_or("");
+        if ntype == "note" { continue; }
         if !connected_nodes.contains(id) && nodes.len() > 1 {
             if ntype == "input" || ntype == "output" {
                 warnings.push(format!("Node '{}' ({}) has no connections", id, ntype));
@@ -410,6 +411,18 @@ mod tests {
         );
         let result = validate_graph_json(&graph).unwrap();
         assert!(result.valid, "cron + webhook should coexist. errors: {:?}", result.errors);
+    }
+
+    #[test]
+    fn test_note_node_no_orphan_warning() {
+        let graph = make_graph(
+            &[("in1", "input"), ("llm1", "llm"), ("out1", "output"), ("note1", "note")],
+            &[("in1", "llm1"), ("llm1", "out1")],
+        );
+        let result = validate_graph_json(&graph).unwrap();
+        assert!(result.valid, "errors: {:?}", result.errors);
+        assert!(!result.warnings.iter().any(|w| w.contains("note1")),
+            "note node should not produce orphan warning, got: {:?}", result.warnings);
     }
 
     #[test]

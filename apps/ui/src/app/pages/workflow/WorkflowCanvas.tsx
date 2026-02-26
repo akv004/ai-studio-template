@@ -779,11 +779,11 @@ export function WorkflowCanvas({ workflow, onBack }: {
                     <span className="px-2 py-0.5 rounded bg-[var(--bg-tertiary)] text-xs text-[var(--text-muted)] mr-1">
                         {nodes.length} nodes
                     </span>
-                    {/* File cluster */}
-                    <button className="btn-icon btn-secondary" onClick={handleSave} disabled={saving || !hasChanges} title={hasChanges ? 'Save (Ctrl+S)' : 'No changes'}>
-                        {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    <div className="toolbar-divider mx-1 h-5 border-l border-[var(--border-subtle)]" />
+                    <button className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 transition-colors" onClick={handleSave} disabled={saving || !hasChanges} title={hasChanges ? "Save (Ctrl+S)" : "Saved"}>
+                        {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                     </button>
-                    <button className="btn-icon btn-secondary" title="Export as JSON" onClick={async () => {
+                    <button className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors" title="Export workflow as JSON" onClick={async () => {
                         const graph = JSON.stringify({ nodes, edges, viewport: { x: 0, y: 0, zoom: 1 } }, null, 2);
                         try {
                             const { save } = await import('@tauri-apps/plugin-dialog');
@@ -807,51 +807,49 @@ export function WorkflowCanvas({ workflow, onBack }: {
                             URL.revokeObjectURL(url);
                         }
                     }}>
-                        <Download size={14} />
+                        <Download size={16} />
                     </button>
-                    <button className="btn-icon btn-secondary" title="Save as template" onClick={() => {
+                    <button className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors" title="Save as template" onClick={() => {
                         setTemplateName(workflow.name);
                         setTemplateDesc(workflow.description || '');
                         setShowSaveTemplate(true);
                     }}>
-                        <BookmarkPlus size={14} />
+                        <BookmarkPlus size={16} />
                     </button>
-                    <div className="toolbar-divider" />
-                    {/* Execute cluster */}
+                    <div className="toolbar-divider mx-1 h-5 border-l border-[var(--border-subtle)]" />
                     <button
-                        className="btn-primary"
+                        className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 transition-colors"
                         disabled={workflowRunning || liveMode || nodes.length === 0}
                         onClick={handleRunClick}
-                        title={workflowRunning ? 'Running...' : 'Run workflow'}
+                        title={workflowRunning ? 'Running...' : 'Run once (dev)'}
                     >
-                        {workflowRunning ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-                        Run
+                        {workflowRunning ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} />}
                     </button>
                     {liveMode ? (
                         <button
-                            className="btn-icon btn-secondary text-red-400 hover:text-red-300"
+                            className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-red-500 hover:text-red-400 transition-colors mx-1"
                             onClick={handleStopLive}
                             title="Stop live workflow"
                         >
-                            <Square size={14} />
+                            <Square size={16} />
                         </button>
                     ) : (
                         <button
-                            className="btn-icon btn-secondary"
+                            className="p-1.5 rounded bg-[var(--accent-primary)] hover:bg-[var(--accent-hover)] text-white disabled:opacity-50 transition-colors mx-1"
                             disabled={workflowRunning || nodes.length === 0}
                             onClick={handleGoLive}
                             title="Go Live (continuous execution)"
                         >
-                            <Radio size={14} />
+                            <Radio size={16} />
                         </button>
                     )}
                     <div className="relative">
                         <button
-                            className="btn-icon btn-secondary"
+                            className={`p-1.5 rounded hover:bg-[var(--bg-tertiary)] transition-colors ${showLiveSettings ? 'text-[var(--text-primary)] bg-[var(--bg-tertiary)]' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}`}
                             onClick={() => setShowLiveSettings(!showLiveSettings)}
                             title="Live settings"
                         >
-                            <Settings2 size={14} />
+                            <Settings2 size={16} />
                         </button>
                         {showLiveSettings && (
                             <div
@@ -900,26 +898,24 @@ export function WorkflowCanvas({ workflow, onBack }: {
                     </div>
                     {hasWebhookTrigger && (
                         <>
-                            <div className="toolbar-divider" />
+                            <div className="toolbar-divider mx-1 h-5 border-l border-[var(--border-subtle)]" />
                             {triggerArmed ? (
                                 <button
-                                    className="btn-secondary text-green-400 border-green-500/40"
+                                    className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-red-500 hover:text-red-400 disabled:opacity-50 transition-colors"
                                     disabled={triggerLoading || workflowRunning}
                                     onClick={handleDisarmTrigger}
-                                    title="Stop webhook server"
+                                    title="Disarm endpoint"
                                 >
-                                    {triggerLoading ? <Loader2 size={14} className="animate-spin" /> : <Square size={14} />}
-                                    Stop
+                                    {triggerLoading ? <Loader2 size={16} className="animate-spin" /> : <Square size={16} />}
                                 </button>
                             ) : (
                                 <button
-                                    className="btn-primary bg-amber-700 hover:bg-amber-600"
+                                    className="p-1.5 rounded hover:bg-[var(--bg-tertiary)] text-yellow-500 hover:text-yellow-400 disabled:opacity-50 transition-colors"
                                     disabled={triggerLoading || workflowRunning}
                                     onClick={handleArmTrigger}
-                                    title="Start webhook server"
+                                    title="Arm webhook endpoint"
                                 >
-                                    {triggerLoading ? <Loader2 size={14} className="animate-spin" /> : <Zap size={14} />}
-                                    Start
+                                    {triggerLoading ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
                                 </button>
                             )}
                         </>
@@ -927,339 +923,339 @@ export function WorkflowCanvas({ workflow, onBack }: {
                 </div>
             </div>
 
-                {lastRunResult && !lastRunDebug && (
-                    <div className="mx-4 mt-3 p-3 rounded border border-green-500/60 bg-green-950/20">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-2">
-                                <Check size={16} className="text-green-400" />
-                                <span className="text-sm font-medium text-green-300">Workflow completed</span>
-                                <span className="text-xs text-[var(--text-muted)]">
-                                    {(lastRunResult.durationMs / 1000).toFixed(1)}s &middot; {lastRunResult.tokens} tokens &middot; {lastRunResult.nodeCount} nodes
-                                </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <button className="btn-secondary" onClick={() => openInspector(lastRunResult.sessionId)}>
-                                    Open Inspector
-                                </button>
-                                <button className="btn-icon" onClick={() => setLastRunResult(null)} title="Dismiss">
-                                    <X size={14} />
-                                </button>
-                            </div>
+            {lastRunResult && !lastRunDebug && (
+                <div className="mx-4 mt-3 p-3 rounded border border-green-500/60 bg-green-950/20">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                            <Check size={16} className="text-green-400" />
+                            <span className="text-sm font-medium text-green-300">Workflow completed</span>
+                            <span className="text-xs text-[var(--text-muted)]">
+                                {(lastRunResult.durationMs / 1000).toFixed(1)}s &middot; {lastRunResult.tokens} tokens &middot; {lastRunResult.nodeCount} nodes
+                            </span>
                         </div>
-                        {Object.entries(lastRunResult.outputs).map(([key, value]) => {
-                            const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
-                            return (
-                                <div key={key} className="mt-2">
-                                    <RichOutput content={text} />
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {lastRunDebug && (
-                    <div className="mx-4 mt-3 p-3 rounded border border-red-500/60 bg-red-950/20">
-                        <div className="flex items-center justify-between gap-3 mb-2">
-                            <div className="text-sm font-medium text-red-300">
-                                Last workflow run failed
-                            </div>
-                            <button className="btn-icon" onClick={() => setLastRunDebug(null)} title="Dismiss">
+                        <div className="flex items-center gap-2">
+                            <button className="btn-secondary" onClick={() => openInspector(lastRunResult.sessionId)}>
+                                Open Inspector
+                            </button>
+                            <button className="btn-icon" onClick={() => setLastRunResult(null)} title="Dismiss">
                                 <X size={14} />
                             </button>
                         </div>
-                        <div className="text-xs font-mono text-red-200 whitespace-pre-wrap break-words">
-                            {lastRunDebug.error}
+                    </div>
+                    {Object.entries(lastRunResult.outputs).map(([key, value]) => {
+                        const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+                        return (
+                            <div key={key} className="mt-2">
+                                <RichOutput content={text} />
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {lastRunDebug && (
+                <div className="mx-4 mt-3 p-3 rounded border border-red-500/60 bg-red-950/20">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                        <div className="text-sm font-medium text-red-300">
+                            Last workflow run failed
                         </div>
-                        <div className="text-[11px] text-[var(--text-muted)] mt-2 font-mono break-all">
-                            Session: {lastRunDebug.sessionId || 'n/a'}
-                        </div>
-                        <div className="flex items-center gap-2 mt-3">
-                            <button className="btn-secondary" onClick={handleCopyDebugLog}>
-                                <Copy size={14} />
-                                Copy Debug Log
+                        <button className="btn-icon" onClick={() => setLastRunDebug(null)} title="Dismiss">
+                            <X size={14} />
+                        </button>
+                    </div>
+                    <div className="text-xs font-mono text-red-200 whitespace-pre-wrap break-words">
+                        {lastRunDebug.error}
+                    </div>
+                    <div className="text-[11px] text-[var(--text-muted)] mt-2 font-mono break-all">
+                        Session: {lastRunDebug.sessionId || 'n/a'}
+                    </div>
+                    <div className="flex items-center gap-2 mt-3">
+                        <button className="btn-secondary" onClick={handleCopyDebugLog}>
+                            <Copy size={14} />
+                            Copy Debug Log
+                        </button>
+                        {lastRunDebug.sessionId && (
+                            <button className="btn-secondary" onClick={() => openInspector(lastRunDebug.sessionId as string)}>
+                                Open Inspector
                             </button>
-                            {lastRunDebug.sessionId && (
-                                <button className="btn-secondary" onClick={() => openInspector(lastRunDebug.sessionId as string)}>
-                                    Open Inspector
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                )}
-
-                {/* Main editor area */}
-                <div className="flex flex-1 min-h-0">
-                    {/* Node Palette */}
-                    <div className="w-48 border-r border-[var(--border-subtle)] bg-[var(--bg-secondary)] overflow-y-auto">
-                        <div className="p-2">
-                            <div className="text-xs font-semibold text-[var(--text-muted)] uppercase px-2 py-1">
-                                Node Palette
-                            </div>
-                            {NODE_CATEGORIES.map((cat) => (
-                                <div key={cat.label} className="mb-2">
-                                    <div className="text-[10px] text-[var(--text-muted)] uppercase px-2 py-1 mt-1">
-                                        {cat.label}
-                                    </div>
-                                    {cat.types.map((t) => (
-                                        <div
-                                            key={t.type}
-                                            className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-grab hover:bg-[var(--bg-tertiary)] text-sm ${pendingNodeType === t.type ? 'ring-1 ring-[var(--accent-primary)] bg-[var(--bg-tertiary)]' : ''}`}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('application/reactflow', t.type);
-                                                e.dataTransfer.effectAllowed = 'move';
-                                            }}
-                                            onClick={() => setPendingNodeType(pendingNodeType === t.type ? null : t.type)}
-                                        >
-                                            <div className="w-3 h-3 rounded-sm shadow-sm shrink-0" style={{ background: nodeColors[t.type] }} />
-                                            <span className="truncate select-none">{t.label}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* React Flow Canvas */}
-                    <div className={`flex-1 ${pendingNodeType ? 'cursor-crosshair' : ''}`} ref={reactFlowRef}>
-                        <ReactFlow
-                            nodes={nodes}
-                            edges={edges}
-                            onNodesChange={onNodesChange}
-                            onEdgesChange={onEdgesChange}
-                            onConnect={onConnect}
-                            isValidConnection={isValidConnection}
-                            onNodeClick={onNodeClick}
-                            onPaneClick={onPaneClick}
-                            onInit={(instance) => { rfInstanceRef.current = instance; }}
-                            onNodeContextMenu={(e, node) => {
-                                e.preventDefault();
-                                setSelectedNodeId(node.id);
-                                setContextMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
-                            }}
-                            onPaneContextMenu={(e) => {
-                                e.preventDefault();
-                                setContextMenu({ x: e.clientX, y: e.clientY });
-                            }}
-                            onDragOver={onDragOver}
-                            onDrop={onDrop}
-                            nodeTypes={customNodeTypes}
-                            edgeTypes={edgeTypes}
-                            connectionLineComponent={TypedConnectionLine}
-                            defaultEdgeOptions={{ type: 'typed', animated: false }}
-                            defaultViewport={initialGraph.viewport}
-                            fitView
-                            deleteKeyCode={null}
-                            className="bg-[var(--bg-primary)]"
-                        >
-                            <Background color="var(--border-subtle)" gap={20} />
-                            <Controls className="react-flow-controls" />
-                            <MiniMap
-                                nodeColor={(n) => nodeColors[n.type || 'input'] || '#666'}
-                                maskColor="rgba(0,0,0,0.6)"
-                                className="react-flow-minimap"
-                            />
-                            {pendingNodeType && (
-                                <Panel position="top-center">
-                                    <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-blue-600/90 text-white text-xs mt-2">
-                                        <div className="w-2.5 h-2.5 rounded-sm" style={{ background: nodeColors[pendingNodeType] }} />
-                                        Click on canvas to place {pendingNodeType} node
-                                        <button className="ml-1 hover:text-blue-200" onClick={() => setPendingNodeType(null)}>
-                                            <X className="w-3 h-3" />
-                                        </button>
-                                    </div>
-                                </Panel>
-                            )}
-                            {nodes.length === 0 && !pendingNodeType && (
-                                <Panel position="top-center">
-                                    <div className="text-sm text-[var(--text-muted)] mt-20 text-center">
-                                        Drag or click nodes from the palette, then click on canvas to place
-                                    </div>
-                                </Panel>
-                            )}
-                        </ReactFlow>
-
-                        {/* Context Menu */}
-                        {contextMenu && (
-                            <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}
-                                onClick={() => setContextMenu(null)}>
-                                {contextMenu.nodeId ? (
-                                    <>
-                                        <div className="context-menu-item" onClick={() => { if (contextMenu.nodeId) duplicateNode(contextMenu.nodeId); }}>
-                                            Duplicate <span className="shortcut">Ctrl+D</span>
-                                        </div>
-                                        <div className="context-menu-item" onClick={() => { if (contextMenu.nodeId) disconnectNode(contextMenu.nodeId); }}>
-                                            Disconnect All
-                                        </div>
-                                        <div className="context-menu-divider" />
-                                        <div className="context-menu-item" onClick={handleDeleteNode}>
-                                            Delete <span className="shortcut">Del</span>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        {NODE_CATEGORIES.flatMap((cat) => cat.types).map((t) => (
-                                            <div key={t.type} className="context-menu-item" onClick={() => {
-                                                const position = rfInstanceRef.current
-                                                    ? rfInstanceRef.current.screenToFlowPosition({ x: contextMenu.x, y: contextMenu.y })
-                                                    : { x: contextMenu.x, y: contextMenu.y };
-                                                const newNode: Node = {
-                                                    id: generateNodeId(t.type),
-                                                    type: t.type,
-                                                    position,
-                                                    data: defaultDataForType(t.type),
-                                                };
-                                                setNodes((nds) => [...nds, newNode]);
-                                            }}>
-                                                Add {t.label}
-                                            </div>
-                                        ))}
-                                        <div className="context-menu-divider" />
-                                        <div className="context-menu-item" onClick={() => setNodes((nds) => nds.map((n) => ({ ...n, selected: true })))}>
-                                            Select All <span className="shortcut">Ctrl+A</span>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
                         )}
                     </div>
+                </div>
+            )}
 
-                    {/* Config Panel (right sidebar) */}
-                    {selectedNode && (
-                        <div className="w-64 border-l border-[var(--border-subtle)] bg-[var(--bg-secondary)] overflow-y-auto">
-                            <NodeConfigPanel
-                                node={selectedNode}
-                                onChange={handleNodeDataChange}
-                                onDelete={handleDeleteNode}
-                            />
+            {/* Main editor area */}
+            <div className="flex flex-1 min-h-0">
+                {/* Node Palette */}
+                <div className="w-48 border-r border-[var(--border-subtle)] bg-[var(--bg-secondary)] overflow-y-auto">
+                    <div className="p-2">
+                        <div className="text-xs font-semibold text-[var(--text-muted)] uppercase px-2 py-1">
+                            Node Palette
+                        </div>
+                        {NODE_CATEGORIES.map((cat) => (
+                            <div key={cat.label} className="mb-2">
+                                <div className="text-[10px] text-[var(--text-muted)] uppercase px-2 py-1 mt-1">
+                                    {cat.label}
+                                </div>
+                                {cat.types.map((t) => (
+                                    <div
+                                        key={t.type}
+                                        className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-grab hover:bg-[var(--bg-tertiary)] text-sm ${pendingNodeType === t.type ? 'ring-1 ring-[var(--accent-primary)] bg-[var(--bg-tertiary)]' : ''}`}
+                                        draggable
+                                        onDragStart={(e) => {
+                                            e.dataTransfer.setData('application/reactflow', t.type);
+                                            e.dataTransfer.effectAllowed = 'move';
+                                        }}
+                                        onClick={() => setPendingNodeType(pendingNodeType === t.type ? null : t.type)}
+                                    >
+                                        <div className="w-3 h-3 rounded-sm shadow-sm shrink-0" style={{ background: nodeColors[t.type] }} />
+                                        <span className="truncate select-none">{t.label}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* React Flow Canvas */}
+                <div className={`flex-1 ${pendingNodeType ? 'cursor-crosshair' : ''}`} ref={reactFlowRef}>
+                    <ReactFlow
+                        nodes={nodes}
+                        edges={edges}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onConnect={onConnect}
+                        isValidConnection={isValidConnection}
+                        onNodeClick={onNodeClick}
+                        onPaneClick={onPaneClick}
+                        onInit={(instance) => { rfInstanceRef.current = instance; }}
+                        onNodeContextMenu={(e, node) => {
+                            e.preventDefault();
+                            setSelectedNodeId(node.id);
+                            setContextMenu({ x: e.clientX, y: e.clientY, nodeId: node.id });
+                        }}
+                        onPaneContextMenu={(e) => {
+                            e.preventDefault();
+                            setContextMenu({ x: e.clientX, y: e.clientY });
+                        }}
+                        onDragOver={onDragOver}
+                        onDrop={onDrop}
+                        nodeTypes={customNodeTypes}
+                        edgeTypes={edgeTypes}
+                        connectionLineComponent={TypedConnectionLine}
+                        defaultEdgeOptions={{ type: 'typed', animated: false }}
+                        defaultViewport={initialGraph.viewport}
+                        fitView
+                        deleteKeyCode={null}
+                        className="bg-[var(--bg-primary)]"
+                    >
+                        <Background color="var(--border-subtle)" gap={20} />
+                        <Controls className="react-flow-controls" />
+                        <MiniMap
+                            nodeColor={(n) => nodeColors[n.type || 'input'] || '#666'}
+                            maskColor="rgba(0,0,0,0.6)"
+                            className="react-flow-minimap"
+                        />
+                        {pendingNodeType && (
+                            <Panel position="top-center">
+                                <div className="flex items-center gap-2 px-3 py-1.5 rounded bg-blue-600/90 text-white text-xs mt-2">
+                                    <div className="w-2.5 h-2.5 rounded-sm" style={{ background: nodeColors[pendingNodeType] }} />
+                                    Click on canvas to place {pendingNodeType} node
+                                    <button className="ml-1 hover:text-blue-200" onClick={() => setPendingNodeType(null)}>
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            </Panel>
+                        )}
+                        {nodes.length === 0 && !pendingNodeType && (
+                            <Panel position="top-center">
+                                <div className="text-sm text-[var(--text-muted)] mt-20 text-center">
+                                    Drag or click nodes from the palette, then click on canvas to place
+                                </div>
+                            </Panel>
+                        )}
+                    </ReactFlow>
+
+                    {/* Context Menu */}
+                    {contextMenu && (
+                        <div className="context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}
+                            onClick={() => setContextMenu(null)}>
+                            {contextMenu.nodeId ? (
+                                <>
+                                    <div className="context-menu-item" onClick={() => { if (contextMenu.nodeId) duplicateNode(contextMenu.nodeId); }}>
+                                        Duplicate <span className="shortcut">Ctrl+D</span>
+                                    </div>
+                                    <div className="context-menu-item" onClick={() => { if (contextMenu.nodeId) disconnectNode(contextMenu.nodeId); }}>
+                                        Disconnect All
+                                    </div>
+                                    <div className="context-menu-divider" />
+                                    <div className="context-menu-item" onClick={handleDeleteNode}>
+                                        Delete <span className="shortcut">Del</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    {NODE_CATEGORIES.flatMap((cat) => cat.types).map((t) => (
+                                        <div key={t.type} className="context-menu-item" onClick={() => {
+                                            const position = rfInstanceRef.current
+                                                ? rfInstanceRef.current.screenToFlowPosition({ x: contextMenu.x, y: contextMenu.y })
+                                                : { x: contextMenu.x, y: contextMenu.y };
+                                            const newNode: Node = {
+                                                id: generateNodeId(t.type),
+                                                type: t.type,
+                                                position,
+                                                data: defaultDataForType(t.type),
+                                            };
+                                            setNodes((nds) => [...nds, newNode]);
+                                        }}>
+                                            Add {t.label}
+                                        </div>
+                                    ))}
+                                    <div className="context-menu-divider" />
+                                    <div className="context-menu-item" onClick={() => setNodes((nds) => nds.map((n) => ({ ...n, selected: true })))}>
+                                        Select All <span className="shortcut">Ctrl+A</span>
+                                    </div>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
 
-                {/* Live Feed Panel */}
-                {(liveMode || liveFeedItems.length > 0) && <LiveFeedPanel />}
-
-                {/* Run Input Modal */}
-                {showRunModal && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowRunModal(false)}>
-                        <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-6 w-[420px] max-h-[80vh] overflow-y-auto"
-                            onClick={(e) => e.stopPropagation()}>
-                            <h2 className="text-lg font-semibold mb-4">Run Workflow</h2>
-                            {Object.keys(runInputs).length === 0 ? (
-                                <p className="text-sm text-[var(--text-muted)] mb-4">
-                                    This workflow has no Input nodes. It will run with no inputs.
-                                </p>
-                            ) : (
-                                <div className="space-y-3 mb-4">
-                                    {Object.entries(runInputs).map(([name, value]) => {
-                                        const inputNode = nodes.find((n) => n.type === 'input' && (n.data.name as string) === name);
-                                        const dataType = (inputNode?.data.dataType as string) || 'text';
-                                        return (
-                                            <label key={name} className="block">
-                                                <span className="text-xs text-[var(--text-muted)] uppercase">{name}</span>
-                                                {dataType === 'boolean' ? (
-                                                    <div className="mt-1">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={Boolean(value)}
-                                                            onChange={(e) => setRunInputs((prev) => ({ ...prev, [name]: e.target.checked }))}
-                                                        />
-                                                    </div>
-                                                ) : dataType === 'json' ? (
-                                                    <textarea
-                                                        className="config-input min-h-[80px] font-mono text-xs"
-                                                        value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
-                                                        onChange={(e) => setRunInputs((prev) => ({ ...prev, [name]: e.target.value }))}
-                                                        placeholder='{"key": "value"}'
-                                                    />
-                                                ) : (
-                                                    <input
-                                                        className="config-input"
-                                                        value={String(value ?? '')}
-                                                        onChange={(e) => setRunInputs((prev) => ({ ...prev, [name]: e.target.value }))}
-                                                        placeholder={`Enter ${name}...`}
-                                                    />
-                                                )}
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                            )}
-                            <div className="flex justify-end gap-2">
-                                <button className="btn-secondary" onClick={() => setShowRunModal(false)}>Cancel</button>
-                                <button className="btn-primary" onClick={handleRunSubmit}>
-                                    <Play size={14} /> Run
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Save as Template Modal */}
-                {showSaveTemplate && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowSaveTemplate(false)}>
-                        <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-6 w-[420px]"
-                            onClick={(e) => e.stopPropagation()}>
-                            <h2 className="text-lg font-semibold mb-4">Save as Template</h2>
-                            <div className="space-y-3 mb-4">
-                                <label className="block">
-                                    <span className="text-xs text-[var(--text-muted)] uppercase">Name</span>
-                                    <input
-                                        className="config-input"
-                                        value={templateName}
-                                        onChange={(e) => setTemplateName(e.target.value)}
-                                        placeholder="My Pipeline"
-                                        autoFocus
-                                    />
-                                </label>
-                                <label className="block">
-                                    <span className="text-xs text-[var(--text-muted)] uppercase">Description</span>
-                                    <input
-                                        className="config-input"
-                                        value={templateDesc}
-                                        onChange={(e) => setTemplateDesc(e.target.value)}
-                                        placeholder="What this template does..."
-                                    />
-                                </label>
-                            </div>
-                            <div className="text-xs text-[var(--text-muted)] mb-4">
-                                {nodes.length} nodes will be saved. Template will appear in the Templates dropdown.
-                            </div>
-                            <div className="flex justify-end gap-2">
-                                <button className="btn-secondary" onClick={() => setShowSaveTemplate(false)}>Cancel</button>
-                                <button className="btn-primary" onClick={handleSaveAsTemplate} disabled={!templateName.trim()}>
-                                    <BookmarkPlus size={14} /> Save Template
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Approval Dialog */}
-                {approvalRequest && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-                        <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-6 w-[420px]">
-                            <div className="flex items-center gap-2 mb-3">
-                                <ShieldCheck size={20} className="text-yellow-400" />
-                                <h2 className="text-lg font-semibold">Approval Required</h2>
-                            </div>
-                            <p className="text-sm mb-3">{approvalRequest.message}</p>
-                            {approvalRequest.dataPreview && (
-                                <pre className="text-xs bg-[var(--bg-tertiary)] p-3 rounded mb-4 overflow-auto max-h-[200px] font-mono">
-                                    {approvalRequest.dataPreview}
-                                </pre>
-                            )}
-                            <div className="flex justify-end gap-2">
-                                <button className="btn-secondary" onClick={() => handleApprovalDecision(false)}>
-                                    <X size={14} /> Reject
-                                </button>
-                                <button className="btn-primary" onClick={() => handleApprovalDecision(true)}>
-                                    <Check size={14} /> Approve
-                                </button>
-                            </div>
-                        </div>
+                {/* Config Panel (right sidebar) */}
+                {selectedNode && (
+                    <div className="w-64 border-l border-[var(--border-subtle)] bg-[var(--bg-secondary)] overflow-y-auto">
+                        <NodeConfigPanel
+                            node={selectedNode}
+                            onChange={handleNodeDataChange}
+                            onDelete={handleDeleteNode}
+                        />
                     </div>
                 )}
             </div>
-            );
+
+            {/* Live Feed Panel */}
+            {(liveMode || liveFeedItems.length > 0) && <LiveFeedPanel />}
+
+            {/* Run Input Modal */}
+            {showRunModal && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowRunModal(false)}>
+                    <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-6 w-[420px] max-h-[80vh] overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}>
+                        <h2 className="text-lg font-semibold mb-4">Run Workflow</h2>
+                        {Object.keys(runInputs).length === 0 ? (
+                            <p className="text-sm text-[var(--text-muted)] mb-4">
+                                This workflow has no Input nodes. It will run with no inputs.
+                            </p>
+                        ) : (
+                            <div className="space-y-3 mb-4">
+                                {Object.entries(runInputs).map(([name, value]) => {
+                                    const inputNode = nodes.find((n) => n.type === 'input' && (n.data.name as string) === name);
+                                    const dataType = (inputNode?.data.dataType as string) || 'text';
+                                    return (
+                                        <label key={name} className="block">
+                                            <span className="text-xs text-[var(--text-muted)] uppercase">{name}</span>
+                                            {dataType === 'boolean' ? (
+                                                <div className="mt-1">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(value)}
+                                                        onChange={(e) => setRunInputs((prev) => ({ ...prev, [name]: e.target.checked }))}
+                                                    />
+                                                </div>
+                                            ) : dataType === 'json' ? (
+                                                <textarea
+                                                    className="config-input min-h-[80px] font-mono text-xs"
+                                                    value={typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
+                                                    onChange={(e) => setRunInputs((prev) => ({ ...prev, [name]: e.target.value }))}
+                                                    placeholder='{"key": "value"}'
+                                                />
+                                            ) : (
+                                                <input
+                                                    className="config-input"
+                                                    value={String(value ?? '')}
+                                                    onChange={(e) => setRunInputs((prev) => ({ ...prev, [name]: e.target.value }))}
+                                                    placeholder={`Enter ${name}...`}
+                                                />
+                                            )}
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <div className="flex justify-end gap-2">
+                            <button className="btn-secondary" onClick={() => setShowRunModal(false)}>Cancel</button>
+                            <button className="btn-primary" onClick={handleRunSubmit}>
+                                <Play size={14} /> Run
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Save as Template Modal */}
+            {showSaveTemplate && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowSaveTemplate(false)}>
+                    <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-6 w-[420px]"
+                        onClick={(e) => e.stopPropagation()}>
+                        <h2 className="text-lg font-semibold mb-4">Save as Template</h2>
+                        <div className="space-y-3 mb-4">
+                            <label className="block">
+                                <span className="text-xs text-[var(--text-muted)] uppercase">Name</span>
+                                <input
+                                    className="config-input"
+                                    value={templateName}
+                                    onChange={(e) => setTemplateName(e.target.value)}
+                                    placeholder="My Pipeline"
+                                    autoFocus
+                                />
+                            </label>
+                            <label className="block">
+                                <span className="text-xs text-[var(--text-muted)] uppercase">Description</span>
+                                <input
+                                    className="config-input"
+                                    value={templateDesc}
+                                    onChange={(e) => setTemplateDesc(e.target.value)}
+                                    placeholder="What this template does..."
+                                />
+                            </label>
+                        </div>
+                        <div className="text-xs text-[var(--text-muted)] mb-4">
+                            {nodes.length} nodes will be saved. Template will appear in the Templates dropdown.
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <button className="btn-secondary" onClick={() => setShowSaveTemplate(false)}>Cancel</button>
+                            <button className="btn-primary" onClick={handleSaveAsTemplate} disabled={!templateName.trim()}>
+                                <BookmarkPlus size={14} /> Save Template
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Approval Dialog */}
+            {approvalRequest && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg p-6 w-[420px]">
+                        <div className="flex items-center gap-2 mb-3">
+                            <ShieldCheck size={20} className="text-yellow-400" />
+                            <h2 className="text-lg font-semibold">Approval Required</h2>
+                        </div>
+                        <p className="text-sm mb-3">{approvalRequest.message}</p>
+                        {approvalRequest.dataPreview && (
+                            <pre className="text-xs bg-[var(--bg-tertiary)] p-3 rounded mb-4 overflow-auto max-h-[200px] font-mono">
+                                {approvalRequest.dataPreview}
+                            </pre>
+                        )}
+                        <div className="flex justify-end gap-2">
+                            <button className="btn-secondary" onClick={() => handleApprovalDecision(false)}>
+                                <X size={14} /> Reject
+                            </button>
+                            <button className="btn-primary" onClick={() => handleApprovalDecision(true)}>
+                                <Check size={14} /> Approve
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 }

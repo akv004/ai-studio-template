@@ -143,7 +143,14 @@ When the app starts, for each armed cron trigger:
 3. Based on `catchUpPolicy`:
    - `skip`: Do nothing, resume from next match
    - `run_once`: Fire one execution immediately
-   - `run_all`: Fire all missed executions sequentially (with 1s delay between)
+   - `run_all`: Fire all missed executions sequentially (with 1s delay between), **capped at 20 runs max**. If more than 20 executions were missed, log an audit entry: `"Capped catch-up: {missed} missed, executing 20"` and skip the oldest excess.
+
+### DST (Daylight Saving Time) Handling
+
+DST transitions are handled by the `chrono-tz` crate automatically. Specific behaviors:
+- **Spring forward** (e.g., 2:00 AM skipped): If a scheduled time falls in the skipped hour, the execution is skipped for that tick (no double-fire).
+- **Fall back** (e.g., 2:00 AM repeated): The execution fires on the **first** occurrence of the ambiguous time only (no duplicate fire).
+- All cron matching uses the user-configured IANA timezone. Internal storage (`last_fired`, `next_fire`) uses UTC ISO-8601.
 
 ---
 
@@ -190,7 +197,7 @@ match trigger.trigger_type.as_str() {
 
 - `cron_trigger` counts as an input source (same as `webhook_trigger`, `input`, etc)
 - Max 1 cron_trigger per workflow (same rule as webhook_trigger)
-- A workflow can have EITHER a cron_trigger OR a webhook_trigger, not both (they serve different automation patterns)
+- A workflow can have BOTH a cron_trigger AND a webhook_trigger (e.g., scheduled daily + manual/webhook override). Each trigger type is still limited to max 1 per workflow.
 - Cron expression validated on save (reject invalid expressions)
 
 ---

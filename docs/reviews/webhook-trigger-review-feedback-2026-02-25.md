@@ -3,6 +3,7 @@
 **Date:** 2026-02-25
 **Reviewer:** Antigravity (Architecture & Strategy)
 **Target:** Webhook Trigger Implementation, Automation Specs (Cron, Email), Demo Templates
+**Status:** PARTIALLY RESOLVED — code fixes done (c0176c5), spec updates + deferred items remain
 
 ## Executive Summary
 
@@ -63,10 +64,10 @@ However, there are a few architectural gaps, specifically around request timeout
 
 ## 6. Actionable Checklist for Developers
 
-- [ ] **Timeout Enforcement:** Wrap the Wait mode workflow execution in `server.rs` with `tokio::time::timeout` using `route.timeout_secs`.
-- [ ] **Port Conflict Handling:** Provide a descriptive UI alert or fallback logic if the webhook server fails to bind cleanly.
-- [ ] **Dynamic Webhook Responses (Future):** Spec out a `Webhook Response` node to allow users to customize HTTP status codes and headers, bringing parity with n8n.
-- [ ] **Cred Storage:** Finalize the "Connections/Secrets Manager" architecture to avoid storing SMTP passwords in webhook/email node configs.
+- [x] **Timeout Enforcement:** Wrapped Wait mode with `tokio::time::timeout` → 408 on expiry (c0176c5, 2026-02-25)
+- [ ] Deferred: **Port Conflict Handling** — UI alert or fallback logic for bind failure
+- [ ] Deferred: **Dynamic Webhook Responses** — Webhook Response node for custom HTTP status/headers
+- [ ] Deferred: **Cred Storage** — Connections/Secrets Manager for SMTP/webhook secrets
 # Webhook Trigger + Automation Specs Review
 **Date**: 2026-02-25
 **Reviewer**: Codex (GPT-5)
@@ -93,16 +94,18 @@ However, there are a few architectural gaps, specifically around request timeout
 | 17 | Secrets-at-rest enterprise risk | HIGH | FAIL | SMTP credentials are planned as plaintext JSON in SQLite, and webhook secrets currently also live in trigger JSON config; this is a major enterprise security objection (`docs/specs/email-node.md:30`, `docs/specs/email-node.md:165`, `apps/desktop/src-tauri/src/db.rs:395`). |
 
 ### Actionable Checklist
-- [ ] Reject arming when `authMode=token` and `authToken` is empty, or when `authMode=hmac` and `hmacSecret` is empty.
-- [ ] Normalize and strictly parse `Authorization` (`Bearer` case-insensitive with trimmed token) and optionally support `X-Signature: sha256=<hex>`.
-- [ ] Replace handler `unwrap()`s with mapped HTTP 500 responses and structured logging.
-- [ ] Implement wait-mode timeout via `tokio::time::timeout` and return 408 on expiry.
-- [ ] Parse and inject query string data into `__webhook_query`.
-- [ ] Add server integration tests (status-code matrix, auth edge cases, missing workflow after arm, malformed headers, binary body HMAC).
-- [ ] Add concurrency tests for `arm_webhook`/`disarm_webhook` and rate limiter under parallel load.
-- [ ] Add a cap for cron `run_all` catch-up (e.g., max 20 backfill runs) plus explicit audit log entry for skipped excess.
-- [ ] Resolve Email spec ambiguities: `bodyType` location, exact success/error output JSON contract, CC/BCC partial-failure handling, validation timing.
-- [ ] Move credentials/secrets to encrypted storage (OS keychain/secret service) before enterprise-facing release.
+- [x] Reject arming when `authMode=token` and `authToken` is empty, or when `authMode=hmac` and `hmacSecret` is empty. (c0176c5, 2026-02-25)
+- [x] Normalize and strictly parse `Authorization` (`Bearer` case-insensitive with trimmed token) and support `X-Signature: sha256=<hex>`. (c0176c5, 2026-02-25)
+- [x] Replace handler `unwrap()`s with mapped HTTP 500 responses and structured logging. (c0176c5, 2026-02-25)
+- [x] Implement wait-mode timeout via `tokio::time::timeout` and return 408 on expiry. (c0176c5, 2026-02-25)
+- [x] Parse and inject query string data into `__webhook_query`. (c0176c5, 2026-02-25)
+- [x] Fix concurrent arm race in TriggerManager (check-drop-await-reacquire pattern). (c0176c5, 2026-02-25)
+- [ ] Deferred: Add server integration tests (status-code matrix, auth edge cases, handler paths)
+- [ ] Deferred: Add concurrency tests for arm/disarm races and rate limiter under parallel load
+- [ ] TODO: Cap cron `run_all` catch-up at 20 runs, clarify DST handling in spec
+- [ ] TODO: Resolve Email spec ambiguities: `bodyType` location, error JSON shape, CC/BCC failure semantics
+- [ ] TODO: Allow webhook + cron per workflow (remove mutual exclusion in spec)
+- [ ] Deferred: Move credentials/secrets to encrypted storage (OS keychain/secret service)
 
 ### Verdict
 

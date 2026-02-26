@@ -31,6 +31,7 @@ A processing node (not a source/trigger) that sends an email via SMTP when reach
 | encryption | enum | tls | tls / ssl / none |
 | fromAddress | string | required | Sender email address |
 | fromName | string | optional | Sender display name |
+| bodyType | enum | plain | `plain` or `html` — controls Content-Type of email body |
 
 ### Input Handles
 
@@ -39,8 +40,8 @@ A processing node (not a source/trigger) that sends an email via SMTP when reach
 | to | text | yes | Recipient email(s), comma-separated |
 | subject | text | yes | Email subject line |
 | body | text | yes | Email body (plain text or HTML) |
-| cc | text | no | CC recipients |
-| bcc | text | no | BCC recipients |
+| cc | text | no | CC recipients (comma-separated). Partial failure: if To succeeds but CC fails, email is sent with a warning in output JSON |
+| bcc | text | no | BCC recipients (comma-separated). Same partial-failure semantics as CC |
 | replyTo | text | no | Reply-to address |
 
 All input handles support template resolution: `{{node_id.output}}` syntax works.
@@ -49,8 +50,8 @@ All input handles support template resolution: `{{node_id.output}}` syntax works
 
 | Handle | Type | Description |
 |--------|------|-------------|
-| output | json | `{success: true, messageId: "...", recipients: 3}` |
-| error | text | Error message if send failed (empty on success) |
+| output | json | Success: `{"success": true, "messageId": "<uuid>", "recipients": 3, "to": ["a@b.com"], "cc": [], "bcc": []}`. On partial CC/BCC failure: `{"success": true, "messageId": "...", "recipients": 2, "warnings": ["CC delivery failed for x@y.com"]}` |
+| error | text | Error message string if send failed entirely (empty string on success). Examples: `"SMTP authentication failed"`, `"SMTP timeout after 30s"`, `"TLS negotiation failed"` |
 
 ### Template Resolution
 

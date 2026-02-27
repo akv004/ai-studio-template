@@ -20,7 +20,12 @@
 | 11 | product-vision.md | — | — | REFERENCE | North star, positioning |
 | 12 | node-editor.md | P0 | 3 | DONE | Visual pipeline builder — 8 node types, DAG engine, templates |
 | 13 | plugin-system.md | P1 | 3 | DONE | Manifest, scanner, CRUD, Settings UI |
-| 14 | killer-features.md | P0 | 5 | PLANNED | A/B Eval, Time-Travel, Auto-Pipeline, Guardrails, RAG, SQL |
+| 14 | killer-features.md | P0 | 5 | PLANNED | Time-Travel, Auto-Pipeline, Guardrails, SQL |
+| 25 | step-through-debugging.md | P0 | 5A | SPEC DONE | Breakpoints, F10/F5, Edit & Continue for AI workflows |
+| 26 | edge-data-preview.md | P1 | 5A | SPEC DONE | X-Ray mode — data values on canvas edges |
+| 27 | prompt-version-control.md | P1 | 5B | SPEC DONE | Auto-versioning LLM prompts, diff, rollback |
+| 28 | natural-language-canvas.md | P0 | 5C | SPEC DONE | Chat-to-graph modification, preview-before-apply |
+| 29 | ai-workflow-copilot.md | P2 | 5D | SPEC DONE | Run history insights, self-optimizing pipelines |
 | 15 | connections-manager.md | P0 | 5B | PLANNED | Unified credential store, encrypted at rest, DB/HTTP/SMTP/Webhook |
 | 16 | triggers-scheduling.md | P0 | 5B | PLANNED | Webhook, cron, file watch, event triggers |
 | 17 | streaming-output.md | P1 | 5A | DONE | SSE token streaming — all 6 providers (Ollama, OpenAI, Azure, Google, Anthropic, Local) |
@@ -146,19 +151,34 @@
 
 ### Phase 5+ Backlog (killer features — work top-down)
 
-11. **A/B Eval Node** — Split input to multiple LLMs in parallel, score outputs side-by-side. Built-in eval grid: latency, cost, quality rating. "Which model is best for this task" in one click. Easiest to build (parallel LLM calls exist), highest demo impact.
-12. **Time-Travel Debug** — Click any completed node → edit its output → re-run from that point forward. Don't restart the whole workflow. Inspector + node states already exist — this is an evolution. Unique differentiator, no competitor has this.
-13. **Auto-Pipeline Generator** — Describe a workflow in English → AI generates the graph JSON → canvas fills itself. Meta: use AI to build AI pipelines. The "wow" demo moment for Show HN.
-14. **Guardrails Node** — Built-in safety: PII detection, content filtering, hallucination check, schema enforcement. Drop anywhere in pipeline. Enterprise magnet, huge credibility for production use.
-15. ~~RAG Knowledge Base~~ DONE (09ca3d0) — 17th node type, full-stack implementation
-16. **EIP: Error Handler / Dead Letter** — Route errors to a fallback path instead of stopping the workflow. Node-level `onError` output handle that connects to recovery logic. Table stakes for production automation.
-17. **EIP: Content Enricher** — Merge data from an external source (DB, API) into the current message. Ties into SQL Query node — "enrich this record with customer data from the DB."
-18. **EIP: Wire Tap** — Copy node output to a side channel (log, file, webhook) without affecting the main flow. Non-blocking audit/debugging.
-19. **EIP: Recipient List** — Dynamic routing to multiple destinations based on message content. Router is static branches; this evaluates at runtime.
-20. **SQL Query Node** — Connect to Postgres/MySQL/SQLite, run queries, return rows. Settings gets a Connections tab. Enables natural language → SQL → results → LLM summary pipelines.
-21. Phase 4C: Streaming, containers, UX polish
-22. v0.2.0 tag for Phase 4B completion
-23. **Dual-Mode Deployment** — Desktop + Server mode from same Rust codebase. Core crate extraction (pure functions), Axum HTTP shell, Docker image, JWT auth, WebSocket events. Same 237+ tests, same UI. Spec: `dual-mode-deployment.md`. ~7 sessions, low risk (mechanical refactor).
+**Killer Features (specced):**
+11. ~~A/B Eval Node~~ REMOVED — Multi-Model Compare template covers this adequately
+12. **Step-Through Debugging** — Breakpoints, F10/F5, Edit & Continue for AI workflows. Spec: `step-through-debugging.md`. ~4 sessions.
+13. **Edge Data Preview (X-Ray Mode)** — Toggle to see data values on every edge after a run. Spec: `edge-data-preview.md`. ~1 session.
+14. **Prompt Version Control** — Auto-versioning LLM prompts with diff, rollback, pin. Spec: `prompt-version-control.md`. ~2 sessions.
+15. **Natural Language Canvas** — Chat input to modify workflow graphs via LLM. Spec: `natural-language-canvas.md`. ~5 sessions.
+16. **AI Workflow Copilot** — Insight engine analyzing run history for optimizations. Spec: `ai-workflow-copilot.md`. ~8 sessions.
+
+**Infrastructure:**
+17. **Dual-Mode Deployment** — Desktop + Server mode from same Rust codebase. Spec: `dual-mode-deployment.md`. ~7 sessions.
+
+**Future Nodes:**
+18. **Time-Travel Debug** — Click any completed node → edit output → re-run from that point.
+19. **Auto-Pipeline Generator** — English → AI generates graph JSON. Overlap with Natural Language Canvas.
+20. **Guardrails Node** — PII detection, content filtering, hallucination check.
+21. ~~RAG Knowledge Base~~ DONE (09ca3d0)
+22. **EIP: Error Handler / Dead Letter** — Node-level `onError` output handle.
+23. **EIP: Content Enricher** — Merge external data into message.
+24. **EIP: Wire Tap** — Side-channel logging without affecting flow.
+25. **EIP: Recipient List** — Dynamic runtime routing.
+26. **SQL Query Node** — Postgres/MySQL/SQLite queries.
+27. ~~Phase 4C~~ DONE — v0.2.0 tagged
+28. ~~v0.2.0 tag~~ DONE (d5446d2)
+
+**Moonshot Ideas (no specs yet):**
+29. **Autonomous Agent Mode** — LLM dynamically picks which nodes to call, visualized on canvas in real-time. "ReAct on Canvas."
+30. **Workflow as API** — One-click deploy workflow as REST endpoint. Local-first production serving.
+31. **Workflow Recording** — Record manual process → AI generates workflow automatically.
 
 ---
 
@@ -208,32 +228,32 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-26 (session 45, continued)
+**Date**: 2026-02-26 (session 46)
 **What happened**:
-- **Note node** (5621c26): 23rd node type — documentation-only canvas node. StickyNote icon, text preview (200 chars) on canvas, full textarea in config panel. New "Utility" palette category. Orphan warning suppressed in validation (+1 test). No executor needed.
-- **Daily Meeting Digest template** (5621c26): 19th bundled template — Cron Trigger (9 AM daily) → File Glob (~/meetings/transcripts/*.txt) → LLM (summarize) → Email Send (digest). Note node explains setup. Uses Azure OpenAI gpt-4o-mini.
-- **Tilde expansion fix** (db16b37): File Glob didn't expand `~` — added shared `expand_tilde()` helper in `file_read.rs`, applied to all 3 file executors (Read, Glob, Write). Also documented Mailpit SMTP setup in template Note node + templates/README.md prerequisites.
-- **Tool Picker dropdown** (49be3ad): Replaced Tool node's hardcoded text input with a grouped `<select>` that fetches available tools from sidecar `GET /mcp/tools`. Grouped by server (`<optgroup>`), shows tool description, "Custom tool name..." fallback for manual entry. Store: `availableTools[]` + `fetchAvailableTools()`. ToolNode canvas shows friendly name (e.g. "shell") with server subtitle (e.g. "builtin").
-- **254 total Rust tests** passing
+- **RAG document extraction** (d5446d2): PDF, DOCX, XLSX, PPTX support via sidecar `/extract` endpoint. 4 extractors (pypdf, python-docx, openpyxl, python-pptx). KB executor detects binary extensions → delegates to sidecar. 18 sidecar tests.
+- **Corporate footprint cleanup** (4ad540d): Removed office identity traces — corporate registry URLs from package-lock.json, sensitive file, git history rewritten (author email).
+- **v0.2.0 re-tagged** at HEAD with comprehensive release notes (23 nodes, 19 templates, 254 tests).
+- **A/B Eval Node REMOVED** from backlog — Multi-Model Compare template covers it.
+- **5 killer feature specs written**:
+  - `step-through-debugging.md` (3c6564c) — breakpoints, F10/F5, Edit & Continue
+  - `edge-data-preview.md` (5216b52) — X-Ray mode for data flow on edges
+  - `prompt-version-control.md` (5216b52) — auto-versioning with diff/rollback
+  - `natural-language-canvas.md` (5216b52) — chat-to-graph modification
+  - `ai-workflow-copilot.md` (5216b52) — insight engine from run history
+- **Node maturity audit**: 8 advanced, 7 solid, 8 basic/passthrough. Key gap: Shell Exec, HTTP Request, Router have 0 tests.
+- **Brainstormed moonshot features**: Autonomous Agent Mode (ReAct on Canvas), Workflow as API, Workflow Recording.
 
-**Previous session (44)**:
-- Cron Trigger peer review — Gemini + Codex, 8 fixes, 253 tests (a8649fe)
-
-**Previous session (43)**:
-- Cron Trigger node — full implementation, 22nd node type (9eb843d)
-
-**Previous session (42)**:
-- Email Send node + peer review — 21st node type (6483d21 + 85f3a81)
+**Previous session (45)**:
+- Note node (23rd), Daily Meeting Digest template, tilde expansion fix, Tool Picker dropdown (254 tests)
 
 **Previous sessions**:
-- Session 41: Webhook Chat API template + toolbar UX redesign per Gemini review
-- Session 40: Loop & Feedback peer review — Gemini + Codex, 8 fixes, 193 tests
-- Session 39: Loop & Feedback nodes (18th+19th node types, 26 new tests, 2 templates)
-- Sessions 1-38: See git log for full history
+- Session 44: Cron Trigger peer review — 8 fixes, 253 tests
+- Session 43: Cron Trigger node — 22nd node type
+- Session 42: Email Send node + peer review — 21st node type
+- Sessions 1-41: See git log
 
 **Next session should**:
-1. Consider **v0.2.0 tag** for Phase 4 completion milestone
-2. Start **A/B Eval Node** (Phase 5 #11 — highest demo impact, parallel LLM comparison)
-3. Or start **Connections Manager** (P0 — encrypted credential store for SMTP, webhooks, DB)
-4. Or start **Dual-Mode Deployment** (desktop + server from same Rust codebase)
-5. **Peer review** Note node + tilde fix + tool picker (quick — small changes)
+1. Pick first killer feature to implement — **Edge Data Preview** (1 session, high impact) or **Step-Through Debugging** (4 sessions, highest differentiation)
+2. Or start **Dual-Mode Deployment** (desktop + server from same codebase)
+3. Or add tests to 0-test nodes (Shell Exec, HTTP Request, Router)
+4. Feature engineering template (Input → KB → LLM → Iterator → Output)

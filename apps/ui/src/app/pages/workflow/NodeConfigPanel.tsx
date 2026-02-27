@@ -571,9 +571,10 @@ export function NodeConfigPanel({ node, onChange, onDelete }: {
                     </div>
                     <label className="block">
                         <span className="text-xs text-[var(--text-muted)]">File Types</span>
-                        <input className="config-input text-xs" value={(data.fileTypes as string) || '*.md,*.txt,*.rs,*.py,*.ts,*.js,*.json,*.yml,*.yaml,*.csv,*.toml,*.go,*.java'}
+                        <input className="config-input text-xs" value={(data.fileTypes as string) || '*.md,*.txt,*.rs,*.py,*.ts,*.js,*.json,*.yml,*.yaml,*.csv,*.toml,*.go,*.java,*.pdf,*.docx,*.xlsx,*.pptx'}
                             onChange={(e) => update('fileTypes', e.target.value)}
-                            placeholder="*.md,*.txt,*.py,..." />
+                            placeholder="*.md,*.txt,*.py,*.pdf,*.docx,..." />
+                        <span className="text-[10px] text-[var(--text-muted)] mt-0.5">Supports PDF, DOCX, XLSX, PPTX via sidecar extraction</span>
                     </label>
                     <label className="block">
                         <span className="text-xs text-[var(--text-muted)]">Max File Size (MB)</span>

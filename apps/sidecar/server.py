@@ -352,6 +352,149 @@ async def embed(request: EmbedRequest):
 
 
 # ============================================================================
+# Document Text Extraction (RAG Knowledge Base)
+# ============================================================================
+
+class ExtractRequest(BaseModel):
+    """Extract text from a binary document (PDF, DOCX, XLSX, PPTX)"""
+    path: str
+    format: Optional[str] = None  # auto-detected from extension if omitted
+
+
+class ExtractResponse(BaseModel):
+    """Extracted text with metadata"""
+    text: str
+    format: str
+    pages: Optional[int] = None
+    sheets: Optional[list[str]] = None
+    slides: Optional[int] = None
+    char_count: int
+
+
+def _detect_format(path: str) -> str:
+    ext = os.path.splitext(path)[1].lower()
+    format_map = {
+        '.pdf': 'pdf',
+        '.docx': 'docx',
+        '.xlsx': 'xlsx',
+        '.xls': 'xlsx',
+        '.pptx': 'pptx',
+    }
+    fmt = format_map.get(ext)
+    if not fmt:
+        raise ValueError(f"Unsupported file format: {ext}")
+    return fmt
+
+
+def _extract_pdf(path: str) -> dict:
+    from pypdf import PdfReader
+    reader = PdfReader(path)
+    pages = []
+    for page in reader.pages:
+        text = page.extract_text() or ''
+        if text.strip():
+            pages.append(text)
+    return {
+        'text': '\n\n'.join(pages),
+        'pages': len(reader.pages),
+    }
+
+
+def _extract_docx(path: str) -> dict:
+    import docx
+    doc = docx.Document(path)
+    parts = []
+    for para in doc.paragraphs:
+        if para.text.strip():
+            parts.append(para.text)
+    # Also extract table content
+    for table in doc.tables:
+        for row in table.rows:
+            cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+            if cells:
+                parts.append('\t'.join(cells))
+    return {'text': '\n'.join(parts)}
+
+
+def _extract_xlsx(path: str) -> dict:
+    from openpyxl import load_workbook
+    wb = load_workbook(path, read_only=True, data_only=True)
+    sheet_names = wb.sheetnames
+    parts = []
+    for ws in wb.worksheets:
+        rows = []
+        for row in ws.iter_rows(values_only=True):
+            cells = [str(c) if c is not None else '' for c in row]
+            if any(c for c in cells):
+                rows.append('\t'.join(cells))
+        if rows:
+            parts.append(f'## Sheet: {ws.title}\n' + '\n'.join(rows))
+    wb.close()
+    return {
+        'text': '\n\n'.join(parts),
+        'sheets': sheet_names,
+    }
+
+
+def _extract_pptx(path: str) -> dict:
+    from pptx import Presentation
+    prs = Presentation(path)
+    slides = []
+    for i, slide in enumerate(prs.slides, 1):
+        texts = []
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    if para.text.strip():
+                        texts.append(para.text)
+        if texts:
+            slides.append(f'## Slide {i}\n' + '\n'.join(texts))
+    return {
+        'text': '\n\n'.join(slides),
+        'slides': len(prs.slides),
+    }
+
+
+@app.post("/extract", response_model=ExtractResponse)
+async def extract_text(request: ExtractRequest):
+    """Extract text from PDF, DOCX, XLSX, or PPTX files. Used by Knowledge Base node."""
+    try:
+        if not os.path.exists(request.path):
+            raise HTTPException(status_code=404, detail=f"File not found: {request.path}")
+
+        fmt = request.format or _detect_format(request.path)
+
+        extractors = {
+            'pdf': _extract_pdf,
+            'docx': _extract_docx,
+            'xlsx': _extract_xlsx,
+            'pptx': _extract_pptx,
+        }
+
+        extractor = extractors.get(fmt)
+        if not extractor:
+            raise HTTPException(status_code=400, detail=f"Unsupported format: {fmt}")
+
+        result = extractor(request.path)
+        text = result.get('text', '')
+
+        return ExtractResponse(
+            text=text,
+            format=fmt,
+            pages=result.get('pages'),
+            sheets=result.get('sheets'),
+            slides=result.get('slides'),
+            char_count=len(text),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Extraction error: {str(e)}")
+
+
+# ============================================================================
 # Chat Endpoints
 # ============================================================================
 

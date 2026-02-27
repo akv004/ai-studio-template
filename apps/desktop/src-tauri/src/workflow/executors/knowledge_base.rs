@@ -10,7 +10,10 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 /// Default file types for Knowledge Base indexing.
-const DEFAULT_FILE_TYPES: &str = "*.md,*.txt,*.rs,*.py,*.ts,*.js,*.json,*.yml,*.yaml,*.csv,*.toml,*.go,*.java";
+const DEFAULT_FILE_TYPES: &str = "*.md,*.txt,*.rs,*.py,*.ts,*.js,*.json,*.yml,*.yaml,*.csv,*.toml,*.go,*.java,*.pdf,*.docx,*.xlsx,*.pptx";
+
+/// Binary document formats that require sidecar extraction.
+const BINARY_EXTENSIONS: &[&str] = &["pdf", "docx", "xlsx", "xls", "pptx"];
 
 pub struct KnowledgeBaseExecutor;
 
@@ -133,9 +136,34 @@ impl NodeExecutor for KnowledgeBaseExecutor {
                     }
                 }
 
-                let content = match std::fs::read_to_string(&full_path) {
-                    Ok(c) => c,
-                    Err(_) => continue, // Skip binary files
+                // Check if this is a binary document that needs sidecar extraction
+                let ext = full_path.extension()
+                    .and_then(|e| e.to_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+                let content = if BINARY_EXTENSIONS.contains(&ext.as_str()) {
+                    // Extract text via sidecar POST /extract
+                    let extract_body = serde_json::json!({
+                        "path": full_path.to_string_lossy(),
+                        "format": ext,
+                    });
+                    match ctx.sidecar.proxy_request("POST", "/extract", Some(extract_body)).await {
+                        Ok(resp) => {
+                            resp.get("text")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string()
+                        }
+                        Err(e) => {
+                            eprintln!("[workflow] KnowledgeBase: failed to extract {}: {}", rel_path, e);
+                            continue;
+                        }
+                    }
+                } else {
+                    match std::fs::read_to_string(&full_path) {
+                        Ok(c) => c,
+                        Err(_) => continue,
+                    }
                 };
 
                 total_chars += content.len();

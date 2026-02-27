@@ -1,6 +1,6 @@
 # Automation Demo Templates
 
-**Status**: DRAFT — pending peer review
+**Status**: SUPERSEDED by `scheduler-and-workflow-ux.md` (consolidated spec with Cron Trigger + Workflow List UX + templates)
 **Phase**: 4C (automation canvas)
 **Priority**: P0 — needed for stakeholder demo
 **Author**: AI Studio PM

@@ -1,6 +1,6 @@
 # Cron Trigger Node
 
-**Status**: DRAFT — pending peer review
+**Status**: DRAFT — engine detail spec. See `scheduler-and-workflow-ux.md` for full feature scope (UI, templates, workflow list UX).
 **Phase**: 4C (automation canvas)
 **Priority**: P0 — critical for scheduled automation use cases
 **Author**: AI Studio PM

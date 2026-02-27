@@ -417,7 +417,9 @@ See [STATUS.md](STATUS.md) for the detailed sprint board.
 
 ---
 
-## Building for Production
+## Deployment
+
+### Desktop (recommended)
 
 ```bash
 cd apps/desktop && pnpm tauri build
@@ -427,6 +429,30 @@ Creates platform-specific installers:
 - **macOS**: `.dmg` + `.app` bundle
 - **Windows**: `.msi` + `.exe` installer
 - **Linux**: `.deb` + `.AppImage`
+
+### Cloud VM
+
+Run AI Studio on an Azure, AWS, or GCP VM with a desktop environment. Connect via RDP or Azure Bastion. Full feature parity — same app, remote access.
+
+```bash
+# Example: Ubuntu VM with desktop
+sudo apt install ubuntu-desktop xrdp -y
+# Build and run AI Studio as normal
+cd apps/desktop && pnpm tauri build
+./src-tauri/target/release/ai-studio
+```
+
+### Server Mode (coming soon)
+
+Same Rust engine + React UI, served as a web application via Docker. No desktop environment needed.
+
+```bash
+# Coming in a future release
+docker compose -f docker-compose.server.yml up
+# Access at http://localhost:8080
+```
+
+Server mode uses the same core engine (workflow execution, RAG, triggers, 237+ tests) with an HTTP transport layer instead of Tauri IPC. See [dual-mode-deployment spec](docs/specs/dual-mode-deployment.md) for architecture details.
 
 ---
 

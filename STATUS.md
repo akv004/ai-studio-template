@@ -22,7 +22,7 @@
 | 13 | plugin-system.md | P1 | 3 | DONE | Manifest, scanner, CRUD, Settings UI |
 | 14 | killer-features.md | P0 | 5 | PLANNED | Time-Travel, Auto-Pipeline, Guardrails, SQL |
 | 25 | step-through-debugging.md | P0 | 5A | SPEC DONE | Breakpoints, F10/F5, Edit & Continue for AI workflows |
-| 26 | edge-data-preview.md | P1 | 5A | SPEC DONE | X-Ray mode — data values on canvas edges |
+| 26 | edge-data-preview.md | P1 | 5A | DONE | X-Ray mode — data values on canvas edges (b31e610) |
 | 27 | prompt-version-control.md | P1 | 5B | SPEC DONE | Auto-versioning LLM prompts, diff, rollback |
 | 28 | natural-language-canvas.md | P0 | 5C | SPEC DONE | Chat-to-graph modification, preview-before-apply |
 | 29 | ai-workflow-copilot.md | P2 | 5D | SPEC DONE | Run history insights, self-optimizing pipelines |
@@ -106,6 +106,7 @@
 | **Daily Meeting Digest template** | DONE | Cron (9 AM) → File Glob (transcripts) → LLM (summarize) → Email Send (digest). 19th bundled template. Includes Note node explaining setup. (5621c26) |
 | **Tilde expansion fix** | DONE | `expand_tilde()` shared helper in file_read.rs — applied to File Read, File Glob, File Write executors. `~/path` now resolves correctly. (db16b37) |
 | **Tool Picker dropdown** | DONE | Replace hardcoded text input with grouped `<select>` that discovers MCP tools via sidecar `GET /mcp/tools`. Grouped by server, shows description, custom fallback. ToolNode shows friendly name + server subtitle. (49be3ad) |
+| **Edge Data Preview (X-Ray)** | DONE | X-Ray mode: toggle data preview badges on edges after workflow run. Hover tooltip, click popover with copy. Toolbar Scan button + X shortcut. (b31e610) |
 | Container/group nodes | TODO | Visual grouping on canvas |
 
 ---
@@ -154,7 +155,7 @@
 **Killer Features (specced):**
 11. ~~A/B Eval Node~~ REMOVED — Multi-Model Compare template covers this adequately
 12. **Step-Through Debugging** — Breakpoints, F10/F5, Edit & Continue for AI workflows. Spec: `step-through-debugging.md`. ~4 sessions.
-13. **Edge Data Preview (X-Ray Mode)** — Toggle to see data values on every edge after a run. Spec: `edge-data-preview.md`. ~1 session.
+13. ~~Edge Data Preview (X-Ray Mode)~~ DONE (b31e610) — Toggle to see data values on every edge after a run.
 14. **Prompt Version Control** — Auto-versioning LLM prompts with diff, rollback, pin. Spec: `prompt-version-control.md`. ~2 sessions.
 15. **Natural Language Canvas** — Chat input to modify workflow graphs via LLM. Spec: `natural-language-canvas.md`. ~5 sessions.
 16. **AI Workflow Copilot** — Insight engine analyzing run history for optimizations. Spec: `ai-workflow-copilot.md`. ~8 sessions.
@@ -228,32 +229,28 @@ Built: SQLite WAL schema v3, 5 LLM providers, MCP registry + stdio client, multi
 
 ## Last Session Notes
 
-**Date**: 2026-02-26 (session 46)
+**Date**: 2026-02-28 (session 47)
 **What happened**:
-- **RAG document extraction** (d5446d2): PDF, DOCX, XLSX, PPTX support via sidecar `/extract` endpoint. 4 extractors (pypdf, python-docx, openpyxl, python-pptx). KB executor detects binary extensions → delegates to sidecar. 18 sidecar tests.
-- **Corporate footprint cleanup** (4ad540d): Removed office identity traces — corporate registry URLs from package-lock.json, sensitive file, git history rewritten (author email).
-- **v0.2.0 re-tagged** at HEAD with comprehensive release notes (23 nodes, 19 templates, 254 tests).
-- **A/B Eval Node REMOVED** from backlog — Multi-Model Compare template covers it.
-- **5 killer feature specs written**:
-  - `step-through-debugging.md` (3c6564c) — breakpoints, F10/F5, Edit & Continue
-  - `edge-data-preview.md` (5216b52) — X-Ray mode for data flow on edges
-  - `prompt-version-control.md` (5216b52) — auto-versioning with diff/rollback
-  - `natural-language-canvas.md` (5216b52) — chat-to-graph modification
-  - `ai-workflow-copilot.md` (5216b52) — insight engine from run history
-- **Node maturity audit**: 8 advanced, 7 solid, 8 basic/passthrough. Key gap: Shell Exec, HTTP Request, Router have 0 tests.
-- **Brainstormed moonshot features**: Autonomous Agent Mode (ReAct on Canvas), Workflow as API, Workflow Recording.
+- **Edge Data Preview (X-Ray Mode)** (b31e610): First Phase 5 killer feature implemented in a single session. 7 files changed (2 new, 5 modified):
+  - Rust: Removed `#[serde(skip_serializing)]` from `node_outputs` in `WorkflowRunResult` — now serialized to UI via IPC
+  - TS types: Added `nodeOutputs?: Record<string, unknown>` to `WorkflowRunResult`
+  - Store: `lastRunNodeOutputs`, `xrayEnabled`, `toggleXray()` — captures outputs after run, clears on reset
+  - New `edgeDataUtils.ts`: `formatPreview()`, `resolveHandleValue()` (mirrors Rust `resolve_source_handle`), `formatFullPreview()`, `getDataTypeLabel()`
+  - New `EdgeDataBadge.tsx`: Pill badge on edge midpoint, hover tooltip (500 chars), click popover (5000 chars) with copy button + data type indicator
+  - `TypedEdge.tsx`: Added `EdgeLabelRenderer` with `EdgeDataBadge` at `labelX`/`labelY` from `getBezierPath`
+  - `WorkflowCanvas.tsx`: Toolbar Scan button (cyan active state), `X` keyboard shortcut
+  - 254 Rust tests pass, TS type check clean
 
-**Previous session (45)**:
-- Note node (23rd), Daily Meeting Digest template, tilde expansion fix, Tool Picker dropdown (254 tests)
+**Previous session (46)**:
+- RAG document extraction, corporate cleanup, v0.2.0 re-tag, 5 killer feature specs
 
 **Previous sessions**:
+- Session 45: Note node (23rd), Daily Meeting Digest template, tilde expansion fix, Tool Picker dropdown
 - Session 44: Cron Trigger peer review — 8 fixes, 253 tests
-- Session 43: Cron Trigger node — 22nd node type
-- Session 42: Email Send node + peer review — 21st node type
-- Sessions 1-41: See git log
+- Sessions 1-43: See git log
 
 **Next session should**:
-1. Pick first killer feature to implement — **Edge Data Preview** (1 session, high impact) or **Step-Through Debugging** (4 sessions, highest differentiation)
-2. Or start **Dual-Mode Deployment** (desktop + server from same codebase)
+1. **Step-Through Debugging** — highest differentiation killer feature (~4 sessions)
+2. Or **Prompt Version Control** (~2 sessions) — auto-versioning LLM prompts
 3. Or add tests to 0-test nodes (Shell Exec, HTTP Request, Router)
-4. Feature engineering template (Input → KB → LLM → Iterator → Output)
+4. Or start **Dual-Mode Deployment** (desktop + server from same codebase)

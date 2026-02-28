@@ -19,7 +19,7 @@ import {
     Save, Play, Copy, ChevronLeft,
     Loader2, Check, X, Download, ShieldCheck,
     Square, Radio, Settings2, BookmarkPlus,
-    Zap, Clock,
+    Zap, Clock, Scan,
 } from 'lucide-react';
 import { useAppStore } from '../../../state/store';
 import type { Workflow, LiveFeedItem } from '@ai-studio/shared';
@@ -73,6 +73,9 @@ export function WorkflowCanvas({ workflow, onBack }: {
         liveConfig,
         setLiveConfig,
         liveFeedItems,
+        xrayEnabled,
+        toggleXray,
+        lastRunNodeOutputs,
     } = useAppStore();
 
     // Parse graph from workflow
@@ -692,6 +695,13 @@ export function WorkflowCanvas({ workflow, onBack }: {
 
             if (inInput) return;
 
+            if (e.key === 'x' || e.key === 'X') {
+                if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+                    toggleXray();
+                    return;
+                }
+            }
+
             if (e.key === 'Delete' || e.key === 'Backspace') {
                 if (selectedNodeId) {
                     setNodes((nds) => nds.filter((n) => n.id !== selectedNodeId));
@@ -750,7 +760,7 @@ export function WorkflowCanvas({ workflow, onBack }: {
         };
         window.addEventListener('keydown', handler);
         return () => window.removeEventListener('keydown', handler);
-    }, [handleSave, selectedNodeId, nodes, edges, setNodes, setEdges, duplicateNode]);
+    }, [handleSave, selectedNodeId, nodes, edges, setNodes, setEdges, duplicateNode, toggleXray]);
 
     const handleNodeDataChange = useCallback((newData: Record<string, unknown>) => {
         if (!selectedNodeId) return;
@@ -919,6 +929,19 @@ export function WorkflowCanvas({ workflow, onBack }: {
                             </div>
                         )}
                     </div>
+                    <div className="toolbar-divider mx-1 h-5 border-l border-[var(--border-subtle)]" />
+                    <button
+                        className={`p-1.5 rounded hover:bg-[var(--bg-tertiary)] disabled:opacity-30 transition-colors ${
+                            xrayEnabled
+                                ? 'text-cyan-400 bg-[var(--bg-tertiary)]'
+                                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                        }`}
+                        disabled={Object.keys(lastRunNodeOutputs).length === 0}
+                        onClick={toggleXray}
+                        title={xrayEnabled ? 'Hide edge data (X)' : 'X-Ray: show edge data (X)'}
+                    >
+                        <Scan size={16} />
+                    </button>
                     {hasTrigger && (
                         <>
                             <div className="toolbar-divider mx-1 h-5 border-l border-[var(--border-subtle)]" />

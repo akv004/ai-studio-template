@@ -1,5 +1,6 @@
-import { type EdgeProps, getBezierPath } from '@xyflow/react';
+import { type EdgeProps, getBezierPath, EdgeLabelRenderer } from '@xyflow/react';
 import { useAppStore } from '../../../../state/store';
+import { EdgeDataBadge } from './EdgeDataBadge';
 
 const HANDLE_COLORS: Record<string, string> = {
     text: '#E879F9',
@@ -21,6 +22,7 @@ export function TypedEdge({
     data,
     selected,
     source,
+    sourceHandleId,
 }: EdgeProps) {
     const handleType = (data?.handleType as string) || 'any';
     const color = HANDLE_COLORS[handleType] || HANDLE_COLORS.any;
@@ -31,7 +33,7 @@ export function TypedEdge({
     const isError = sourceNodeState?.status === 'error';
     const workflowRunning = useAppStore(s => s.workflowRunning);
 
-    const [edgePath] = getBezierPath({
+    const [edgePath, labelX, labelY] = getBezierPath({
         sourceX, sourceY,
         targetX, targetY,
         sourcePosition, targetPosition,
@@ -81,6 +83,14 @@ export function TypedEdge({
                     </feMerge>
                 </filter>
             </defs>
+            <EdgeLabelRenderer>
+                <EdgeDataBadge
+                    sourceNodeId={source}
+                    sourceHandle={sourceHandleId || 'output'}
+                    labelX={labelX}
+                    labelY={labelY}
+                />
+            </EdgeLabelRenderer>
         </>
     );
 }

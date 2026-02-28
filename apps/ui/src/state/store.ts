@@ -161,9 +161,12 @@ interface AppState {
     workflowRunning: boolean;
     workflowRunSessionId: string | null;
     workflowNodeStates: Record<string, NodeExecutionState>;
+    lastRunNodeOutputs: Record<string, unknown>;
+    xrayEnabled: boolean;
     runWorkflow: (workflowId: string, inputs: Record<string, unknown>) => Promise<WorkflowRunResult>;
     setNodeState: (nodeId: string, status: NodeExecutionStatus, extra?: Partial<NodeExecutionState>) => void;
     resetNodeStates: () => void;
+    toggleXray: () => void;
 
     // Budget
     budgetStatus: BudgetStatus | null;
@@ -726,13 +729,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     workflowRunning: false,
     workflowRunSessionId: null,
     workflowNodeStates: {},
+    lastRunNodeOutputs: {},
+    xrayEnabled: false,
     runWorkflow: async (workflowId, inputs) => {
-        set({ workflowRunning: true, workflowNodeStates: {}, workflowRunSessionId: null, error: null });
+        set({ workflowRunning: true, workflowNodeStates: {}, workflowRunSessionId: null, lastRunNodeOutputs: {}, error: null });
         try {
             const result = await invoke<WorkflowRunResult>('run_workflow', {
                 request: { workflowId, inputs },
             });
-            set({ workflowRunning: false, workflowRunSessionId: result.sessionId });
+            set({
+                workflowRunning: false,
+                workflowRunSessionId: result.sessionId,
+                lastRunNodeOutputs: result.nodeOutputs || {},
+            });
             if (result.status === 'completed') {
                 get().addToast(`Workflow completed in ${(result.durationMs / 1000).toFixed(1)}s`, 'success');
             } else {
@@ -772,7 +781,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             };
         });
     },
-    resetNodeStates: () => set({ workflowNodeStates: {}, workflowRunSessionId: null }),
+    resetNodeStates: () => set({ workflowNodeStates: {}, workflowRunSessionId: null, lastRunNodeOutputs: {} }),
+    toggleXray: () => set((s) => ({ xrayEnabled: !s.xrayEnabled })),
 
     // System Info
     systemInfo: null,

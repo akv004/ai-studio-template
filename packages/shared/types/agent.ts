@@ -323,6 +323,7 @@ export interface WorkflowRunResult {
     sessionId: string;
     status: string;
     outputs: Record<string, unknown>;
+    nodeOutputs?: Record<string, unknown>;
     totalTokens: number;
     totalCostUsd: number;
     durationMs: number;
